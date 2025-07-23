@@ -1,0 +1,506 @@
+# orders/serializers.py
+import logging
+import re
+from rest_framework import serializers
+from django.contrib.auth.models import User
+from companies.models import Company
+from policies.models import Policy
+from .models import Order, OrderMemo, Invoice
+
+logger = logging.getLogger('orders')
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    """
+    주문서 관리를 위한 시리얼라이저
+    주문서의 CRUD 작업과 상태 관리 기능 제공
+    """
+    
+    # 읽기 전용 필드들
+    id = serializers.UUIDField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True, format='%Y-%m-%d %H:%M:%S')
+    updated_at = serializers.DateTimeField(read_only=True, format='%Y-%m-%d %H:%M:%S')
+    
+    # 관계 필드들
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    apply_type_display = serializers.CharField(source='get_apply_type_display', read_only=True)
+    carrier_display = serializers.CharField(source='get_carrier_display', read_only=True)
+    
+    # 연관 객체 정보
+    policy_title = serializers.CharField(source='policy.title', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    
+    # 통계 및 추가 정보
+    memo_count = serializers.SerializerMethodField()
+    has_invoice = serializers.SerializerMethodField()
+    invoice_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'customer_name', 'customer_phone', 'customer_email',
+            'model_name', 'carrier', 'carrier_display', 'apply_type', 'apply_type_display',
+            'status', 'status_display', 'policy', 'policy_title', 'company', 'company_name',
+            'created_by', 'created_by_username', 'memo', 'delivery_address',
+            'memo_count', 'has_invoice', 'invoice_info',
+            'created_at', 'updated_at'
+        ]
+        extra_kwargs = {
+            'customer_name': {
+                'required': True,
+                'allow_blank': False,
+                'max_length': 100,
+                'help_text': '신청 고객의 성명을 입력하세요'
+            },
+            'customer_phone': {
+                'required': True,
+                'allow_blank': False,
+                'help_text': '휴대폰 번호를 입력하세요 (예: 010-1234-5678)'
+            },
+            'model_name': {
+                'required': True,
+                'allow_blank': False,
+                'max_length': 200,
+                'help_text': '주문할 스마트기기 모델명을 입력하세요'
+            },
+            'company': {
+                'required': True,
+                'help_text': '주문을 처리할 업체를 선택하세요'
+            }
+        }
+    
+    def get_memo_count(self, obj):
+        """연관된 메모 수 반환"""
+        try:
+            return obj.order_memos.count()
+        except Exception as e:
+            logger.warning(f"주문 메모 수 조회 중 오류: {str(e)} - 주문: {obj.customer_name}")
+            return 0
+    
+    def get_has_invoice(self, obj):
+        """송장 존재 여부 반환"""
+        try:
+            return hasattr(obj, 'invoice') and obj.invoice is not None
+        except Exception as e:
+            logger.warning(f"송장 존재 여부 확인 중 오류: {str(e)} - 주문: {obj.customer_name}")
+            return False
+    
+    def get_invoice_info(self, obj):
+        """송장 정보 반환"""
+        try:
+            if hasattr(obj, 'invoice') and obj.invoice:
+                return {
+                    'courier': obj.invoice.courier,
+                    'courier_display': obj.invoice.get_courier_display(),
+                    'invoice_number': obj.invoice.invoice_number,
+                    'sent_at': obj.invoice.sent_at.strftime('%Y-%m-%d %H:%M:%S') if obj.invoice.sent_at else None,
+                    'is_delivered': obj.invoice.is_delivered(),
+                    'delivery_status': obj.invoice.get_delivery_status()
+                }
+            return None
+        except Exception as e:
+            logger.warning(f"송장 정보 조회 중 오류: {str(e)} - 주문: {obj.customer_name}")
+            return None
+    
+    def validate_customer_name(self, value):
+        """고객명 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("고객명은 필수 입력 사항입니다.")
+        
+        # 특수문자 제한 (한글, 영문, 숫자, 공백만 허용)
+        if not re.match(r'^[가-힣a-zA-Z0-9\s]+$', value.strip()):
+            raise serializers.ValidationError("고객명은 한글, 영문, 숫자, 공백만 입력 가능합니다.")
+        
+        return value.strip()
+    
+    def validate_customer_phone(self, value):
+        """연락처 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("연락처는 필수 입력 사항입니다.")
+        
+        # 휴대폰 번호 정규식 검증
+        phone_pattern = r'^01([0|1|6|7|8|9])-?([0-9]{3,4})-?([0-9]{4})$'
+        cleaned_phone = value.strip().replace('-', '').replace(' ', '')
+        
+        if not re.match(r'^01([0|1|6|7|8|9])([0-9]{7,8})$', cleaned_phone):
+            raise serializers.ValidationError("올바른 휴대폰 번호를 입력하세요. (예: 010-1234-5678)")
+        
+        # 표준 형식으로 변환 (010-1234-5678)
+        if len(cleaned_phone) == 11:
+            return f"{cleaned_phone[:3]}-{cleaned_phone[3:7]}-{cleaned_phone[7:]}"
+        elif len(cleaned_phone) == 10:
+            return f"{cleaned_phone[:3]}-{cleaned_phone[3:6]}-{cleaned_phone[6:]}"
+        
+        return value
+    
+    def validate_customer_email(self, value):
+        """이메일 검증"""
+        if value and value.strip():
+            # 이메일 형식 재검증
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, value.strip()):
+                raise serializers.ValidationError("올바른 이메일 주소를 입력하세요.")
+            return value.strip()
+        return value
+    
+    def validate_model_name(self, value):
+        """모델명 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("모델명은 필수 입력 사항입니다.")
+        
+        return value.strip()
+    
+    def validate_company(self, value):
+        """업체 검증"""
+        if not value.status:
+            logger.warning(f"비활성 업체로 주문 생성 시도: {value.name}")
+            raise serializers.ValidationError("운영 중단된 업체로는 주문을 생성할 수 없습니다.")
+        
+        return value
+    
+    def validate(self, data):
+        """전체 데이터 검증"""
+        # 정책과 업체 매칭 확인
+        policy = data.get('policy')
+        company = data.get('company')
+        
+        if policy and company:
+            policy_assignment = policy.assignments.filter(company=company).exists()
+            if not policy_assignment:
+                logger.warning(f"정책과 업체가 매칭되지 않는 주문 생성 시도: {policy.title} - {company.name}")
+                # 경고만 하고 에러는 발생시키지 않음 (비즈니스 로직에 따라 조정 가능)
+        
+        return data
+    
+    def create(self, validated_data):
+        """주문서 생성"""
+        try:
+            order = Order.objects.create(**validated_data)
+            logger.info(f"주문서 생성 성공: {order.customer_name} - {order.model_name}")
+            return order
+        except Exception as e:
+            logger.error(f"주문서 생성 실패: {str(e)} - 데이터: {validated_data}")
+            raise serializers.ValidationError("주문서 생성 중 오류가 발생했습니다.")
+    
+    def update(self, instance, validated_data):
+        """주문서 정보 수정"""
+        try:
+            old_customer_name = instance.customer_name
+            old_status = instance.status
+            
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            
+            instance.save()
+            
+            # 상태 변경 시 추가 로깅
+            if 'status' in validated_data and old_status != instance.status:
+                logger.info(f"주문 상태 변경: {instance.customer_name} - {old_status} → {instance.status}")
+            else:
+                logger.info(f"주문서 정보 수정 성공: {old_customer_name} -> {instance.customer_name}")
+            
+            return instance
+        
+        except Exception as e:
+            logger.error(f"주문서 정보 수정 실패: {str(e)} - 주문: {instance.customer_name}")
+            raise serializers.ValidationError("주문서 정보 수정 중 오류가 발생했습니다.")
+
+
+class OrderMemoSerializer(serializers.ModelSerializer):
+    """
+    주문 메모 관리를 위한 시리얼라이저
+    주문 처리 과정의 메모와 기록 관리 기능 제공
+    """
+    
+    # 읽기 전용 필드들
+    id = serializers.UUIDField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True, format='%Y-%m-%d %H:%M:%S')
+    
+    # 연관 객체 정보
+    order_customer_name = serializers.CharField(source='order.customer_name', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    
+    class Meta:
+        model = OrderMemo
+        fields = [
+            'id', 'order', 'order_customer_name', 'memo',
+            'created_by', 'created_by_username', 'created_at'
+        ]
+        extra_kwargs = {
+            'order': {
+                'required': True,
+                'help_text': '메모를 추가할 주문서를 선택하세요'
+            },
+            'memo': {
+                'required': True,
+                'allow_blank': False,
+                'max_length': 2000,
+                'help_text': '주문 처리 관련 메모를 입력하세요'
+            }
+        }
+    
+    def validate_memo(self, value):
+        """메모 내용 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("메모 내용은 필수 입력 사항입니다.")
+        
+        if len(value.strip()) > 2000:
+            raise serializers.ValidationError("메모는 2000자를 초과할 수 없습니다.")
+        
+        return value.strip()
+    
+    def create(self, validated_data):
+        """주문 메모 생성"""
+        try:
+            memo = OrderMemo.objects.create(**validated_data)
+            logger.info(f"주문 메모 생성 성공: {memo.order.customer_name}")
+            return memo
+        except Exception as e:
+            logger.error(f"주문 메모 생성 실패: {str(e)} - 데이터: {validated_data}")
+            raise serializers.ValidationError("메모 생성 중 오류가 발생했습니다.")
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    """
+    송장 정보 관리를 위한 시리얼라이저
+    배송 처리 및 송장 추적 기능 제공
+    """
+    
+    # 읽기 전용 필드들
+    id = serializers.UUIDField(read_only=True)
+    sent_at = serializers.DateTimeField(read_only=True, format='%Y-%m-%d %H:%M:%S')
+    delivered_at = serializers.DateTimeField(read_only=True, format='%Y-%m-%d %H:%M:%S')
+    
+    # 관계 필드들
+    courier_display = serializers.CharField(source='get_courier_display', read_only=True)
+    order_customer_name = serializers.CharField(source='order.customer_name', read_only=True)
+    
+    # 계산된 필드들
+    is_delivered = serializers.SerializerMethodField()
+    delivery_status = serializers.SerializerMethodField()
+    delivery_duration = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Invoice
+        fields = [
+            'id', 'order', 'order_customer_name', 'courier', 'courier_display',
+            'invoice_number', 'recipient_name', 'recipient_phone',
+            'sent_at', 'delivered_at', 'is_delivered', 'delivery_status',
+            'delivery_duration'
+        ]
+        extra_kwargs = {
+            'order': {
+                'required': True,
+                'help_text': '송장을 등록할 주문서를 선택하세요'
+            },
+            'invoice_number': {
+                'required': True,
+                'allow_blank': False,
+                'max_length': 100,
+                'help_text': '택배사 송장 추적 번호를 입력하세요'
+            }
+        }
+    
+    def get_is_delivered(self, obj):
+        """배송 완료 여부 반환"""
+        try:
+            return obj.is_delivered()
+        except Exception as e:
+            logger.warning(f"배송 완료 여부 확인 중 오류: {str(e)}")
+            return False
+    
+    def get_delivery_status(self, obj):
+        """배송 상태 텍스트 반환"""
+        try:
+            return obj.get_delivery_status()
+        except Exception as e:
+            logger.warning(f"배송 상태 조회 중 오류: {str(e)}")
+            return "알 수 없음"
+    
+    def get_delivery_duration(self, obj):
+        """배송 소요 시간 반환 (일 단위)"""
+        try:
+            if obj.is_delivered():
+                duration = obj.delivered_at - obj.sent_at
+                return duration.days
+            return None
+        except Exception as e:
+            logger.warning(f"배송 소요 시간 계산 중 오류: {str(e)}")
+            return None
+    
+    def validate_invoice_number(self, value):
+        """송장 번호 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("송장 번호는 필수 입력 사항입니다.")
+        
+        # 송장 번호 형식 검증 (숫자와 하이픈만 허용)
+        cleaned_number = value.strip().replace('-', '').replace(' ', '')
+        if not cleaned_number.isdigit():
+            raise serializers.ValidationError("송장 번호는 숫자만 입력 가능합니다.")
+        
+        return value.strip()
+    
+    def validate_order(self, value):
+        """주문서 검증"""
+        # 이미 송장이 등록된 주문인지 확인
+        if hasattr(value, 'invoice') and value.invoice and self.instance != value.invoice:
+            logger.warning(f"이미 송장이 등록된 주문에 송장 재등록 시도: {value.customer_name}")
+            raise serializers.ValidationError("이미 송장이 등록된 주문입니다.")
+        
+        # 완료되지 않은 주문에 송장 등록 시 경고
+        if value.status not in ['processing', 'completed']:
+            logger.warning(f"미완료 주문에 송장 등록: {value.customer_name} (상태: {value.status})")
+        
+        return value
+    
+    def validate(self, data):
+        """전체 데이터 검증"""
+        courier = data.get('courier')
+        invoice_number = data.get('invoice_number')
+        
+        if courier and invoice_number:
+            # 동일 택배사에서 중복 송장번호 검사
+            queryset = Invoice.objects.filter(courier=courier, invoice_number=invoice_number)
+            if self.instance:
+                queryset = queryset.exclude(id=self.instance.id)
+            
+            if queryset.exists():
+                logger.warning(f"중복 송장 번호 등록 시도: {courier} - {invoice_number}")
+                raise serializers.ValidationError({
+                    'invoice_number': '동일한 택배사에서 중복된 송장 번호가 존재합니다.'
+                })
+        
+        return data
+    
+    def create(self, validated_data):
+        """송장 생성"""
+        try:
+            invoice = Invoice.objects.create(**validated_data)
+            logger.info(f"송장 생성 성공: {invoice.order.customer_name} - {invoice.courier} ({invoice.invoice_number})")
+            return invoice
+        except Exception as e:
+            logger.error(f"송장 생성 실패: {str(e)} - 데이터: {validated_data}")
+            raise serializers.ValidationError("송장 생성 중 오류가 발생했습니다.")
+    
+    def update(self, instance, validated_data):
+        """송장 정보 수정"""
+        try:
+            old_invoice_number = instance.invoice_number
+            
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            
+            instance.save()
+            
+            logger.info(f"송장 정보 수정 성공: {instance.order.customer_name} - {old_invoice_number} -> {instance.invoice_number}")
+            return instance
+        
+        except Exception as e:
+            logger.error(f"송장 정보 수정 실패: {str(e)} - 송장: {instance.invoice_number}")
+            raise serializers.ValidationError("송장 정보 수정 중 오류가 발생했습니다.")
+
+
+class OrderStatusUpdateSerializer(serializers.Serializer):
+    """
+    주문 상태 업데이트를 위한 시리얼라이저
+    주문 상태를 안전하게 변경하는 기능
+    """
+    
+    order_id = serializers.UUIDField(
+        required=True,
+        help_text="상태를 변경할 주문 ID"
+    )
+    
+    new_status = serializers.ChoiceField(
+        choices=Order.STATUS_CHOICES,
+        required=True,
+        help_text="변경할 새로운 상태"
+    )
+    
+    memo = serializers.CharField(
+        max_length=500,
+        required=False,
+        allow_blank=True,
+        help_text="상태 변경 사유 (선택사항)"
+    )
+    
+    def validate_order_id(self, value):
+        """주문 ID 검증"""
+        try:
+            order = Order.objects.get(id=value)
+            return value
+        except Order.DoesNotExist:
+            logger.warning(f"존재하지 않는 주문 ID로 상태 변경 시도: {value}")
+            raise serializers.ValidationError("해당 주문을 찾을 수 없습니다.")
+
+
+class OrderBulkStatusUpdateSerializer(serializers.Serializer):
+    """
+    주문 일괄 상태 업데이트를 위한 시리얼라이저
+    여러 주문의 상태를 동시에 변경하는 기능
+    """
+    
+    order_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        help_text="상태를 변경할 주문 ID 목록"
+    )
+    
+    new_status = serializers.ChoiceField(
+        choices=Order.STATUS_CHOICES,
+        required=True,
+        help_text="변경할 새로운 상태"
+    )
+    
+    def validate_order_ids(self, value):
+        """주문 ID 목록 검증"""
+        if not value:
+            raise serializers.ValidationError("상태를 변경할 주문을 선택해주세요.")
+        
+        # 존재하는 주문 ID인지 확인
+        existing_orders = Order.objects.filter(id__in=value)
+        existing_ids = set(str(order.id) for order in existing_orders)
+        provided_ids = set(str(id) for id in value)
+        
+        if len(existing_ids) != len(provided_ids):
+            invalid_ids = provided_ids - existing_ids
+            logger.warning(f"존재하지 않는 주문 ID로 일괄 상태 변경 시도: {invalid_ids}")
+            raise serializers.ValidationError("일부 주문 ID가 존재하지 않습니다.")
+        
+        return value
+
+
+class OrderBulkDeleteSerializer(serializers.Serializer):
+    """
+    주문 일괄 삭제를 위한 시리얼라이저
+    여러 주문을 선택하여 동시에 삭제하는 기능
+    """
+    
+    order_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        help_text="삭제할 주문 ID 목록"
+    )
+    
+    force_delete = serializers.BooleanField(
+        default=False,
+        help_text="완료된 주문도 강제로 삭제할지 여부"
+    )
+    
+    def validate_order_ids(self, value):
+        """주문 ID 목록 검증"""
+        if not value:
+            raise serializers.ValidationError("삭제할 주문을 선택해주세요.")
+        
+        # 존재하는 주문 ID인지 확인
+        existing_orders = Order.objects.filter(id__in=value)
+        existing_ids = set(str(order.id) for order in existing_orders)
+        provided_ids = set(str(id) for id in value)
+        
+        if existing_ids != provided_ids:
+            invalid_ids = provided_ids - existing_ids
+            logger.warning(f"존재하지 않는 주문 ID로 삭제 시도: {invalid_ids}")
+            raise serializers.ValidationError("일부 주문 ID가 존재하지 않습니다.")
+        
+        return value
