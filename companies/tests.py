@@ -1,409 +1,409 @@
 # companies/tests.py
 import uuid
+import logging # Added for logging
 from django.test import TestCase
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 from rest_framework import status
 from .models import Company, CompanyUser, CompanyMessage
 
+logger = logging.getLogger(__name__) # Initialized logger
+
 
 class CompanyModelTest(TestCase):
-    """업체 모델 테스트"""
-    
-    def setUp(self):
-        """테스트 데이터 설정"""
-        self.company_data = {
-            'name': '테스트 대리점',
-            'type': 'agency',
-            'status': True,
-            'visible': True,
-            'default_courier': 'CJ대한통운'
-        }
-    
+    """
+    `Company` 모델의 비즈니스 로직 및 유효성 검증을 테스트하는 클래스입니다.
+    주로 모델의 `clean()` 및 `save()` 메서드의 동작을 검증합니다.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        """
+        테스트 클래스 로드 시 한 번만 실행되는 초기 설정 메서드입니다.
+        모든 테스트 메서드에서 공유할 기본 `Company` 인스턴스들을 생성합니다.
+        """
+        logger.info("[CompanyModelTest.setUpTestData] 테스트 데이터 설정 시작.")
+        cls.headquarters = Company.objects.create(
+            name='본사',
+            type='headquarters',
+            status=True,
+            visible=True
+        )
+        logger.info(f"[CompanyModelTest.setUpTestData] 본사 생성: {cls.headquarters.name} (ID: {cls.headquarters.id})")
+
+        cls.agency = Company.objects.create(
+            name='테스트 협력사',
+            type='agency',
+            parent_company=cls.headquarters,
+            status=True,
+            visible=True,
+            default_courier='롯데택배'
+        )
+        logger.info(f"[CompanyModelTest.setUpTestData] 협력사 생성: {cls.agency.name} (ID: {cls.agency.id})")
+
+        cls.retail = Company.objects.create(
+            name='테스트 판매점',
+            type='retail',
+            parent_company=cls.agency,
+            status=True,
+            visible=True
+        )
+        logger.info(f"[CompanyModelTest.setUpTestData] 판매점 생성: {cls.retail.name} (ID: {cls.retail.id})")
+        logger.info("[CompanyModelTest.setUpTestData] 테스트 데이터 설정 완료.")
+
     def test_company_creation(self):
-        """업체 생성 테스트"""
-        company = Company.objects.create(**self.company_data)
-        
-        self.assertEqual(company.name, '테스트 대리점')
-        self.assertEqual(company.type, 'agency')
-        self.assertTrue(company.status)
-        self.assertTrue(isinstance(company.id, uuid.UUID))
-    
+        """
+        `Company` 모델 인스턴스가 올바르게 생성되고 필드 값이 설정되는지 테스트합니다.
+        특히, `agency` 타입의 업체가 상위 본사를 가지는지 확인합니다.
+        """
+        logger.info("[CompanyModelTest.test_company_creation] 업체 생성 테스트 시작.")
+        company = self.agency # setUpTestData에서 생성된 협력사 인스턴스 사용
+        self.assertEqual(company.name, '테스트 협력사', "생성된 업체의 이름이 일치해야 합니다.")
+        self.assertEqual(company.type, 'agency', "생성된 업체의 유형이 'agency'여야 합니다.")
+        self.assertTrue(company.status, "생성된 업체의 상태는 True여야 합니다.")
+        self.assertTrue(isinstance(company.id, uuid.UUID), "업체 ID는 UUID 타입이어야 합니다.")
+        self.assertEqual(company.parent_company, self.headquarters, "협력사의 상위 업체는 본사여야 합니다.")
+        logger.info("[CompanyModelTest.test_company_creation] 업체 생성 테스트 완료.")
+
     def test_company_string_representation(self):
-        """업체 문자열 표현 테스트"""
-        company = Company.objects.create(**self.company_data)
+        """
+        `Company` 모델 인스턴스의 문자열 표현(`__str__` 메서드)이 올바른지 테스트합니다.
+        """
+        logger.info("[CompanyModelTest.test_company_string_representation] 문자열 표현 테스트 시작.")
+        company = self.retail # setUpTestData에서 생성된 판매점 인스턴스 사용
         expected_str = f"{company.name} ({company.get_type_display()})"
-        self.assertEqual(str(company), expected_str)
-    
+        self.assertEqual(str(company), expected_str, "__str__ 메서드의 반환 값이 예상과 일치해야 합니다.")
+        logger.info("[CompanyModelTest.test_company_string_representation] 문자열 표현 테스트 완료.")
+
     def test_company_toggle_status(self):
-        """업체 상태 전환 테스트"""
-        company = Company.objects.create(**self.company_data)
-        original_status = company.status
+        """
+        `Company.toggle_status()` 메서드가 업체의 운영 상태를 올바르게 변경하는지 테스트합니다.
+        """
+        logger.info("[CompanyModelTest.test_company_toggle_status] 상태 전환 테스트 시작.")
+        company = self.agency # setUpTestData에서 생성된 협력사 인스턴스 사용
+        original_status = company.status # 초기 상태 기록
         
-        success = company.toggle_status()
-        self.assertTrue(success)
-        self.assertNotEqual(company.status, original_status)
+        success = company.toggle_status() # 상태 토글 메서드 호출
+        self.assertTrue(success, "toggle_status 메서드는 성공 시 True를 반환해야 합니다.")
+        company.refresh_from_db() # 데이터베이스에서 최신 상태를 다시 로드
+        self.assertNotEqual(company.status, original_status, "업체의 상태가 성공적으로 변경되어야 합니다.")
+        logger.info(f"[CompanyModelTest.test_company_toggle_status] 상태 전환 테스트 완료. 이전: {original_status}, 현재: {company.status}")
 
 
 class CompanyAPITest(APITestCase):
-    """업체 API 테스트"""
-    
-    def setUp(self):
-        """테스트 사용자 및 데이터 설정"""
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
+    """
+    `Company` 및 `CompanyUser` 관련 API 엔드포인트의 동작과
+    사용자 역할에 따른 접근 권한을 테스트하는 클래스입니다.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        """
+        테스트 클래스 로드 시 한 번만 실행되는 초기 설정 메서드입니다.
+        API 테스트를 위한 기본 `Company` 및 `User` 인스턴스들을 생성합니다.
+        """
+        logger.info("[CompanyAPITest.setUpTestData] API 테스트 데이터 설정 시작.")
+        # 기본 업체 생성
+        cls.headquarters = Company.objects.create(
+            name='API 본사',
+            type='headquarters',
+            status=True,
+            visible=True
         )
-        self.client.force_authenticate(user=self.user)
+        logger.info(f"[CompanyAPITest.setUpTestData] 본사 생성: {cls.headquarters.name}")
+
+        cls.agency = Company.objects.create(
+            name='API 협력사',
+            type='agency',
+            parent_company=cls.headquarters,
+            status=True,
+            visible=True
+        )
+        logger.info(f"[CompanyAPITest.setUpTestData] 협력사 생성: {cls.agency.name}")
+
+        cls.retail = Company.objects.create(
+            name='API 판매점',
+            type='retail',
+            parent_company=cls.agency,
+            status=True,
+            visible=True
+        )
+        logger.info(f"[CompanyAPITest.setUpTestData] 판매점 생성: {cls.retail.name}")
         
-        self.company_data = {
-            'name': 'API 테스트 업체',
+        # Django 기본 User 모델 인스턴스 생성 (API 인증용)
+        cls.hq_django_user = User.objects.create_user(username='hq_admin', password='testpass', is_superuser=True)
+        logger.info(f"[CompanyAPITest.setUpTestData] Django User 생성: {cls.hq_django_user.username} (Superuser)")
+        cls.agency_django_user = User.objects.create_user(username='agency_admin', password='testpass')
+        logger.info(f"[CompanyAPITest.setUpTestData] Django User 생성: {cls.agency_django_user.username}")
+        cls.retail_django_user = User.objects.create_user(username='retail_staff', password='testpass')
+        logger.info(f"[CompanyAPITest.setUpTestData] Django User 생성: {cls.retail_django_user.username}")
+
+        # CompanyUser 모델 인스턴스 생성 (업체 소속 정보용)
+        cls.hq_company_user = CompanyUser.objects.create(company=cls.headquarters, username='hq_admin', password='testpass', role='admin')
+        logger.info(f"[CompanyAPITest.setUpTestData] CompanyUser 생성: {cls.hq_company_user.username} (소속: {cls.hq_company_user.company.name})")
+        cls.agency_company_user = CompanyUser.objects.create(company=cls.agency, username='agency_admin', password='testpass', role='admin')
+        logger.info(f"[CompanyAPITest.setUpTestData] CompanyUser 생성: {cls.agency_company_user.username} (소속: {cls.agency_company_user.company.name})")
+        cls.retail_company_user = CompanyUser.objects.create(company=cls.retail, username='retail_staff', password='testpass', role='staff')
+        logger.info(f"[CompanyAPITest.setUpTestData] CompanyUser 생성: {cls.retail_company_user.username} (소속: {cls.retail_company_user.company.name})")
+        logger.info("[CompanyAPITest.setUpTestData] API 테스트 데이터 설정 완료.")
+
+    def setUp(self):
+        """
+        각 테스트 메서드가 실행되기 전에 호출되는 설정 메서드입니다.
+        테스트 클라이언트의 인증 상태를 초기화하고, 공통적으로 사용될 데이터를 설정합니다.
+        """
+        logger.info("[CompanyAPITest.setUp] 각 테스트 시작 전 설정.")
+        # 기본적으로 본사 관리자로 인증하여 대부분의 생성/수정/삭제 테스트를 수행합니다.
+        self.client.force_authenticate(user=self.hq_django_user)
+        logger.info(f"[CompanyAPITest.setUp] 클라이언트 인증: {self.hq_django_user.username}")
+        
+        # 새로운 업체 생성을 위한 공통 데이터 정의
+        self.company_data_for_retail = {
+            'name': '새로운 API 판매점',
             'type': 'retail',
+            'parent_company': str(self.agency.id), # 협력사를 상위로 지정
             'status': True,
             'visible': True
         }
-    
-    def test_create_company(self):
-        """업체 생성 API 테스트"""
+        self.company_data_for_agency = {
+            'name': '새로운 API 협력사',
+            'type': 'agency',
+            'parent_company': str(self.headquarters.id), # 본사를 상위로 지정
+            'status': True,
+            'visible': True
+        }
+        logger.info("[CompanyAPITest.setUp] 테스트 공통 데이터 설정 완료.")
+
+    def test_create_company_retail(self):
+        """
+        본사 관리자 권한으로 새로운 판매점 업체를 생성하는 API 테스트입니다.
+        판매점이 올바른 상위 업체(협력사) 하위에 생성되는지 확인합니다.
+        """
+        logger.info("[CompanyAPITest.test_create_company_retail] 판매점 생성 API 테스트 시작.")
         url = '/api/companies/companies/'
-        response = self.client.post(url, self.company_data, format='json')
+        response = self.client.post(url, self.company_data_for_retail, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Company.objects.count(), 1)
-        self.assertEqual(Company.objects.get().name, 'API 테스트 업체')
-    
-    def test_list_companies(self):
-        """업체 목록 조회 API 테스트"""
-        Company.objects.create(**self.company_data)
-        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"판매점 생성 실패: {response.data}")
+        self.assertEqual(Company.objects.filter(name='새로운 API 판매점').count(), 1, "새로운 판매점이 하나 생성되어야 합니다.")
+        created_company = Company.objects.get(name='새로운 API 판매점')
+        self.assertEqual(created_company.parent_company, self.agency, "생성된 판매점의 상위 업체는 지정된 협력사여야 합니다.")
+        logger.info("[CompanyAPITest.test_create_company_retail] 판매점 생성 API 테스트 완료.")
+
+    def test_create_company_retail(self):
+            """
+            협력사 관리자 권한으로 새로운 판매점 업체를 생성하는 API 테스트입니다.
+            (본사는 판매점을 직접 생성할 수 없으므로 협력사 권한으로 테스트)
+            판매점이 올바른 상위 업체(협력사) 하위에 생성되는지 확인합니다.
+            """
+            logger.info("[CompanyAPITest.test_create_company_retail] 판매점 생성 API 테스트 시작.")
+            
+            # 협력사 관리자로 인증 변경 (본사는 판매점을 직접 생성할 수 없음)
+            self.client.force_authenticate(user=self.agency_django_user)
+            
+            url = '/api/companies/companies/'
+            response = self.client.post(url, self.company_data_for_retail, format='json')
+            
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"판매점 생성 실패: {response.data}")
+            self.assertEqual(Company.objects.filter(name='새로운 API 판매점').count(), 1, "새로운 판매점이 하나 생성되어야 합니다.")
+            created_company = Company.objects.get(name='새로운 API 판매점')
+            self.assertEqual(created_company.parent_company, self.agency, "생성된 판매점의 상위 업체는 지정된 협력사여야 합니다.")
+            logger.info("[CompanyAPITest.test_create_company_retail] 판매점 생성 API 테스트 완료.")
+
+
+    def test_list_companies_headquarters_user(self):
+        """
+        본사 관리자 권한으로 모든 업체 목록을 조회하는 API 테스트입니다.
+        시스템 내의 모든 업체가 조회되는지 확인합니다.
+        """
+        logger.info("[CompanyAPITest.test_list_companies_headquarters_user] 본사 사용자 업체 목록 조회 테스트 시작.")
+        self.client.force_authenticate(user=self.hq_django_user)
         url = '/api/companies/companies/'
         response = self.client.get(url)
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-    
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"본사 사용자 업체 목록 조회 실패: {response.data}")
+        # 최소한 setUpTestData에서 생성된 본사, 협력사, 판매점 3개는 조회되어야 합니다.
+        self.assertGreaterEqual(len(response.data['results']), 3, "본사 사용자는 최소 3개 이상의 업체를 조회해야 합니다.")
+        logger.info("[CompanyAPITest.test_list_companies_headquarters_user] 본사 사용자 업체 목록 조회 테스트 완료.")
+
+    def test_list_companies_agency_user(self):
+        """
+        협력사 관리자 권한으로 자신의 업체와 하위 판매점 목록을 조회하는 API 테스트입니다.
+        다른 협력사나 본사는 조회되지 않아야 합니다.
+        """
+        logger.info("[CompanyAPITest.test_list_companies_agency_user] 협력사 사용자 업체 목록 조회 테스트 시작.")
+        self.client.force_authenticate(user=self.agency_django_user)
+        url = '/api/companies/companies/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"협력사 사용자 업체 목록 조회 실패: {response.data}")
+        # 협력사 본인 + 하위 판매점 = 2개 업체가 조회되어야 합니다.
+        self.assertEqual(len(response.data['results']), 2, "협력사 사용자는 자신의 업체와 하위 판매점만 조회해야 합니다.")
+        company_ids = [c['id'] for c in response.data['results']]
+        self.assertIn(str(self.agency.id), company_ids, "조회된 목록에 자신의 협력사 ID가 포함되어야 합니다.")
+        self.assertIn(str(self.retail.id), company_ids, "조회된 목록에 하위 판매점 ID가 포함되어야 합니다.")
+        self.assertNotIn(str(self.headquarters.id), company_ids, "조회된 목록에 본사 ID가 포함되지 않아야 합니다.")
+        logger.info("[CompanyAPITest.test_list_companies_agency_user] 협력사 사용자 업체 목록 조회 테스트 완료.")
+
+    def test_list_companies_retail_user(self):
+        """
+        판매점 직원 권한으로 자신의 업체만 조회하는 API 테스트입니다.
+        다른 업체(본사, 협력사, 다른 판매점)는 조회되지 않아야 합니다.
+        """
+        logger.info("[CompanyAPITest.test_list_companies_retail_user] 판매점 사용자 업체 목록 조회 테스트 시작.")
+        self.client.force_authenticate(user=self.retail_django_user)
+        url = '/api/companies/companies/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"판매점 사용자 업체 목록 조회 실패: {response.data}")
+        # 판매점 본인 = 1개 업체가 조회되어야 합니다.
+        self.assertEqual(len(response.data['results']), 1, "판매점 사용자는 자신의 업체만 조회해야 합니다.")
+        self.assertEqual(response.data['results'][0]['id'], str(self.retail.id), "조회된 업체 ID가 자신의 판매점 ID와 일치해야 합니다.")
+        logger.info("[CompanyAPITest.test_list_companies_retail_user] 판매점 사용자 업체 목록 조회 테스트 완료.")
+
     def test_company_detail(self):
-        """업체 상세 조회 API 테스트"""
-        company = Company.objects.create(**self.company_data)
-        
+        """
+        특정 업체의 상세 정보를 조회하는 API 테스트입니다.
+        본사 관리자 권한으로 판매점의 상세 정보를 조회합니다.
+        """
+        logger.info("[CompanyAPITest.test_company_detail] 업체 상세 조회 API 테스트 시작.")
+        company = self.retail # 기존에 생성된 판매점 사용
         url = f'/api/companies/companies/{company.id}/'
         response = self.client.get(url)
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['name'], company.name)
-    
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"업체 상세 조회 실패: {response.data}")
+        self.assertEqual(response.data['name'], company.name, "조회된 업체명이 일치해야 합니다.")
+        logger.info("[CompanyAPITest.test_company_detail] 업체 상세 조회 API 테스트 완료.")
+
     def test_update_company(self):
-        """업체 수정 API 테스트"""
-        company = Company.objects.create(**self.company_data)
-        
+        """
+        특정 업체의 정보를 수정하는 API 테스트입니다.
+        본사 관리자 권한으로 판매점의 이름을 수정합니다.
+        """
+        logger.info("[CompanyAPITest.test_update_company] 업체 수정 API 테스트 시작.")
+        company = self.retail # 기존에 생성된 판매점 사용
         url = f'/api/companies/companies/{company.id}/'
-        updated_data = {'name': '수정된 업체명', 'type': 'retail'}
+        updated_name = '수정된 판매점명'
+        updated_data = {'name': updated_name, 'type': 'retail', 'parent_company': str(self.agency.id)} # parent_company 유지
         response = self.client.patch(url, updated_data, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        company.refresh_from_db()
-        self.assertEqual(company.name, '수정된 업체명')
-    
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"업체 수정 실패: {response.data}")
+        company.refresh_from_db() # 데이터베이스에서 최신 상태를 다시 로드
+        self.assertEqual(company.name, updated_name, "업체명이 성공적으로 수정되어야 합니다.")
+        logger.info("[CompanyAPITest.test_update_company] 업체 수정 API 테스트 완료.")
+
     def test_toggle_company_status(self):
-        """업체 상태 전환 API 테스트"""
-        company = Company.objects.create(**self.company_data)
-        original_status = company.status
+        """
+        특정 업체의 운영 상태를 토글하는 API 테스트입니다.
+        본사 관리자 권한으로 판매점의 상태를 변경합니다.
+        """
+        logger.info("[CompanyAPITest.test_toggle_company_status] 업체 상태 전환 API 테스트 시작.")
+        company = self.retail # 기존에 생성된 판매점 사용
+        original_status = company.status # 초기 상태 기록
         
         url = f'/api/companies/companies/{company.id}/toggle_status/'
         response = self.client.post(url)
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        company.refresh_from_db()
-        self.assertNotEqual(company.status, original_status)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"업체 상태 전환 실패: {response.data}")
+        company.refresh_from_db() # 데이터베이스에서 최신 상태를 다시 로드
+        self.assertNotEqual(company.status, original_status, "업체의 상태가 성공적으로 변경되어야 합니다.")
+        logger.info("[CompanyAPITest.test_toggle_company_status] 업체 상태 전환 API 테스트 완료.")
 
-
-# policies/tests.py
-from django.test import TestCase
-from django.contrib.auth.models import User
-from rest_framework.test import APITestCase
-from rest_framework import status
-from companies.models import Company
-from .models import Policy, PolicyAssignment
-
-
-class PolicyModelTest(TestCase):
-    """정책 모델 테스트"""
-    
-    def setUp(self):
-        """테스트 데이터 설정"""
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.policy_data = {
-            'title': '테스트 정책',
-            'description': '테스트용 정책입니다.',
-            'form_type': 'general',
-            'rebate_agency': 50000.00,
-            'rebate_retail': 30000.00,
-            'expose': True,
-            'created_by': self.user
+    def test_create_company_user(self):
+        """
+        본사 관리자 권한으로 새로운 업체 사용자(직원)를 생성하는 API 테스트입니다.
+        """
+        logger.info("[CompanyAPITest.test_create_company_user] 회사 사용자 생성 API 테스트 시작.")
+        self.client.force_authenticate(user=self.hq_django_user) # 본사 관리자로 인증
+        user_data = {
+            'company': str(self.agency.id), # 협력사 소속으로 사용자 생성
+            'username': 'new_agency_staff',
+            'password': 'newpass123',
+            'role': 'staff'
         }
-    
-    def test_policy_creation(self):
-        """정책 생성 테스트"""
-        policy = Policy.objects.create(**self.policy_data)
+        url = '/api/companies/users/'
+        response = self.client.post(url, user_data, format='json')
         
-        self.assertEqual(policy.title, '테스트 정책')
-        self.assertEqual(policy.form_type, 'general')
-        self.assertTrue(policy.expose)
-        self.assertIsNotNone(policy.html_content)  # HTML 자동 생성 확인
-    
-    def test_policy_html_generation(self):
-        """정책 HTML 자동 생성 테스트"""
-        policy = Policy.objects.create(**self.policy_data)
-        
-        self.assertIsNotNone(policy.html_content)
-        self.assertIn(policy.title, policy.html_content)
-        self.assertIn(policy.description, policy.html_content)
-    
-    def test_policy_toggle_expose(self):
-        """정책 노출 상태 전환 테스트"""
-        policy = Policy.objects.create(**self.policy_data)
-        original_expose = policy.expose
-        
-        success = policy.toggle_expose()
-        self.assertTrue(success)
-        self.assertNotEqual(policy.expose, original_expose)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"회사 사용자 생성 실패: {response.data}")
+        self.assertEqual(CompanyUser.objects.filter(username='new_agency_staff').count(), 1, "새로운 업체 사용자가 하나 생성되어야 합니다.")
+        created_user = CompanyUser.objects.get(username='new_agency_staff')
+        self.assertEqual(created_user.company, self.agency, "생성된 사용자의 소속 업체가 지정된 협력사여야 합니다.")
+        logger.info("[CompanyAPITest.test_create_company_user] 회사 사용자 생성 API 테스트 완료.")
 
-
-class PolicyAssignmentTest(TestCase):
-    """정책 배정 테스트"""
-    
-    def setUp(self):
-        """테스트 데이터 설정"""
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.company = Company.objects.create(
-            name='테스트 업체',
-            type='agency',
-            status=True
-        )
-        self.policy = Policy.objects.create(
-            title='테스트 정책',
-            description='테스트 설명',
-            form_type='general',
-            rebate_agency=50000.00,
-            rebate_retail=30000.00,
-            created_by=self.user
-        )
-    
-    def test_policy_assignment_creation(self):
-        """정책 배정 생성 테스트"""
-        assignment = PolicyAssignment.objects.create(
-            policy=self.policy,
-            company=self.company,
-            custom_rebate=40000.00,
-            expose_to_child=True
-        )
-        
-        self.assertEqual(assignment.policy, self.policy)
-        self.assertEqual(assignment.company, self.company)
-        self.assertEqual(assignment.custom_rebate, 40000.00)
-    
-    def test_effective_rebate_calculation(self):
-        """효과적인 리베이트 계산 테스트"""
-        # 커스텀 리베이트가 있는 경우
-        assignment_with_custom = PolicyAssignment.objects.create(
-            policy=self.policy,
-            company=self.company,
-            custom_rebate=40000.00
-        )
-        self.assertEqual(assignment_with_custom.get_effective_rebate(), 40000.00)
-        
-        # 커스텀 리베이트가 없는 경우 (기본값 사용)
-        assignment_without_custom = PolicyAssignment.objects.create(
-            policy=self.policy,
-            company=self.company
-        )
-        self.assertEqual(assignment_without_custom.get_effective_rebate(), 50000.00)  # agency 기본값
-
-
-# orders/tests.py
-from django.test import TestCase
-from django.contrib.auth.models import User
-from rest_framework.test import APITestCase
-from rest_framework import status
-from companies.models import Company
-from policies.models import Policy
-from .models import Order, OrderMemo, Invoice
-
-
-class OrderModelTest(TestCase):
-    """주문 모델 테스트"""
-    
-    def setUp(self):
-        """테스트 데이터 설정"""
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.company = Company.objects.create(
-            name='테스트 업체',
-            type='retail',
-            status=True
-        )
-        self.order_data = {
-            'customer_name': '홍길동',
-            'customer_phone': '010-1234-5678',
-            'customer_email': 'test@example.com',
-            'model_name': 'Galaxy S23',
-            'carrier': 'skt',
-            'apply_type': 'new',
-            'status': 'reserved',
-            'company': self.company,
-            'created_by': self.user
-        }
-    
-    def test_order_creation(self):
-        """주문 생성 테스트"""
-        order = Order.objects.create(**self.order_data)
-        
-        self.assertEqual(order.customer_name, '홍길동')
-        self.assertEqual(order.customer_phone, '010-1234-5678')
-        self.assertEqual(order.status, 'reserved')
-        self.assertEqual(order.company, self.company)
-    
-    def test_order_status_update(self):
-        """주문 상태 업데이트 테스트"""
-        order = Order.objects.create(**self.order_data)
-        
-        # 유효한 상태 전환 테스트
-        success = order.update_status('received', self.user)
-        self.assertTrue(success)
-        self.assertEqual(order.status, 'received')
-        
-        # 유효하지 않은 상태 전환 테스트
-        success = order.update_status('reserved', self.user)
-        self.assertFalse(success)  # completed -> reserved는 불가능
-    
-    def test_order_memo_creation(self):
-        """주문 메모 생성 테스트"""
-        order = Order.objects.create(**self.order_data)
-        memo = OrderMemo.objects.create(
-            order=order,
-            memo='테스트 메모입니다.',
-            created_by=self.user
-        )
-        
-        self.assertEqual(memo.order, order)
-        self.assertEqual(memo.memo, '테스트 메모입니다.')
-        self.assertEqual(order.get_memos().count(), 1)
-    
-    def test_invoice_creation(self):
-        """송장 생성 테스트"""
-        order = Order.objects.create(**self.order_data)
-        invoice = Invoice.objects.create(
-            order=order,
-            courier='cj',
-            invoice_number='1234567890'
-        )
-        
-        self.assertEqual(invoice.order, order)
-        self.assertEqual(invoice.courier, 'cj')
-        self.assertEqual(invoice.invoice_number, '1234567890')
-        self.assertFalse(invoice.is_delivered())
-        
-        # 송장 생성 시 주문 상태가 자동으로 완료로 변경되는지 확인
-        order.refresh_from_db()
-        self.assertEqual(order.status, 'completed')
-
-
-class OrderAPITest(APITestCase):
-    """주문 API 테스트"""
-    
-    def setUp(self):
-        """테스트 사용자 및 데이터 설정"""
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.force_authenticate(user=self.user)
-        
-        self.company = Company.objects.create(
-            name='테스트 업체',
-            type='retail',
-            status=True
-        )
-        
-        self.order_data = {
-            'customer_name': '김철수',
-            'customer_phone': '010-9876-5432',
-            'model_name': 'iPhone 15',
-            'carrier': 'kt',
-            'apply_type': 'new',
-            'company': str(self.company.id)
-        }
-    
-    def test_create_order(self):
-        """주문 생성 API 테스트"""
-        url = '/api/orders/orders/'
-        response = self.client.post(url, self.order_data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Order.objects.count(), 1)
-        
-        order = Order.objects.get()
-        self.assertEqual(order.customer_name, '김철수')
-        self.assertEqual(order.created_by, self.user)
-    
-    def test_update_order_status(self):
-        """주문 상태 업데이트 API 테스트"""
-        order = Order.objects.create(
-            customer_name='테스트 고객',
-            customer_phone='010-1111-2222',
-            model_name='Test Phone',
-            carrier='lgu',
-            apply_type='new',
-            company=self.company,
-            status='reserved',
-            created_by=self.user
-        )
-        
-        url = f'/api/orders/orders/{order.id}/update_status/'
-        data = {'new_status': 'received', 'memo': '접수 완료'}
-        response = self.client.post(url, data, format='json')
-        
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        order.refresh_from_db()
-        self.assertEqual(order.status, 'received')
-        
-        # 메모가 자동으로 추가되었는지 확인
-        self.assertEqual(order.order_memos.count(), 1)
-    
-    def test_order_statistics(self):
-        """주문 통계 API 테스트"""
-        # 테스트용 주문들 생성
-        for i in range(3):
-            Order.objects.create(
-                customer_name=f'고객{i}',
-                customer_phone=f'010-000-000{i}',
-                model_name=f'Phone{i}',
-                carrier='skt',
-                apply_type='new',
-                company=self.company,
-                status='completed' if i == 0 else 'processing',
-                created_by=self.user
-            )
-        
-        url = '/api/orders/orders/statistics/'
+    def test_company_user_visibility_agency_to_retail(self):
+        """
+        협력사 관리자 권한으로 자신의 업체(협력사)에 속한 사용자와
+        자신의 하위 판매점(retail)에 속한 사용자들을 모두 조회하는 API 테스트입니다.
+        """
+        logger.info("[CompanyAPITest.test_company_user_visibility_agency_to_retail] 협력사 사용자 가시성 테스트 시작.")
+        self.client.force_authenticate(user=self.agency_django_user)
+        url = f'/api/companies/companies/{self.agency.id}/users/'
         response = self.client.get(url)
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total_orders'], 3)
-        self.assertEqual(response.data['status_statistics']['completed']['count'], 1)
-        self.assertEqual(response.data['status_statistics']['processing']['count'], 2)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"사용자 목록 조회 실패: {response.data}")
+        user_usernames = [u['username'] for u in response.data['users']]
+        
+        # 협력사 관리자 본인과 하위 판매점 직원이 목록에 포함되어야 합니다.
+        self.assertIn(self.__class__.agency_company_user.username, user_usernames, "협력사 관리자 본인이 목록에 포함되어야 합니다.")
+        self.assertIn(self.__class__.retail_company_user.username, user_usernames, "하위 판매점 직원이 목록에 포함되어야 합니다.")
+        
+        # 본사 관리자는 포함되지 않아야 합니다.
+        self.assertNotIn(self.__class__.hq_company_user.username, user_usernames, "본사 관리자는 목록에 포함되지 않아야 합니다.")
+        logger.info("[CompanyAPITest.test_company_user_visibility_agency_to_retail] 협력사 사용자 가시성 테스트 완료.")
 
+    def test_company_user_visibility_retail_cannot_see_other_retail(self):
+        """
+        판매점 직원 권한으로 다른 판매점의 사용자 정보를 조회할 수 없는지 테스트합니다.
+        """
+        logger.info("[CompanyAPITest.test_company_user_visibility_retail_cannot_see_other_retail] 판매점 사용자 가시성 테스트 시작.")
+        # 테스트를 위한 다른 협력사 및 판매점 생성
+        other_agency = Company.objects.create(
+            name='다른 API 협력사',
+            type='agency',
+            parent_company=self.headquarters,
+            status=True,
+            visible=True
+        )
+        other_retail = Company.objects.create(
+            name='다른 API 판매점',
+            type='retail',
+            parent_company=other_agency,
+            status=True,
+            visible=True
+        )
+        # 다른 판매점의 Django User 및 CompanyUser 생성
+        other_retail_django_user = User.objects.create_user(username='other_retail_staff', password='testpass')
+        other_retail_company_user = CompanyUser.objects.create(company=other_retail, username=other_retail_django_user.username, password='testpass', role='staff')
 
-# 테스트 실행 방법:
-# python manage.py test companies.tests
-# python manage.py test policies.tests  
-# python manage.py test orders.tests
-# python manage.py test  # 전체 테스트 실행
+        self.client.force_authenticate(user=self.retail_django_user) # 현재 판매점 직원으로 인증
+        url = f'/api/companies/companies/{other_retail.id}/users/' # 다른 판매점의 사용자 목록 조회 시도
+        response = self.client.get(url)
+        
+        # 접근이 거부되거나 찾을 수 없다는 응답이 와야 합니다.
+        self.assertIn(response.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN], 
+                      f"다른 판매점 사용자 조회 시 접근이 거부되어야 합니다. 현재 상태: {response.status_code}")
+        logger.info("[CompanyAPITest.test_company_user_visibility_retail_cannot_see_other_retail] 판매점 사용자 가시성 테스트 완료.")    def test_headquarters_cannot_create_retail_directly(self):
+        """
+        본사 관리자가 판매점을 직접 생성할 수 없는지 테스트합니다.
+        본사는 협력사만 생성할 수 있고, 판매점은 협력사가 생성해야 합니다.
+        """
+        logger.info("[CompanyAPITest.test_headquarters_cannot_create_retail_directly] 본사 판매점 직접 생성 금지 테스트 시작.")
+        self.client.force_authenticate(user=self.hq_django_user) # 본사 관리자로 인증
+        
+        # 본사가 판매점을 직접 생성하려는 데이터 (상위 업체로 협력사 지정)
+        invalid_retail_data = {
+            'name': '본사 직접 생성 판매점',
+            'type': 'retail',
+            'parent_company': str(self.agency.id), # 유효한 협력사를 상위로 지정
+            'status': True,
+            'visible': True
+        }
+        url = '/api/companies/companies/'
+        response = self.client.post(url, invalid_retail_data, format='json')
+        
+        # 본사가 판매점을 직접 생성하는 것이 금지되어야 하므로 403 Forbidden이 와야 합니다.
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, 
+                        f"본사의 판매점 직접 생성은 403 Forbidden으로 거부되어야 합니다. 현재 상태: {response.status_code}, 응답: {response.data}")
+        self.assertIn('본사 계정은 판매점을 직접 생성할 수 없습니다', str(response.data), "적절한 에러 메시지가 반환되어야 합니다.")
+        self.assertFalse(Company.objects.filter(name='본사 직접 생성 판매점').exists(), "판매점이 생성되지 않아야 합니다.")
+        logger.info("[CompanyAPITest.test_headquarters_cannot_create_retail_directly] 본사 판매점 직접 생성 금지 테스트 완료.")
+

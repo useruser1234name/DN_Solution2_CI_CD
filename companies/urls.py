@@ -2,7 +2,7 @@
 import logging
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CompanyViewSet, CompanyUserViewSet, CompanyMessageViewSet
+from .views import CompanyViewSet, CompanyUserViewSet, CompanyMessageViewSet, model_test_ui
 
 logger = logging.getLogger('companies')
 
@@ -23,6 +23,7 @@ router.register(r'messages', CompanyMessageViewSet, basename='companymessage')
 urlpatterns = [
     # DRF Router가 자동 생성한 URL들을 포함
     path('', include(router.urls)),
+    path('model-test/', model_test_ui, name='model_test_ui'),
 ]
 
 logger.info("Companies 앱 URL 패턴이 성공적으로 등록되었습니다")

@@ -125,9 +125,14 @@ python manage.py runserver 0.0.0.0:8000
 
 ### 5.1 업체 관리 API
 
+- **권한 기반 조회**:
+  - **슈퍼유저**: 모든 업체 정보를 조회합니다.
+  - **대리점 관리자**: 자신의 대리점 정보와 소속된 하위 판매점 목록을 조회합니다.
+  - **판매점 직원**: 자신이 속한 판매점 정보만 조회합니다.
+
 ```
-GET    /api/companies/companies/                    # 업체 목록 조회
-POST   /api/companies/companies/                    # 새 업체 생성
+GET    /api/companies/companies/                    # 업체 목록 조회 (권한에 따라 필터링)
+POST   /api/companies/companies/                    # 새 업체 생성 (대리점은 하위 판매점 생성 가능)
 GET    /api/companies/companies/{id}/               # 업체 상세 조회
 PUT    /api/companies/companies/{id}/               # 업체 정보 수정
 DELETE /api/companies/companies/{id}/               # 업체 삭제
@@ -164,6 +169,7 @@ GET    /api/orders/orders/statistics/               # 주문 통계 조회
 ### 6.1 업체 관련 모델
 
 - **Company**: 업체 정보 (대리점/판매점)
+  - `parent_company`: 판매점이 속한 상위 대리점을 가리키는 외래 키. 대리점-판매점 간의 계층 구조를 형성합니다.
 - **CompanyUser**: 업체별 사용자 계정
 - **CompanyMessage**: 업체 메시지
 
