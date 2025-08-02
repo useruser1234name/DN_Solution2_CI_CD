@@ -1,0 +1,96 @@
+# Django
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# Django - 환경 변수
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Django - 가상환경
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Django - 로그 파일
+logs/
+*.log
+
+# Django - 데이터베이스
+*.db
+*.sqlite3
+
+# Django - 정적 파일
+static/
+staticfiles/
+
+# React / Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React - 빌드 파일
+/frontend/build
+/frontend/dist
+
+# React - 환경 변수
+/frontend/.env
+/frontend/.env.local
+/frontend/.env.development.local
+/frontend/.env.test.local
+/frontend/.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 임시 파일
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# 테스트 파일
+test_*.py
+*_test.py
+tests/
+
+# 문서 (선택적 - 필요시 주석 해제)
+# Docs/
+
+# 데이터베이스 백업
+*.sql
+*.dump
+
+# 캐시
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 패키지 관리
+Pipfile.lock
+poetry.lock 
