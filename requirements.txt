@@ -1,0 +1,45 @@
+# Django 프로젝트 필수 패키지 목록
+# HB Admin - B2B 플랫폼 백엔드
+
+# Django 프레임워크
+Django==4.2.7
+djangorestframework==3.14.0
+
+# 데이터베이스
+psycopg2-binary==2.9.10
+
+# CORS 처리
+django-cors-headers==4.3.1
+
+# 필터링
+django-filter==23.4
+
+# 환경 변수 관리
+python-decouple==3.8
+python-dotenv==1.0.0
+
+# 시간대 처리
+pytz==2023.3
+
+# 개발 도구 (개발 환경용)
+django-extensions==3.2.3
+ipython==8.17.2
+
+# API 문서화 (선택사항)
+drf-spectacular==0.26.5
+
+# 로깅 (선택사항)
+colorlog==6.8.0
+
+# 테스트 (선택사항)
+factory-boy==3.3.0
+faker==20.1.0
+
+# 보안
+django-ratelimit==4.1.0
+
+# 파일 처리
+Pillow==11.3.0
+
+# 유틸리티
+requests==2.31.0

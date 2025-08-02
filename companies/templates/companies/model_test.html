@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>모델 테스트 페이지</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        h1, h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        .container { display: flex; gap: 2em; }
+        .col { flex: 1; }
+        form { border: 1px solid #ddd; padding: 1em; margin-bottom: 1em; }
+        form label { display: block; margin-bottom: 0.5em; }
+        form input, form select { width: 100%; padding: 0.5em; margin-bottom: 1em; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 0.5em; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>모델 직접 테스트 UI</h1>
+    <p>이 페이지에서 Company와 CompanyUser를 직접 생성하고 관계를 테스트할 수 있습니다. 서버 로그를 확인하여 모델의 clean, save 메서드가 어떻게 동작하는지 확인하세요.</p>
+
+    <div class="container">
+        <div class="col">
+            <h2>Company 생성</h2>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="create_company">
+                <label for="name">업체명:</label>
+                <input type="text" name="name" required>
+                <label for="type">업체 유형:</label>
+                <select name="type">
+                    <option value="headquarters">본사</option>
+                    <option value="agency">협력사</option>
+                    <option value="retail">판매점</option>
+                </select>
+                <label for="parent_company">상위 업체:</label>
+                <select name="parent_company">
+                    <option value="">없음</option>
+                    {% for company in companies %}
+                        <option value="{{ company.id }}">{{ company.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Company 생성</button>
+            </form>
+
+            <h2>CompanyUser 생성</h2>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="create_user">
+                <label for="company">소속 업체:</label>
+                <select name="company" required>
+                    {% for company in companies %}
+                        <option value="{{ company.id }}">{{ company.name }}</option>
+                    {% endfor %}
+                </select>
+                <label for="username">사용자명:</label>
+                <input type="text" name="username" required>
+                <label for="password">비밀번호:</label>
+                <input type="password" name="password" required>
+                <label for="role">역할:</label>
+                <select name="role">
+                    <option value="admin">관리자</option>
+                    <option value="staff">직원</option>
+                </select>
+                <button type="submit">CompanyUser 생성</button>
+            </form>
+        </div>
+
+        <div class="col">
+            <h2>Company 목록</h2>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>이름</th>
+                    <th>유형</th>
+                    <th>상위 업체</th>
+                </tr>
+                {% for company in companies %}
+                <tr>
+                    <td>{{ company.id|slice:":8" }}...</td>
+                    <td>{{ company.name }}</td>
+                    <td>{{ company.get_type_display }}</td>
+                    <td>{{ company.parent_company.name|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+
+            <h2>CompanyUser 목록</h2>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>사용자명</th>
+                    <th>소속 업체</th>
+                    <th>역할</th>
+                </tr>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id|slice:":8" }}...</td>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.company.name }}</td>
+                    <td>{{ user.get_role_display }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</body>
+</html>
