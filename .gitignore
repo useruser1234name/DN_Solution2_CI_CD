@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+develop-eggs/
 dist/
 downloads/
 eggs/
@@ -19,9 +20,12 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -40,8 +44,12 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
-.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
 .hypothesis/
+.pytest_cache/
 
 # Translations
 *.mo
@@ -52,53 +60,10 @@ htmlcov/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-media/
 
-# Django - 환경 변수
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-
-# Django - 가상환경
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-
-# Django - 로그 파일
-logs/
-*.log
-
-# Django - 데이터베이스
-*.db
-*.sqlite3
-
-# Django - 정적 파일
-static/
-staticfiles/
-
-# Frontend - React 전체 디렉토리 제외
-frontend/
-
-# React / Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# React - 빌드 파일
-/frontend/build
-/frontend/dist
-
-# React - 환경 변수
-/frontend/.env
-/frontend/.env.local
-/frontend/.env.development.local
-/frontend/.env.test.local
-/frontend/.env.production.local
+# If your build process includes running collectstatic, then you probably don't need or want to include staticfiles/
+# in your Git repository. Update and uncomment the following line accordingly.
+# <django-project-name>/staticfiles/
 
 # Flask stuff:
 instance/
@@ -123,58 +88,41 @@ ipython_config.py
 # pyenv
 .python-version
 
-# celery beat
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
 celerybeat-schedule
+celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
 
 # Environments
+.env
 .venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Spyder project settings
+.spyderproject
+.spyproject
 
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Rope project settings
+.ropeproject
 
-# 임시 파일
-*.tmp
-*.temp
-*.bak
-*.backup
-
-# 테스트 파일
-test_*.py
-*_test.py
-tests/
-
-# 문서 (선택적 - 필요시 주석 해제)
-# Docs/
-
-# 데이터베이스 백업
-*.sql
-*.dump
-
-# 캐시
-.cache/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# 패키지 관리
-Pipfile.lock
-poetry.lock
+# mkdocs documentation
+/site
 
 # mypy
 .mypy_cache/
@@ -184,5 +132,37 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Custom
-logs/
+# Django specific
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Media files
+media/
+
+# Static files
+static/
+
+# Node modules (if using frontend)
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
