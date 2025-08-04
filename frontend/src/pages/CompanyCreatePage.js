@@ -42,8 +42,8 @@ const CompanyCreatePage = () => {
                 alert('업체가 성공적으로 등록되었습니다.');
                 navigate('/companies');
             } else {
-                setError(response.error || '업체 등록에 실패했습니다.');
-                console.error('[CompanyCreatePage] 업체 등록 실패:', response.error);
+                console.error('[CompanyCreatePage] 업체 등록 실패:', response);
+                setError(response.message || '업체 등록에 실패했습니다.');
             }
         } catch (error) {
             setError('네트워크 오류가 발생했습니다.');

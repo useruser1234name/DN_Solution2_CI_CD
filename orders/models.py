@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """
 주문 관리 시스템 모델
 
@@ -9,17 +8,6 @@
 import uuid
 import logging
 from django.db import models
-from django.core.exceptions import ValidationError
-from django.utils import timezone
-from companies.models import Company
-from policies.models import Policy
-
-logger = logging.getLogger(__name__)
-=======
-# orders/models.py
-import uuid
-import logging
-from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
@@ -27,12 +15,10 @@ from companies.models import Company
 from policies.models import Policy
 
 logger = logging.getLogger('orders')
->>>>>>> 25_08_03/main
 
 
 class Order(models.Model):
     """
-<<<<<<< HEAD
     주문 모델
     
     고객 주문을 관리하는 핵심 모델입니다.
@@ -60,17 +46,15 @@ class Order(models.Model):
         on_delete=models.CASCADE,
         verbose_name='주문 업체'
     )
-    customer_info = models.JSONField(verbose_name='고객 정보')
+    customer_name = models.CharField(max_length=100, verbose_name='고객명')
+    customer_phone = models.CharField(max_length=20, verbose_name='고객 연락처')
+    customer_email = models.EmailField(blank=True, verbose_name='고객 이메일')
+    customer_address = models.TextField(verbose_name='배송 주소')
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='pending',
         verbose_name='주문 상태'
-    )
-    tracking_number = models.CharField(
-        max_length=100,
-        blank=True,
-        verbose_name='송장번호'
     )
     total_amount = models.DecimalField(
         max_digits=10,
@@ -83,6 +67,13 @@ class Order(models.Model):
         verbose_name='리베이트 금액'
     )
     notes = models.TextField(blank=True, verbose_name='메모')
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='주문 생성자'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='주문일시')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
     
@@ -94,16 +85,28 @@ class Order(models.Model):
             models.Index(fields=['policy']),
             models.Index(fields=['company']),
             models.Index(fields=['status']),
-            models.Index(fields=['tracking_number']),
+            models.Index(fields=['customer_name']),
             models.Index(fields=['created_at']),
         ]
     
     def __str__(self):
-        return f"주문 #{self.id} - {self.customer_info.get('name', 'Unknown')}"
+        return f"{self.customer_name} - {self.get_status_display()} ({self.created_at.strftime('%Y-%m-%d')})"
     
     def clean(self):
         """주문 생성/수정 시 비즈니스 규칙 검증"""
         super().clean()
+        
+        # 고객명 필수 입력
+        if not self.customer_name or not self.customer_name.strip():
+            raise ValidationError("고객명은 필수 입력 사항입니다.")
+        
+        # 연락처 필수 입력
+        if not self.customer_phone or not self.customer_phone.strip():
+            raise ValidationError("고객 연락처는 필수 입력 사항입니다.")
+        
+        # 배송 주소 필수 입력
+        if not self.customer_address or not self.customer_address.strip():
+            raise ValidationError("배송 주소는 필수 입력 사항입니다.")
         
         # 금액 검증
         if self.total_amount <= 0:
@@ -111,408 +114,84 @@ class Order(models.Model):
         
         if self.rebate_amount < 0:
             raise ValidationError("리베이트 금액은 0 이상이어야 합니다.")
-        
-        # 비활성 업체에 주문 생성 금지
-        if not self.company.status:
-            raise ValidationError("비활성 업체에는 주문을 생성할 수 없습니다.")
     
     def save(self, *args, **kwargs):
-        """저장 시 로깅 및 리베이트 계산"""
+        """저장 시 로깅 및 검증"""
         self.full_clean()
         is_new = self.pk is None
         
-        # 리베이트 금액 자동 계산
         if is_new:
-            self.calculate_rebate()
-        
-        if is_new:
-            logger.info(f"[Order.save] 새 주문 생성 - ID: {self.id}, 고객: {self.customer_info.get('name', 'Unknown')}")
+            logger.info(f"[Order.save] 새 주문 생성 - 고객: {self.customer_name}, 금액: {self.total_amount}")
         else:
-            logger.info(f"[Order.save] 주문 수정 - ID: {self.id}, 상태: {self.status}")
+            logger.info(f"[Order.save] 주문 수정 - 고객: {self.customer_name}")
         
         super().save(*args, **kwargs)
     
     def delete(self, *args, **kwargs):
         """삭제 시 로깅"""
-        logger.warning(f"[Order.delete] 주문 삭제 - ID: {self.id}")
+        logger.warning(f"[Order.delete] 주문 삭제 - 고객: {self.customer_name}")
         super().delete(*args, **kwargs)
     
     def calculate_rebate(self):
         """리베이트 금액 계산"""
-        # 정책 배정에서 실제 리베이트율 가져오기
         try:
-            assignment = PolicyAssignment.objects.get(policy=self.policy, company=self.company)
-            rebate_rate = assignment.get_effective_rebate()
-        except PolicyAssignment.DoesNotExist:
-            rebate_rate = self.policy.rebate_rate
+            # 정책의 리베이트 설정에 따라 계산
+            if self.company.type == 'agency':
+                rebate_rate = self.policy.rebate_agency
+            elif self.company.type == 'retail':
+                rebate_rate = self.policy.rebate_retail
+            else:
+                rebate_rate = 0
+            
+            self.rebate_amount = rebate_rate
+            self.save()
+            
+            logger.info(f"리베이트 계산 완료: {self.customer_name} - {self.rebate_amount}원")
+            return self.rebate_amount
         
-        self.rebate_amount = (self.total_amount * rebate_rate) / 100
+        except Exception as e:
+            logger.error(f"리베이트 계산 실패: {str(e)} - 주문: {self.customer_name}")
+            return 0
     
     def update_status(self, new_status, user=None):
-        """
-        주문 상태 업데이트
-        
-        Args:
-            new_status: 새로운 상태
-            user: 상태 변경자
-        
-        Raises:
-            ValidationError: 유효하지 않은 상태 전환인 경우
-        """
+        """주문 상태 업데이트"""
         if new_status not in dict(self.STATUS_CHOICES):
             raise ValidationError("유효하지 않은 주문 상태입니다.")
-        
-        # 상태 전환 규칙 검증
-        if not self.can_transition_to(new_status):
-            raise ValidationError(f"'{self.get_status_display()}'에서 '{dict(self.STATUS_CHOICES)[new_status]}'로 변경할 수 없습니다.")
         
         old_status = self.status
         self.status = new_status
         self.save()
         
-        logger.info(f"[Order.update_status] 주문 상태 변경 - ID: {self.id}, {old_status} → {new_status}, 변경자: {user.username if user else 'Unknown'}")
+        logger.info(f"주문 상태 변경: {self.customer_name} - {old_status} → {new_status}")
+        
+        # 상태 변경 시 메모 추가
+        if user:
+            OrderMemo.objects.create(
+                order=self,
+                memo=f"주문 상태가 '{self.get_status_display()}'로 변경되었습니다.",
+                created_by=user
+            )
     
     def can_transition_to(self, new_status):
-        """
-        상태 전환 가능 여부 검증
-        
-        Args:
-            new_status: 새로운 상태
-        
-        Returns:
-            bool: 전환 가능 여부
-        """
-        # 상태 전환 규칙 정의
-        transitions = {
+        """상태 전환 가능 여부 확인"""
+        valid_transitions = {
             'pending': ['processing', 'cancelled'],
             'processing': ['shipped', 'cancelled'],
             'shipped': ['completed', 'return_requested'],
             'completed': ['return_requested'],
             'cancelled': [],
             'return_requested': ['exchanged'],
-            'exchanged': [],
+            'exchanged': ['completed'],
         }
         
-        return new_status in transitions.get(self.status, [])
-    
-    def add_tracking_number(self, tracking_number, user=None):
-        """
-        송장번호 등록
-        
-        Args:
-            tracking_number: 송장번호
-            user: 등록자
-        """
-        self.tracking_number = tracking_number
-        self.update_status('shipped', user)
-        
-        logger.info(f"[Order.add_tracking_number] 송장번호 등록 - ID: {self.id}, 송장번호: {tracking_number}")
-=======
-    고객 주문서 관리 모델
-    온라인 가입 양식 및 주문 처리 상태 관리
-    """
-    
-    # 주문 상태 선택지
-    STATUS_CHOICES = [
-        ('reserved', '예약'),
-        ('received', '접수'),
-        ('processing', '처리중'),
-        ('completed', '완료'),
-        ('cancelled', '취소'),
-    ]
-    
-    # 신청 타입 선택지
-    APPLY_TYPE_CHOICES = [
-        ('new', '신규가입'),
-        ('change', '기기변경'),
-        ('transfer', '번호이동'),
-        ('additional', '추가개통'),
-    ]
-    
-    # 통신사 선택지
-    CARRIER_CHOICES = [
-        ('skt', 'SK텔레콤'),
-        ('kt', 'KT'),
-        ('lgu', 'LG유플러스'),
-        ('skt_mvno', 'SK텔레콤 알뜰폰'),
-        ('kt_mvno', 'KT 알뜰폰'),
-        ('lgu_mvno', 'LG유플러스 알뜰폰'),
-    ]
-    
-    # 기본 키는 UUID 사용
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-        help_text="주문서의 고유 식별자"
-    )
-    
-    # 고객 기본 정보
-    customer_name = models.CharField(
-        max_length=100,
-        verbose_name="고객명",
-        help_text="신청 고객의 성명"
-    )
-    
-    # 전화번호 검증을 위한 정규식 패턴
-    phone_regex = RegexValidator(
-        regex=r'^01([0|1|6|7|8|9])-?([0-9]{3,4})-?([0-9]{4})$',
-        message="올바른 휴대폰 번호를 입력하세요. (예: 010-1234-5678)"
-    )
-    
-    customer_phone = models.CharField(
-        validators=[phone_regex],
-        max_length=15,
-        verbose_name="연락처",
-        help_text="고객 휴대폰 번호"
-    )
-    
-    customer_email = models.EmailField(
-        blank=True,
-        null=True,
-        verbose_name="이메일",
-        help_text="고객 이메일 주소 (선택사항)"
-    )
-    
-    # 주문 상품 정보
-    model_name = models.CharField(
-        max_length=200,
-        verbose_name="모델명",
-        help_text="주문할 스마트기기 모델명"
-    )
-    
-    carrier = models.CharField(
-        max_length=20,
-        choices=CARRIER_CHOICES,
-        verbose_name="통신사",
-        help_text="이용할 통신사"
-    )
-    
-    # 신청 타입
-    apply_type = models.CharField(
-        max_length=20,
-        choices=APPLY_TYPE_CHOICES,
-        default='new',
-        verbose_name="신청 타입",
-        help_text="신청의 종류"
-    )
-    
-    # 주문 상태
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='reserved',
-        verbose_name="처리 상태",
-        help_text="주문서의 현재 처리 상태"
-    )
-    
-    # 연결된 정책 (Foreign Key)
-    policy = models.ForeignKey(
-        Policy,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='orders',
-        verbose_name="적용 정책",
-        help_text="이 주문에 적용된 정책"
-    )
-    
-    # 연결된 업체 (Foreign Key)
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name='orders',
-        verbose_name="처리 업체",
-        help_text="이 주문을 처리하는 업체"
-    )
-    
-    # 주문 처리자
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='created_orders',
-        verbose_name="접수자",
-        help_text="주문을 접수한 사용자"
-    )
-    
-    # 추가 정보
-    memo = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="메모",
-        help_text="주문 관련 추가 메모"
-    )
-    
-    # 배송 정보
-    delivery_address = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="배송 주소",
-        help_text="기기 배송받을 주소"
-    )
-    
-    # 시간 정보
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="접수일시"
-    )
-    
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name="수정일시"
-    )
-    
-    class Meta:
-        verbose_name = "주문서"
-        verbose_name_plural = "주문서 목록"
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['status', 'created_at']),
-            models.Index(fields=['company', 'status']),
-            models.Index(fields=['customer_name', 'customer_phone']),
-            models.Index(fields=['model_name']),
-            models.Index(fields=['carrier', 'apply_type']),
-        ]
-    
-    def __str__(self):
-        return f"{self.customer_name} - {self.model_name} ({self.get_status_display()})"
-    
-    def clean(self):
-        """모델 데이터 검증"""
-        if not self.customer_name or not self.customer_name.strip():
-            raise ValidationError("고객명은 필수 입력 사항입니다.")
-        
-        if not self.customer_phone or not self.customer_phone.strip():
-            raise ValidationError("연락처는 필수 입력 사항입니다.")
-        
-        if not self.model_name or not self.model_name.strip():
-            raise ValidationError("모델명은 필수 입력 사항입니다.")
-        
-        # 업체 상태 확인
-        if self.company and not self.company.status:
-            raise ValidationError("운영 중단된 업체로는 주문을 생성할 수 없습니다.")
-        
-        # 정책과 업체 매칭 확인
-        if self.policy and self.company:
-            policy_assignment = self.policy.assignments.filter(company=self.company).exists()
-            if not policy_assignment:
-                logger.warning(f"정책과 업체가 매칭되지 않는 주문 생성 시도: {self.policy.title} - {self.company.name}")
-    
-    def save(self, *args, **kwargs):
-        """저장 시 로깅 처리"""
-        is_new = self.pk is None
-        old_status = None
-        
-        if not is_new:
-            try:
-                old_instance = Order.objects.get(pk=self.pk)
-                old_status = old_instance.status
-            except Order.DoesNotExist:
-                pass
-        
-        try:
-            self.clean()
-            super().save(*args, **kwargs)
-            
-            if is_new:
-                logger.info(f"새로운 주문서가 접수되었습니다: {self.customer_name} - {self.model_name} (업체: {self.company.name})")
-            else:
-                if old_status != self.status:
-                    logger.info(f"주문서 상태 변경: {self.customer_name} - {old_status} → {self.status}")
-                else:
-                    logger.info(f"주문서 정보 수정: {self.customer_name} (ID: {self.id})")
-        
-        except Exception as e:
-            logger.error(f"주문서 저장 중 오류 발생: {str(e)} - 고객: {self.customer_name}")
-            raise
-    
-    def delete(self, *args, **kwargs):
-        """삭제 시 로깅 처리"""
-        customer_name = self.customer_name
-        order_id = self.id
-        
-        try:
-            super().delete(*args, **kwargs)
-            logger.info(f"주문서가 삭제되었습니다: {customer_name} (ID: {order_id})")
-        
-        except Exception as e:
-            logger.error(f"주문서 삭제 중 오류 발생: {str(e)} - 고객: {customer_name}")
-            raise
-    
-    def update_status(self, new_status, user=None):
-        """주문 상태를 업데이트하는 메서드"""
-        try:
-            old_status = self.status
-            
-            # 상태 변경이 유효한지 검증
-            if not self._is_valid_status_transition(old_status, new_status):
-                logger.warning(f"유효하지 않은 상태 변경 시도: {old_status} → {new_status} (주문: {self.customer_name})")
-                return False
-            
-            self.status = new_status
-            self.save()
-            
-            # 상태 변경 로그
-            user_info = f" by {user.username}" if user else ""
-            logger.info(f"주문 상태 변경 성공: {self.customer_name} - {old_status} → {new_status}{user_info}")
-            
-            return True
-        
-        except Exception as e:
-            logger.error(f"주문 상태 변경 중 오류 발생: {str(e)} - 주문: {self.customer_name}")
-            return False
-    
-    def _is_valid_status_transition(self, old_status, new_status):
-        """상태 전환이 유효한지 검사"""
-        # 기본적인 상태 전환 규칙
-        valid_transitions = {
-            'reserved': ['received', 'cancelled'],
-            'received': ['processing', 'cancelled'],
-            'processing': ['completed', 'cancelled'],
-            'completed': [],  # 완료된 주문은 상태 변경 불가
-            'cancelled': ['reserved'],  # 취소된 주문은 다시 예약으로만 가능
-        }
-        
-        return new_status in valid_transitions.get(old_status, [])
-    
-    def get_memos(self):
-        """연관된 메모 목록 반환"""
-        try:
-            return self.order_memos.all().order_by('-created_at')
-        except Exception as e:
-            logger.warning(f"주문 메모 조회 중 오류: {str(e)} - 주문: {self.customer_name}")
-            return []
-    
-    def get_invoice(self):
-        """연관된 송장 정보 반환"""
-        try:
-            return getattr(self, 'invoice', None)
-        except Exception as e:
-            logger.warning(f"주문 송장 조회 중 오류: {str(e)} - 주문: {self.customer_name}")
-            return None
-    
-    def is_completed(self):
-        """주문이 완료되었는지 확인"""
-        return self.status == 'completed'
-    
-    def is_cancelled(self):
-        """주문이 취소되었는지 확인"""
-        return self.status == 'cancelled'
-    
-    def can_be_cancelled(self):
-        """주문을 취소할 수 있는지 확인"""
-        return self.status in ['reserved', 'received', 'processing']
->>>>>>> 25_08_03/main
+        return new_status in valid_transitions.get(self.status, [])
 
 
 class OrderMemo(models.Model):
     """
-<<<<<<< HEAD
     주문 메모 모델
     
-    주문 처리 과정에서 발생하는 메모를 기록합니다.
+    주문에 대한 메모와 상태 변경 이력을 관리합니다.
     """
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -522,80 +201,15 @@ class OrderMemo(models.Model):
         related_name='memos',
         verbose_name='주문'
     )
-    content = models.TextField(verbose_name='메모 내용')
-    created_by = models.ForeignKey(
-        'companies.CompanyUser',
-        on_delete=models.CASCADE,
-        verbose_name='작성자'
-    )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='작성일시')
-    
-    class Meta:
-        verbose_name = '주문 메모'
-        verbose_name_plural = '주문 메모'
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['order']),
-            models.Index(fields=['created_by']),
-            models.Index(fields=['created_at']),
-        ]
-    
-    def __str__(self):
-        return f"메모 - {self.order.id} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
-    
-    def save(self, *args, **kwargs):
-        """저장 시 로깅"""
-        self.full_clean()
-        is_new = self.pk is None
-        
-        if is_new:
-            logger.info(f"[OrderMemo.save] 새 주문 메모 생성 - 주문: {self.order.id}, 작성자: {self.created_by.username}")
-        else:
-            logger.info(f"[OrderMemo.save] 주문 메모 수정 - 주문: {self.order.id}, 작성자: {self.created_by.username}")
-        
-        super().save(*args, **kwargs)
-=======
-    주문서별 메모 관리 모델
-    주문 처리 과정에서 발생하는 메모와 기록 관리
-    """
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-        help_text="메모의 고유 식별자"
-    )
-    
-    # 주문서 연결 (Foreign Key)
-    order = models.ForeignKey(
-        Order,
-        on_delete=models.CASCADE,
-        related_name='order_memos',
-        verbose_name="연관 주문서",
-        help_text="메모가 속한 주문서"
-    )
-    
-    # 메모 내용
-    memo = models.TextField(
-        verbose_name="메모 내용",
-        help_text="주문 처리 관련 메모나 기록"
-    )
-    
-    # 메모 작성자
+    memo = models.TextField(verbose_name='메모 내용')
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        verbose_name="작성자",
-        help_text="메모를 작성한 사용자"
+        verbose_name='작성자'
     )
-    
-    # 메모 작성일시
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="작성일시"
-    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='작성일시')
     
     class Meta:
         verbose_name = "주문 메모"
@@ -603,280 +217,67 @@ class OrderMemo(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['order', 'created_at']),
-            models.Index(fields=['created_by']),
         ]
     
     def __str__(self):
-        memo_preview = self.memo[:50] + '...' if len(self.memo) > 50 else self.memo
-        return f"{self.order.customer_name} - {memo_preview}"
+        return f"{self.order.customer_name} - {self.memo[:50]}"
     
     def clean(self):
-        """모델 데이터 검증"""
+        """메모 내용 검증"""
         if not self.memo or not self.memo.strip():
             raise ValidationError("메모 내용은 필수 입력 사항입니다.")
-        
-        if len(self.memo.strip()) > 2000:
-            raise ValidationError("메모는 2000자를 초과할 수 없습니다.")
     
     def save(self, *args, **kwargs):
-        """저장 시 로깅 처리"""
+        """저장 시 로깅"""
+        self.full_clean()
         is_new = self.pk is None
         
-        try:
-            self.clean()
-            super().save(*args, **kwargs)
-            
-            if is_new:
-                author = self.created_by.username if self.created_by else "시스템"
-                logger.info(f"주문 메모 추가: {self.order.customer_name} - 작성자: {author}")
-            else:
-                logger.info(f"주문 메모 수정: {self.order.customer_name} (메모 ID: {self.id})")
+        if is_new:
+            logger.info(f"주문 메모 생성: {self.order.customer_name} - {self.memo[:30]}")
+        else:
+            logger.info(f"주문 메모 수정: {self.order.customer_name}")
         
-        except Exception as e:
-            logger.error(f"주문 메모 저장 중 오류 발생: {str(e)} - 주문: {self.order.customer_name}")
-            raise
->>>>>>> 25_08_03/main
+        super().save(*args, **kwargs)
 
 
 class Invoice(models.Model):
     """
-<<<<<<< HEAD
     송장 모델
     
     송장 정보를 관리하고 배송 완료 여부를 추적합니다.
     """
     
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.OneToOneField(
-        Order,
-        on_delete=models.CASCADE,
-        verbose_name='주문'
-    )
-    tracking_number = models.CharField(max_length=100, verbose_name='송장번호')
-    courier = models.CharField(max_length=50, verbose_name='택배사')
-    is_delivered = models.BooleanField(default=False, verbose_name='배송완료 여부')
-    delivered_at = models.DateTimeField(null=True, blank=True, verbose_name='배송완료일시')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
-    
-    class Meta:
-        verbose_name = '송장'
-        verbose_name_plural = '송장'
-        indexes = [
-            models.Index(fields=['tracking_number']),
-            models.Index(fields=['courier']),
-            models.Index(fields=['is_delivered']),
-        ]
-    
-    def __str__(self):
-        return f"송장 - {self.tracking_number} ({self.courier})"
-    
-    def save(self, *args, **kwargs):
-        """저장 시 로깅"""
-        self.full_clean()
-        is_new = self.pk is None
-        
-        if is_new:
-            logger.info(f"[Invoice.save] 새 송장 생성 - 송장번호: {self.tracking_number}, 택배사: {self.courier}")
-        else:
-            logger.info(f"[Invoice.save] 송장 수정 - 송장번호: {self.tracking_number}, 택배사: {self.courier}")
-        
-        super().save(*args, **kwargs)
-    
-    def mark_as_delivered(self):
-        """배송완료 처리"""
-        self.is_delivered = True
-        self.delivered_at = timezone.now()
-        self.save()
-        
-        # 주문 상태를 완료로 변경
-        self.order.update_status('completed')
-        
-        logger.info(f"[Invoice.mark_as_delivered] 배송완료 처리 - 송장번호: {self.tracking_number}")
-
-
-class OrderRequest(models.Model):
-    """
-    주문 요청 모델
-    
-    고객의 교환/취소 요청을 관리합니다.
-    """
-    
-    REQUEST_TYPES = [
-        ('exchange', '교환'),
-        ('cancel', '취소'),
-        ('return', '반품'),
-    ]
-    
-    STATUS_CHOICES = [
-        ('pending', '요청대기'),
-        ('approved', '승인됨'),
-        ('rejected', '거절됨'),
-        ('completed', '완료'),
-    ]
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.ForeignKey(
-        Order,
-        on_delete=models.CASCADE,
-        verbose_name='주문'
-    )
-    request_type = models.CharField(max_length=20, choices=REQUEST_TYPES, verbose_name='요청 유형')
-    reason = models.TextField(verbose_name='요청 사유')
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending',
-        verbose_name='처리 상태'
-    )
-    processed_by = models.ForeignKey(
-        'companies.CompanyUser',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        verbose_name='처리자'
-    )
-    processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일시')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='요청일시')
-    
-    class Meta:
-        verbose_name = '주문 요청'
-        verbose_name_plural = '주문 요청'
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['order']),
-            models.Index(fields=['request_type']),
-            models.Index(fields=['status']),
-        ]
-    
-    def __str__(self):
-        return f"{self.get_request_type_display()} 요청 - {self.order.id}"
-    
-    def save(self, *args, **kwargs):
-        """저장 시 로깅"""
-        self.full_clean()
-        is_new = self.pk is None
-        
-        if is_new:
-            logger.info(f"[OrderRequest.save] 새 주문 요청 생성 - 주문: {self.order.id}, 유형: {self.request_type}")
-        else:
-            logger.info(f"[OrderRequest.save] 주문 요청 수정 - 주문: {self.order.id}, 상태: {self.status}")
-        
-        super().save(*args, **kwargs)
-    
-    def approve(self, processor):
-        """
-        요청 승인
-        
-        Args:
-            processor: 처리자 (CompanyUser 인스턴스)
-        """
-        from django.utils import timezone
-        
-        self.status = 'approved'
-        self.processed_by = processor
-        self.processed_at = timezone.now()
-        self.save()
-        
-        # 주문 상태 업데이트
-        if self.request_type == 'cancel':
-            self.order.update_status('cancelled', processor.django_user)
-        elif self.request_type == 'return':
-            self.order.update_status('return_requested', processor.django_user)
-        
-        logger.info(f"[OrderRequest.approve] 주문 요청 승인 - 주문: {self.order.id}, 처리자: {processor.username}")
-    
-    def reject(self, processor):
-        """
-        요청 거절
-        
-        Args:
-            processor: 처리자 (CompanyUser 인스턴스)
-        """
-        from django.utils import timezone
-        
-        self.status = 'rejected'
-        self.processed_by = processor
-        self.processed_at = timezone.now()
-        self.save()
-        
-        logger.info(f"[OrderRequest.reject] 주문 요청 거절 - 주문: {self.order.id}, 처리자: {processor.username}")
-=======
-    주문 완료 후 송장 정보 관리 모델
-    배송 처리 및 송장 추적을 위한 정보 저장
-    """
-    
-    # 택배사 선택지
     COURIER_CHOICES = [
         ('cj', 'CJ대한통운'),
-        ('lotte', '롯데택배'),
         ('hanjin', '한진택배'),
-        ('post', '우체국택배'),
-        ('kdexp', '경동택배'),
+        ('lotte', '롯데택배'),
         ('logen', '로젠택배'),
+        ('epost', '우체국택배'),
         ('daesin', '대신택배'),
-        ('etc', '기타'),
+        ('hyundai', '현대택배'),
+        ('kg', 'KG로지스'),
+        ('kde', '경동택배'),
+        ('dongbu', '동부택배'),
+        ('other', '기타'),
     ]
     
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-        help_text="송장의 고유 식별자"
-    )
-    
-    # 주문서 연결 (One-to-One)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.OneToOneField(
         Order,
         on_delete=models.CASCADE,
         related_name='invoice',
-        verbose_name="연관 주문서",
-        help_text="송장이 속한 주문서"
+        verbose_name='주문'
     )
-    
-    # 택배사 정보
     courier = models.CharField(
         max_length=20,
         choices=COURIER_CHOICES,
-        verbose_name="택배사",
-        help_text="배송을 담당하는 택배사"
+        verbose_name='택배사'
     )
-    
-    # 송장 번호
-    invoice_number = models.CharField(
-        max_length=100,
-        verbose_name="송장 번호",
-        help_text="택배사 송장 추적 번호"
-    )
-    
-    # 발송일시
-    sent_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="발송일시"
-    )
-    
-    # 배송 완료일시
-    delivered_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="배송 완료일시"
-    )
-    
-    # 수취인 정보 (고객 정보와 다를 수 있음)
-    recipient_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        verbose_name="수취인명",
-        help_text="실제 택배를 받을 사람 (빈 값이면 고객명 사용)"
-    )
-    
-    recipient_phone = models.CharField(
-        max_length=15,
-        blank=True,
-        null=True,
-        verbose_name="수취인 연락처",
-        help_text="실제 택배를 받을 사람의 연락처"
-    )
+    invoice_number = models.CharField(max_length=100, verbose_name='송장번호')
+    recipient_name = models.CharField(max_length=100, blank=True, verbose_name='수취인명')
+    recipient_phone = models.CharField(max_length=20, blank=True, verbose_name='수취인 연락처')
+    sent_at = models.DateTimeField(auto_now_add=True, verbose_name='발송일시')
+    delivered_at = models.DateTimeField(null=True, blank=True, verbose_name='배송완료일시')
     
     class Meta:
         verbose_name = "송장"
@@ -904,10 +305,6 @@ class OrderRequest(models.Model):
         
         if existing.exists():
             raise ValidationError("동일한 택배사에서 중복된 송장 번호가 존재합니다.")
-        
-        # 이미 완료된 주문인지 확인
-        if self.order.status != 'completed':
-            logger.warning(f"미완료 주문에 송장 등록 시도: {self.order.customer_name} (상태: {self.order.status})")
     
     def save(self, *args, **kwargs):
         """저장 시 로깅 및 주문 상태 자동 완료 처리"""
@@ -979,4 +376,106 @@ class OrderRequest(models.Model):
             return "배송완료"
         else:
             return "배송중"
->>>>>>> 25_08_03/main
+
+
+class OrderRequest(models.Model):
+    """
+    주문 요청 모델
+    
+    고객의 교환/취소 요청을 관리합니다.
+    """
+    
+    REQUEST_TYPES = [
+        ('exchange', '교환'),
+        ('cancel', '취소'),
+        ('return', '반품'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', '요청대기'),
+        ('approved', '승인됨'),
+        ('rejected', '거절됨'),
+        ('completed', '완료'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='requests',
+        verbose_name='주문'
+    )
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPES, verbose_name='요청 유형')
+    reason = models.TextField(verbose_name='요청 사유')
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='처리 상태'
+    )
+    processed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='처리자'
+    )
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일시')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='요청일시')
+    
+    class Meta:
+        verbose_name = '주문 요청'
+        verbose_name_plural = '주문 요청'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['order', 'request_type']),
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.order.customer_name} - {self.get_request_type_display()} ({self.get_status_display()})"
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅"""
+        is_new = self.pk is None
+        
+        if is_new:
+            logger.info(f"주문 요청 생성: {self.order.customer_name} - {self.get_request_type_display()}")
+        else:
+            logger.info(f"주문 요청 수정: {self.order.customer_name} - {self.get_status_display()}")
+        
+        super().save(*args, **kwargs)
+    
+    def approve(self, processor):
+        """요청 승인"""
+        from django.utils import timezone
+        
+        self.status = 'approved'
+        self.processed_by = processor
+        self.processed_at = timezone.now()
+        self.save()
+        
+        logger.info(f"주문 요청 승인: {self.order.customer_name} - {self.get_request_type_display()}")
+    
+    def reject(self, processor):
+        """요청 거절"""
+        from django.utils import timezone
+        
+        self.status = 'rejected'
+        self.processed_by = processor
+        self.processed_at = timezone.now()
+        self.save()
+        
+        logger.info(f"주문 요청 거절: {self.order.customer_name} - {self.get_request_type_display()}")
+    
+    def complete(self, processor):
+        """요청 완료"""
+        from django.utils import timezone
+        
+        self.status = 'completed'
+        self.processed_by = processor
+        self.processed_at = timezone.now()
+        self.save()
+        
+        logger.info(f"주문 요청 완료: {self.order.customer_name} - {self.get_request_type_display()}")

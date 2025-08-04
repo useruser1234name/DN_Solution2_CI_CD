@@ -30,6 +30,13 @@ const DashboardPage = () => {
                 activities: activitiesResponse
             });
 
+            console.log('[DashboardPage] 성공 여부 확인:', {
+                statsSuccess: statsResponse.success,
+                activitiesSuccess: activitiesResponse.success,
+                statsData: statsResponse.data,
+                activitiesData: activitiesResponse.data
+            });
+
             if (statsResponse.success && activitiesResponse.success) {
                 console.log('[DashboardPage] API 호출 성공, 데이터 변환 시작');
                 

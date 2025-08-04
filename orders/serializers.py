@@ -5,7 +5,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from companies.models import Company
 from policies.models import Policy
-from .models import Order, OrderMemo, Invoice
+from .models import Order, OrderMemo, Invoice, OrderRequest
 
 logger = logging.getLogger('orders')
 
@@ -23,8 +23,6 @@ class OrderSerializer(serializers.ModelSerializer):
     
     # 관계 필드들
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    apply_type_display = serializers.CharField(source='get_apply_type_display', read_only=True)
-    carrier_display = serializers.CharField(source='get_carrier_display', read_only=True)
     
     # 연관 객체 정보
     policy_title = serializers.CharField(source='policy.title', read_only=True)
@@ -40,9 +38,9 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'customer_name', 'customer_phone', 'customer_email',
-            'model_name', 'carrier', 'carrier_display', 'apply_type', 'apply_type_display',
-            'status', 'status_display', 'policy', 'policy_title', 'company', 'company_name',
-            'created_by', 'created_by_username', 'memo', 'delivery_address',
+            'customer_address', 'status', 'status_display', 'policy', 'policy_title', 
+            'company', 'company_name', 'created_by', 'created_by_username',
+            'total_amount', 'rebate_amount', 'notes',
             'memo_count', 'has_invoice', 'invoice_info',
             'created_at', 'updated_at'
         ]
@@ -58,11 +56,10 @@ class OrderSerializer(serializers.ModelSerializer):
                 'allow_blank': False,
                 'help_text': '휴대폰 번호를 입력하세요 (예: 010-1234-5678)'
             },
-            'model_name': {
+            'customer_address': {
                 'required': True,
                 'allow_blank': False,
-                'max_length': 200,
-                'help_text': '주문할 스마트기기 모델명을 입력하세요'
+                'help_text': '배송 주소를 입력하세요'
             },
             'company': {
                 'required': True,
@@ -144,10 +141,10 @@ class OrderSerializer(serializers.ModelSerializer):
             return value.strip()
         return value
     
-    def validate_model_name(self, value):
-        """모델명 검증"""
+    def validate_customer_address(self, value):
+        """배송 주소 검증"""
         if not value or not value.strip():
-            raise serializers.ValidationError("모델명은 필수 입력 사항입니다.")
+            raise serializers.ValidationError("배송 주소는 필수 입력 사항입니다.")
         
         return value.strip()
     
