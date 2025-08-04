@@ -4,9 +4,9 @@
 
 ## 1. 아키텍처 및 기술 스택
 
-*   **프레임워크:** Django 4.x
+*   **프레임워크:** Django 5.2
 *   **API 프레임워크:** Django REST Framework (DRF)
-*   **언어:** Python 3.x
+*   **언어:** Python 3.13
 *   **데이터베이스:** SQLite (개발용), PostgreSQL/MySQL 등 (운영용)
 *   **가상 환경:** `venv`
 *   **설계 원칙:**
@@ -87,22 +87,99 @@
 ### 2.2. `orders` 앱 상세 설계
 
 *   **목적:** 고객 주문 정보의 생성, 조회, 관리 및 상태 변경을 처리합니다.
-*   **모델:** `Order`, `OrderMemo`, `Invoice`.
+*   **모델:** `Order`, `OrderMemo`, `Invoice`, `OrderRequest`.
 *   **주요 로직:**
-    *   `Order.update_status()`: 주문 상태를 변경하고, 유효하지 않은 상태 전환을 방지합니다.
-    *   `OrderMemo`: 주문 처리 과정에서 발생하는 메모를 기록합니다.
-    *   `Invoice`: 송장 정보 관리 및 배송 완료 여부를 추적합니다.
-    *   송장 생성 시 주문 상태가 자동으로 `completed`로 변경되는 로직을 포함합니다.
+    *   **`Order` 모델:**
+        *   고객 정보를 개별 필드로 관리 (`customer_name`, `customer_phone`, `customer_email`, `customer_address`)
+        *   `update_status()`: 주문 상태를 변경하고, 유효하지 않은 상태 전환을 방지합니다.
+        *   `calculate_rebate()`: 정책 기반 리베이트 계산 로직
+        *   `created_by` (ForeignKey to `User`): 주문 생성자 추적
+    *   **`OrderMemo` 모델:** 주문 처리 과정에서 발생하는 메모를 기록합니다.
+    *   **`Invoice` 모델:** 
+        *   송장 정보 관리 및 배송 완료 여부를 추적합니다.
+        *   `recipient_name`, `recipient_phone` 필드 추가
+        *   `sent_at`, `delivered_at` 시간 추적
+        *   `mark_as_delivered()` 메서드로 배송 완료 처리
+    *   **`OrderRequest` 모델:**
+        *   교환, 취소, 반품 요청 관리
+        *   `complete()` 메서드로 요청 완료 처리
+        *   `processed_by` (ForeignKey to `User`): 처리자 추적
 
 ### 2.3. `policies` 앱 상세 설계
 
-*   **목적:** 다양한 정책을 정의하고, 이를 특정 업체에 배정하며, 리베이트 계산 등의 비즈니스 로직을 처리합니다.
-*   **모델:** `Policy`, `PolicyAssignment`.
+*   **목적:** 스마트기기 판매 정책을 정의하고, 이를 특정 업체에 배정하며, 리베이트 계산 등의 비즈니스 로직을 처리합니다.
+*   **모델:** `Policy`, `PolicyNotice`, `PolicyAssignment`.
 *   **주요 로직:**
-    *   `Policy`: 정책의 제목, 설명, 폼 유형, 리베이트율 등을 정의합니다. HTML 콘텐츠 자동 생성 로직을 포함합니다.
-    *   `Policy.toggle_expose()`: 정책의 노출 상태를 변경합니다.
-    *   `PolicyAssignment`: 특정 `Policy`를 특정 `Company`에 배정하고, 커스텀 리베이트율을 설정할 수 있습니다.
-    *   `PolicyAssignment.get_effective_rebate()`: 배정된 정책의 실제 리베이트율을 계산합니다 (커스텀 리베이트 우선).
+    *   **`Policy` 모델:**
+        *   정책의 제목, 설명, 폼 유형, 통신사, 가입기간, 리베이트율 등을 정의합니다.
+        *   `carrier` (CharField): 통신사 필터링 (SKT, KT, LG U+ 등)
+        *   `contract_period` (CharField): 가입기간 필터링 (12개월, 24개월 등)
+        *   `expose` (BooleanField): 프론트엔드 노출 여부
+        *   `premium_market_expose` (BooleanField): 프리미엄 마켓 자동 노출 여부
+        *   `rebate_agency` (DecimalField): 대리점 리베이트 금액
+        *   `rebate_retail` (DecimalField): 판매점 리베이트 금액
+        *   `generate_html_content()`: 정책 데이터 기반 HTML 콘텐츠 자동 생성
+        *   `toggle_expose()`, `toggle_premium_market_expose()`: 노출 상태 토글
+        *   `clean()`: 제목 중복 검증, 리베이트 유효성 검증
+    *   **`PolicyNotice` 모델:**
+        *   정책별 안내사항 관리 (고객 안내, 업체 공지, 정책 특이사항, 일반 공지)
+        *   `notice_type` (CharField): 안내 유형 구분
+        *   `is_important` (BooleanField): 중요 안내 여부
+        *   `order` (IntegerField): 표시 순서
+    *   **`PolicyAssignment` 모델:**
+        *   특정 `Policy`를 특정 `Company`에 배정하고, 커스텀 리베이트율을 설정할 수 있습니다.
+        *   `custom_rebate` (DecimalField): 업체별 커스텀 리베이트
+        *   `expose_to_child` (BooleanField): 하위 업체 노출 여부
+        *   `get_effective_rebate()`: 배정된 정책의 실제 리베이트율을 계산합니다 (커스텀 리베이트 우선)
+        *   `get_rebate_source()`: 리베이트 출처 표시 (기본값/커스텀)
+
+#### 2.3.1. 정책 관리 뷰 (`views.py`)
+
+*   **`PolicyListView`:** 정책 목록 조회, 필터링, 검색, 페이지네이션
+*   **`PolicyDetailView`:** 정책 상세 정보 및 관련 안내사항, 배정 업체 목록
+*   **`PolicyCreateView`:** 새 정책 생성
+*   **`PolicyUpdateView`:** 정책 수정
+*   **`PolicyDeleteView`:** 정책 삭제
+*   **API 엔드포인트:**
+    *   `toggle_policy_expose()`: 정책 노출 상태 토글
+    *   `toggle_premium_market_expose()`: 프리미엄 마켓 노출 상태 토글
+    *   `regenerate_html()`: HTML 콘텐츠 재생성
+    *   `check_duplicate_policy()`: 정책 제목 중복 체크
+    *   `policy_api_list()`: AJAX 기반 정책 목록 (필터링, 페이지네이션)
+    *   `policy_statistics()`: 정책 통계 정보
+
+#### 2.3.2. 정책 관리 Admin (`admin.py`)
+
+*   **`PolicyAdmin`:** 정책 관리 인터페이스
+    *   `list_display`: 정책 목록 표시 필드
+    *   `list_filter`: 필터링 옵션
+    *   `search_fields`: 검색 필드
+    *   `fieldsets`: 폼 필드 그룹화
+    *   `actions`: 일괄 작업 (노출 토글, HTML 재생성)
+    *   `PolicyNoticeInline`: 안내사항 인라인 편집
+*   **`PolicyNoticeAdmin`:** 안내사항 관리
+*   **`PolicyAssignmentAdmin`:** 정책 배정 관리
+
+#### 2.3.3. 정책 관리 시리얼라이저 (`serializers.py`)
+
+*   **`PolicySerializer`:** 정책 기본 정보 직렬화
+*   **`PolicyNoticeSerializer`:** 안내사항 직렬화
+*   **`PolicyAssignmentSerializer`:** 정책 배정 직렬화
+*   **`PolicyDetailSerializer`:** 정책 상세 정보 (중첩 안내사항, 배정 포함)
+*   **`PolicyCreateSerializer`:** 정책 생성 (중첩 안내사항 포함)
+*   **`PolicyUpdateSerializer`:** 정책 수정 (안내사항 재생성)
+
+#### 2.3.4. 정책 관리 템플릿
+
+*   **`policy_list.html`:** 정책 목록 페이지
+    *   필터링 폼 (검색, 신청서 타입, 통신사, 가입기간, 노출 상태)
+    *   정책 테이블 (토글 스위치, 액션 버튼)
+    *   AJAX 기반 실시간 상태 변경
+    *   페이지네이션
+*   **`policy_form.html`:** 정책 생성/수정 폼
+    *   단계별 입력 섹션 (기본 정보, 신청서 설정, 필터링 설정, 리베이트 설정, 노출 설정)
+    *   실시간 중복 체크
+    *   클라이언트 사이드 유효성 검증
 
 ## 3. 공통 백엔드 설계 요소
 

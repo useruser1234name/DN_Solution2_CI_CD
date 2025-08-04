@@ -73,8 +73,8 @@ class APILoggingMiddleware:
                     try:
                         error_content = response.content.decode('utf-8')
                         logger.error(f"[{request_id}] 오류 내용: {error_content}")
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"[{request_id}] 응답 본문 로깅 실패: {str(e)}")
 
         return response
 

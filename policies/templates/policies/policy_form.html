@@ -1,0 +1,535 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if is_create %}새 정책 생성{% else %}정책 수정{% endif %} - 스마트기기 판매 정책{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    .policy-form-container {
+        padding: 20px;
+        background: #f8f9fa;
+        min-height: 100vh;
+    }
+    
+    .form-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 30px;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .form-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #f8f9fa;
+    }
+    
+    .form-header h1 {
+        color: #333;
+        margin-bottom: 10px;
+    }
+    
+    .form-header p {
+        color: #666;
+        margin: 0;
+    }
+    
+    .form-section {
+        margin-bottom: 30px;
+    }
+    
+    .form-section h3 {
+        color: #333;
+        margin-bottom: 15px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .form-row {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .form-group {
+        flex: 1;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+    }
+    
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+    
+    .form-group .help-text {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+    
+    .form-group .error-message {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+    
+    .form-group.has-error input,
+    .form-group.has-error select,
+    .form-group.has-error textarea {
+        border-color: #dc3545;
+    }
+    
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .checkbox-group input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+    }
+    
+    .checkbox-group label {
+        margin: 0;
+        font-weight: normal;
+    }
+    
+    .form-actions {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s;
+    }
+    
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #0056b3;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-secondary:hover {
+        background: #545b62;
+    }
+    
+    .btn-outline {
+        background: transparent;
+        border: 1px solid #007bff;
+        color: #007bff;
+    }
+    
+    .btn-outline:hover {
+        background: #007bff;
+        color: white;
+    }
+    
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+    }
+    
+    .duplicate-check {
+        margin-top: 10px;
+    }
+    
+    .duplicate-check button {
+        padding: 6px 12px;
+        font-size: 12px;
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .duplicate-check button:hover {
+        background: #e9ecef;
+    }
+    
+    .duplicate-result {
+        margin-top: 8px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    
+    .duplicate-result.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    
+    .duplicate-result.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+    
+    .loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    
+    @media (max-width: 768px) {
+        .form-row {
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .form-actions {
+            flex-direction: column;
+        }
+        
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="policy-form-container">
+    <div class="form-card">
+        <div class="form-header">
+            <h1>
+                <i class="fas fa-{% if is_create %}plus{% else %}edit{% endif %}"></i>
+                {% if is_create %}새 정책 생성{% else %}정책 수정{% endif %}
+            </h1>
+            <p>스마트기기 판매 정책의 정보를 입력해주세요.</p>
+        </div>
+
+        <form method="post" id="policyForm">
+            {% csrf_token %}
+            
+            <!-- 기본 정보 섹션 -->
+            <div class="form-section">
+                <h3><i class="fas fa-info-circle"></i> 기본 정보</h3>
+                
+                <div class="form-group">
+                    <label for="id_title" class="required-field">정책 제목</label>
+                    <input type="text" id="id_title" name="title" value="{{ form.title.value|default:'' }}" 
+                           placeholder="정책의 제목을 입력하세요" required>
+                    {% if form.title.errors %}
+                    <div class="error-message">{{ form.title.errors.0 }}</div>
+                    {% endif %}
+                    <div class="help-text">정책을 구분할 수 있는 명확한 제목을 입력하세요.</div>
+                    
+                    <div class="duplicate-check">
+                        <button type="button" onclick="checkDuplicate()">중복 체크</button>
+                        <div id="duplicateResult"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="id_description" class="required-field">정책 설명</label>
+                    <textarea id="id_description" name="description" 
+                              placeholder="정책의 상세 설명을 입력하세요" required>{{ form.description.value|default:'' }}</textarea>
+                    {% if form.description.errors %}
+                    <div class="error-message">{{ form.description.errors.0 }}</div>
+                    {% endif %}
+                    <div class="help-text">정책의 주요 내용과 특징을 상세히 설명하세요.</div>
+                </div>
+            </div>
+
+            <!-- 신청서 설정 섹션 -->
+            <div class="form-section">
+                <h3><i class="fas fa-file-alt"></i> 신청서 설정</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_form_type" class="required-field">신청서 타입</label>
+                        <select id="id_form_type" name="form_type" required>
+                            <option value="">신청서 타입을 선택하세요</option>
+                            {% for value, label in form_types %}
+                            <option value="{{ value }}" {% if form.form_type.value == value %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.form_type.errors %}
+                        <div class="error-message">{{ form.form_type.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 필터링 설정 섹션 -->
+            <div class="form-section">
+                <h3><i class="fas fa-filter"></i> 필터링 설정</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_carrier">통신사</label>
+                        <select id="id_carrier" name="carrier">
+                            {% for value, label in carriers %}
+                            <option value="{{ value }}" {% if form.carrier.value == value %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.carrier.errors %}
+                        <div class="error-message">{{ form.carrier.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">정책이 적용될 통신사를 선택하세요.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_contract_period">가입기간</label>
+                        <select id="id_contract_period" name="contract_period">
+                            {% for value, label in contract_periods %}
+                            <option value="{{ value }}" {% if form.contract_period.value == value %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.contract_period.errors %}
+                        <div class="error-message">{{ form.contract_period.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">정책이 적용될 가입기간을 선택하세요.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 리베이트 설정 섹션 -->
+            <div class="form-section">
+                <h3><i class="fas fa-money-bill-wave"></i> 리베이트 설정</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_rebate_agency">대리점 리베이트 (원)</label>
+                        <input type="number" id="id_rebate_agency" name="rebate_agency" 
+                               value="{{ form.rebate_agency.value|default:'0' }}" min="0" step="1000">
+                        {% if form.rebate_agency.errors %}
+                        <div class="error-message">{{ form.rebate_agency.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">대리점에 지급할 리베이트 금액을 입력하세요.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_rebate_retail">판매점 리베이트 (원)</label>
+                        <input type="number" id="id_rebate_retail" name="rebate_retail" 
+                               value="{{ form.rebate_retail.value|default:'0' }}" min="0" step="1000">
+                        {% if form.rebate_retail.errors %}
+                        <div class="error-message">{{ form.rebate_retail.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">판매점에 지급할 리베이트 금액을 입력하세요.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 노출 설정 섹션 -->
+            <div class="form-section">
+                <h3><i class="fas fa-eye"></i> 노출 설정</h3>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="id_expose" name="expose" 
+                           {% if form.expose.value %}checked{% endif %}>
+                    <label for="id_expose">프론트엔드에 정책 노출</label>
+                </div>
+                <div class="help-text">체크하면 웹사이트에서 이 정책을 볼 수 있습니다.</div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="id_premium_market_expose" name="premium_market_expose" 
+                           {% if form.premium_market_expose.value %}checked{% endif %}>
+                    <label for="id_premium_market_expose">프리미엄 마켓 자동 노출</label>
+                </div>
+                <div class="help-text">체크하면 프리미엄 마켓에 자동으로 노출됩니다.</div>
+            </div>
+
+            <!-- 폼 액션 -->
+            <div class="form-actions">
+                <a href="{% url 'policies:policy_list' %}" class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i> 목록으로
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> {% if is_create %}정책 생성{% else %}정책 수정{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function checkDuplicate() {
+    const title = document.getElementById('id_title').value.trim();
+    const policyId = '{{ form.instance.id|default:"" }}';
+    
+    if (!title) {
+        showDuplicateResult('정책 제목을 먼저 입력해주세요.', 'error');
+        return;
+    }
+    
+    const resultDiv = document.getElementById('duplicateResult');
+    resultDiv.innerHTML = '<div style="color: #666;">중복 체크 중...</div>';
+    
+    fetch('/policies/api/check-duplicate/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            title: title,
+            policy_id: policyId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showDuplicateResult(data.message, data.is_duplicate ? 'error' : 'success');
+        } else {
+            showDuplicateResult(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showDuplicateResult('중복 체크 중 오류가 발생했습니다.', 'error');
+    });
+}
+
+function showDuplicateResult(message, type) {
+    const resultDiv = document.getElementById('duplicateResult');
+    resultDiv.innerHTML = `<div class="duplicate-result ${type}">${message}</div>`;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// 폼 제출 시 유효성 검사
+document.getElementById('policyForm').addEventListener('submit', function(e) {
+    const title = document.getElementById('id_title').value.trim();
+    const description = document.getElementById('id_description').value.trim();
+    const formType = document.getElementById('id_form_type').value;
+    
+    let hasError = false;
+    
+    // 필수 필드 검사
+    if (!title) {
+        showFieldError('id_title', '정책 제목은 필수 입력 사항입니다.');
+        hasError = true;
+    } else {
+        clearFieldError('id_title');
+    }
+    
+    if (!description) {
+        showFieldError('id_description', '정책 설명은 필수 입력 사항입니다.');
+        hasError = true;
+    } else {
+        clearFieldError('id_description');
+    }
+    
+    if (!formType) {
+        showFieldError('id_form_type', '신청서 타입은 필수 선택 사항입니다.');
+        hasError = true;
+    } else {
+        clearFieldError('id_form_type');
+    }
+    
+    if (hasError) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // 로딩 상태 표시
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...';
+    submitBtn.disabled = true;
+    e.target.classList.add('loading');
+});
+
+function showFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    const formGroup = field.closest('.form-group');
+    
+    formGroup.classList.add('has-error');
+    
+    let errorDiv = formGroup.querySelector('.error-message');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        formGroup.appendChild(errorDiv);
+    }
+    errorDiv.textContent = message;
+}
+
+function clearFieldError(fieldId) {
+    const field = document.getElementById(fieldId);
+    const formGroup = field.closest('.form-group');
+    
+    formGroup.classList.remove('has-error');
+    
+    const errorDiv = formGroup.querySelector('.error-message');
+    if (errorDiv) {
+        errorDiv.remove();
+    }
+}
+</script>
+{% endblock %} 

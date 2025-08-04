@@ -19,7 +19,7 @@ logger = logging.getLogger('companies')
 class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    permission_classes = [AllowAny]  # 임시로 인증 비활성화
+    permission_classes = [AllowAny]
 
     def list(self, request, *args, **kwargs):
         logger.info(f"[CompanyViewSet] 목록 조회 요청 - IP: {request.META.get('REMOTE_ADDR')}")
@@ -44,7 +44,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
 class CompanyUserViewSet(viewsets.ModelViewSet):
     queryset = CompanyUser.objects.all()
     serializer_class = CompanyUserSerializer
-    permission_classes = [AllowAny]  # 임시로 인증 비활성화
+    permission_classes = [IsAuthenticated]
 
     def list(self, request, *args, **kwargs):
         logger.info(f"[CompanyUserViewSet] 목록 조회 요청 - IP: {request.META.get('REMOTE_ADDR')}")
@@ -57,7 +57,7 @@ class CompanyUserViewSet(viewsets.ModelViewSet):
             raise
 
 class UserApprovalView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def post(self, request, user_id):
         """사용자 승인/거부 API"""
@@ -124,56 +124,46 @@ class LoginView(APIView):
             
             logger.info(f"[LoginView] 로그인 시도 - 사용자명: {username}")
             
-            # 임시 로그인 로직 (실제로는 Django 인증 사용)
-            if username == 'admin' and password == 'admin1234':
-                logger.info(f"[LoginView] 로그인 성공 - 사용자: {username}")
-                
-                # 기존 사용자 조회
+            # Django 인증 시스템 사용
+            from django.contrib.auth import authenticate
+            user = authenticate(username=username, password=password)
+            
+            if user is not None:
+                # CompanyUser 조회
                 try:
-                    user = CompanyUser.objects.get(username=username)
-                    logger.info(f"[LoginView] 기존 사용자 로그인: {user.username}")
-                except CompanyUser.DoesNotExist:
-                    # 새 사용자 생성
-                    company = Company.objects.first()
-                    if not company:
-                        logger.error("[LoginView] 회사가 존재하지 않음")
+                    company_user = CompanyUser.objects.get(django_user=user)
+                    
+                    # 승인된 사용자만 로그인 허용
+                    if not company_user.is_approved:
+                        logger.warning(f"[LoginView] 승인되지 않은 사용자 로그인 시도: {username}")
                         return Response(
-                            {'error': '시스템 설정 오류입니다.'},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                            {'error': '승인되지 않은 사용자입니다. 관리자에게 문의하세요.'},
+                            status=status.HTTP_401_UNAUTHORIZED
                         )
                     
-                    # Django User 생성
-                    from django.contrib.auth.models import User
-                    django_user = User.objects.create_user(
-                        username=username,
-                        password='admin1234'
-                    )
+                    # 마지막 로그인 시간 업데이트
+                    company_user.last_login = timezone.now()
+                    company_user.save()
                     
-                    user = CompanyUser.objects.create(
-                        username=username,
-                        django_user=django_user,
-                        company=company,
-                        role='admin',
-                        status='approved',
-                        is_approved=True
+                    response_data = {
+                        'id': str(company_user.id),
+                        'username': company_user.username,
+                        'role': company_user.role,
+                        'status': company_user.status,
+                        'company_name': company_user.company.name,
+                        'company_type': company_user.company.get_type_display(),
+                        'message': '로그인 성공'
+                    }
+                    
+                    logger.info(f"[LoginView] 로그인 성공 - 사용자: {username}")
+                    return Response(response_data, status=status.HTTP_200_OK)
+                    
+                except CompanyUser.DoesNotExist:
+                    logger.warning(f"[LoginView] CompanyUser가 존재하지 않음: {username}")
+                    return Response(
+                        {'error': '사용자 정보를 찾을 수 없습니다.'},
+                        status=status.HTTP_401_UNAUTHORIZED
                     )
-                    logger.info(f"[LoginView] 새 사용자 생성: {user.username}")
-                
-                # 마지막 로그인 시간 업데이트
-                user.last_login = timezone.now()
-                user.save()
-                
-                response_data = {
-                    'id': str(user.id),
-                    'username': user.username,
-                    'role': user.role,
-                    'status': user.status,
-                    'token': f'token-{user.id}-{int(timezone.now().timestamp())}',
-                    'message': '로그인 성공'
-                }
-                
-                logger.info(f"[LoginView] 로그인 응답 데이터: {json.dumps(response_data, ensure_ascii=False)}")
-                return Response(response_data, status=status.HTTP_200_OK)
             else:
                 logger.warning(f"[LoginView] 로그인 실패 - 잘못된 인증 정보: {username}")
                 return Response(
@@ -189,7 +179,7 @@ class LoginView(APIView):
             )
 
 class DashboardStatsView(APIView):
-    permission_classes = [AllowAny]  # 임시로 인증 비활성화
+    permission_classes = [AllowAny]
     
     def get(self, request):
         """대시보드 통계 데이터를 반환합니다."""
@@ -238,7 +228,7 @@ class DashboardStatsView(APIView):
             )
 
 class DashboardActivitiesView(APIView):
-    permission_classes = [AllowAny]  # 임시로 인증 비활성화
+    permission_classes = [AllowAny]
     
     def get(self, request):
         """대시보드 활동 내역을 반환합니다."""

@@ -16,13 +16,6 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.shortcuts import render
-
-def api_test_view(request):
-    return render(request, 'api_test.html')
-
-def simple_test_view(request):
-    return render(request, 'simple_test.html')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,6 +24,4 @@ urlpatterns = [
     path('api/', include('orders.urls')),
     path('api/', include('inventory.urls')),
     path('api/', include('messaging.urls')),
-    path('api-test/', api_test_view, name='api_test'),
-    path('test/', simple_test_view, name='simple_test'),
 ]

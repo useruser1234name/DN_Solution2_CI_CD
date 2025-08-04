@@ -9,6 +9,7 @@ import CompanyListPage from './pages/CompanyListPage';
 import CompanyCreatePage from './pages/CompanyCreatePage';
 import UserListPage from './pages/UserListPage';
 import UserCreatePage from './pages/UserCreatePage';
+import PolicyListPage from './pages/PolicyListPage';
 import { testConnection } from './services/api';
 import './App.css';
 
@@ -104,10 +105,18 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <MainLayout>
-                    <div className="page-placeholder">
-                      <h1>📋 정책 목록</h1>
-                      <p>정책 목록 페이지가 준비 중입니다.</p>
-                    </div>
+                    <PolicyListPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/policies/create"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <PolicyListPage />
                   </MainLayout>
                 </ProtectedRoute>
               }
