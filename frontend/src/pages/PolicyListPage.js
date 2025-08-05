@@ -30,7 +30,7 @@ const PolicyListPage = () => {
             setLoading(true);
             setError(null);
             
-            const response = await get('api/list/');
+            const response = await get('policies/list/');
             console.log('[PolicyListPage] 정책 목록 응답:', response);
 
             if (response.success) {
@@ -72,7 +72,7 @@ const PolicyListPage = () => {
         console.log('[PolicyListPage] 정책 등록 시작:', formData);
         
         try {
-            const response = await post('api/create/', formData);
+            const response = await post('policies/create/', formData);
             console.log('[PolicyListPage] 정책 등록 응답:', response);
 
             if (response.success) {

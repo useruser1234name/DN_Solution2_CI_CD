@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
@@ -12,6 +12,31 @@ const LoginPage = () => {
     const navigate = useNavigate();
 
     console.log('[LoginPage] 컴포넌트 렌더링');
+
+    // CSRF 토큰 가져오기
+    useEffect(() => {
+        const fetchCSRFToken = async () => {
+            try {
+                console.log('[LoginPage] CSRF 토큰 가져오기 시작');
+                const response = await fetch('http://localhost:8001/api/companies/auth/csrf/', {
+                    method: 'GET',
+                    credentials: 'include',
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('[LoginPage] CSRF 토큰 가져오기 성공');
+                    // CSRF 토큰을 localStorage에 저장
+                    localStorage.setItem('csrfToken', data.csrf_token);
+                } else {
+                    console.log('[LoginPage] CSRF 토큰 가져오기 실패:', response.status);
+                }
+            } catch (error) {
+                console.error('[LoginPage] CSRF 토큰 가져오기 오류:', error);
+            }
+        };
+        
+        fetchCSRFToken();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -96,6 +121,9 @@ const LoginPage = () => {
                 </form>
                 <div className="login-info">
                     <p>테스트 계정: admin / admin1234</p>
+                    <div className="signup-link">
+                        <p>계정이 없으신가요? <a href="http://localhost:8001/api/companies/signup/" target="_blank" rel="noopener noreferrer">회원가입하기</a></p>
+                    </div>
                 </div>
             </div>
         </div>

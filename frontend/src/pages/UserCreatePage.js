@@ -53,7 +53,7 @@ const UserCreatePage = () => {
         setError(null);
 
         try {
-            const response = await post('users/', formData);
+            const response = await post('companies/users/', formData);
             console.log('[UserCreatePage] 사용자 등록 응답:', response);
 
             if (response.success) {

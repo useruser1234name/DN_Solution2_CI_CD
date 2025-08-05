@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 회원가입</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .info-box p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+        .parent-code-info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 관리자 회원가입</h1>
+        
+        <div class="info-box">
+            <h3>📋 회원가입 안내</h3>
+            <p>• 업체 코드는 자동으로 생성됩니다 (A-YYMMDD-NN 형식)</p>
+            <p>• 본사: A, 협력사/대리점: B, 판매점: C</p>
+            <p>• 본사가 아닌 경우 상위 업체 코드를 입력해야 합니다</p>
+            <p>• 승인 후 로그인이 가능합니다</p>
+        </div>
+
+        <div class="parent-code-info" id="parentCodeInfo">
+            <h3>🔗 상위 업체 코드</h3>
+            <p>• 협력사/대리점: 본사 코드 입력</p>
+            <p>• 판매점: 협력사 또는 대리점 코드 입력</p>
+        </div>
+
+        <form id="signupForm">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="username">사용자명 *</label>
+                <input type="text" id="username" name="username" required placeholder="사용자명을 입력하세요">
+            </div>
+
+            <div class="form-group">
+                <label for="password">비밀번호 *</label>
+                <input type="password" id="password" name="password" required placeholder="비밀번호를 입력하세요">
+            </div>
+
+            <div class="form-group">
+                <label for="company_name">업체명 *</label>
+                <input type="text" id="company_name" name="company_name" required placeholder="업체명을 입력하세요">
+            </div>
+
+            <div class="form-group">
+                <label for="company_type">업체 유형 *</label>
+                <select id="company_type" name="company_type" required>
+                    <option value="">업체 유형을 선택하세요</option>
+                    <option value="headquarters">본사</option>
+                    <option value="agency">협력사</option>
+                    <option value="dealer">대리점</option>
+                    <option value="retail">판매점</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="parentCodeGroup" style="display: none;">
+                <label for="parent_code">상위 업체 코드 *</label>
+                <input type="text" id="parent_code" name="parent_code" placeholder="상위 업체 코드를 입력하세요">
+            </div>
+
+            <button type="submit" class="btn">회원가입</button>
+        </form>
+
+        <div class="error" id="errorMessage"></div>
+        <div class="success" id="successMessage"></div>
+
+        <div class="back-link">
+            <a href="/api/companies/signup/">← 회원가입 유형 선택으로 돌아가기</a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('signupForm');
+            const companyType = document.getElementById('company_type');
+            const parentCodeGroup = document.getElementById('parentCodeGroup');
+            const parentCode = document.getElementById('parent_code');
+            const parentCodeInfo = document.getElementById('parentCodeInfo');
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+
+            // 업체 유형 변경 시 부모 코드 필드 표시/숨김
+            companyType.addEventListener('change', function() {
+                if (this.value === 'headquarters') {
+                    parentCodeGroup.style.display = 'none';
+                    parentCodeInfo.style.display = 'none';
+                    parentCode.removeAttribute('required');
+                } else {
+                    parentCodeGroup.style.display = 'block';
+                    parentCodeInfo.style.display = 'block';
+                    parentCode.setAttribute('required', 'required');
+                }
+            });
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // 에러 메시지 초기화
+                errorMessage.style.display = 'none';
+                successMessage.style.display = 'none';
+
+                const formData = new FormData(form);
+                const data = {
+                    username: formData.get('username'),
+                    password: formData.get('password'),
+                    company_name: formData.get('company_name'),
+                    company_type: formData.get('company_type'),
+                    parent_code: formData.get('parent_code') || ''
+                };
+
+                try {
+                    const response = await fetch('/api/companies/signup/admin/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        successMessage.textContent = result.message;
+                        successMessage.style.display = 'block';
+                        form.reset();
+                        parentCodeGroup.style.display = 'none';
+                        parentCodeInfo.style.display = 'none';
+                    } else {
+                        errorMessage.textContent = result.error || '회원가입에 실패했습니다.';
+                        errorMessage.style.display = 'block';
+                    }
+                } catch (error) {
+                    errorMessage.textContent = '네트워크 오류가 발생했습니다.';
+                    errorMessage.style.display = 'block';
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

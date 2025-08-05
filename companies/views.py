@@ -10,107 +10,98 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from .models import Company, CompanyUser
 from .serializers import CompanySerializer, CompanyUserSerializer
+from django.contrib.auth.models import User
+from django.middleware.csrf import get_token
+from django.http import JsonResponse
 
 # 로거 설정
 logger = logging.getLogger('companies')
 
 # Create your views here.
 
+from .utils import get_visible_companies, get_visible_users
+
 class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
     permission_classes = [AllowAny]
 
-    def list(self, request, *args, **kwargs):
-        logger.info(f"[CompanyViewSet] 목록 조회 요청 - IP: {request.META.get('REMOTE_ADDR')}")
-        try:
-            response = super().list(request, *args, **kwargs)
-            logger.info(f"[CompanyViewSet] 목록 조회 성공 - 결과 수: {len(response.data)}")
-            return response
-        except Exception as e:
-            logger.error(f"[CompanyViewSet] 목록 조회 실패: {str(e)}")
-            raise
-
-    def create(self, request, *args, **kwargs):
-        logger.info(f"[CompanyViewSet] 생성 요청 - IP: {request.META.get('REMOTE_ADDR')} - 데이터: {request.data}")
-        try:
-            response = super().create(request, *args, **kwargs)
-            logger.info(f"[CompanyViewSet] 생성 성공 - ID: {response.data.get('id')}")
-            return response
-        except Exception as e:
-            logger.error(f"[CompanyViewSet] 생성 실패: {str(e)}")
-            raise
+    def get_queryset(self):
+        return get_visible_companies(self.request.user)
 
 class CompanyUserViewSet(viewsets.ModelViewSet):
     queryset = CompanyUser.objects.all()
     serializer_class = CompanyUserSerializer
     permission_classes = [IsAuthenticated]
 
-    def list(self, request, *args, **kwargs):
-        logger.info(f"[CompanyUserViewSet] 목록 조회 요청 - IP: {request.META.get('REMOTE_ADDR')}")
-        try:
-            response = super().list(request, *args, **kwargs)
-            logger.info(f"[CompanyUserViewSet] 목록 조회 성공 - 결과 수: {len(response.data)}")
-            return response
-        except Exception as e:
-            logger.error(f"[CompanyUserViewSet] 목록 조회 실패: {str(e)}")
-            raise
+    def get_queryset(self):
+        return get_visible_users(self.request.user)
 
 class UserApprovalView(APIView):
     permission_classes = [IsAuthenticated]
-    
-    def post(self, request, user_id):
-        """사용자 승인/거부 API"""
-        logger.info(f"[UserApprovalView] 사용자 승인/거부 요청 - 사용자 ID: {user_id}, IP: {request.META.get('REMOTE_ADDR')}")
-        
-        try:
-            action = request.data.get('action')  # 'approve' 또는 'reject'
-            logger.info(f"[UserApprovalView] 액션: {action}")
-            
-            try:
-                user = CompanyUser.objects.get(id=user_id)
-                logger.info(f"[UserApprovalView] 사용자 찾음: {user.username}")
-            except CompanyUser.DoesNotExist:
-                logger.error(f"[UserApprovalView] 사용자를 찾을 수 없음: {user_id}")
-                return Response(
-                    {'error': '사용자를 찾을 수 없습니다.'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            if action == 'approve':
-                user.status = 'approved'
-                user.is_approved = True
-                logger.info(f"[UserApprovalView] 사용자 승인: {user.username}")
-            elif action == 'reject':
-                user.status = 'rejected'
-                user.is_approved = False
-                logger.info(f"[UserApprovalView] 사용자 거부: {user.username}")
-            else:
-                logger.error(f"[UserApprovalView] 잘못된 액션: {action}")
-                return Response(
-                    {'error': '잘못된 액션입니다. (approve 또는 reject)'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            user.save()
-            
-            response_data = {
-                'id': str(user.id),
-                'username': user.username,
-                'status': user.status,
-                'message': f'사용자가 {action}되었습니다.'
-            }
-            
-            logger.info(f"[UserApprovalView] 사용자 상태 변경 완료: {user.username} -> {user.status}")
-            return Response(response_data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"[UserApprovalView] 사용자 승인/거부 처리 중 오류: {str(e)}", exc_info=True)
-            return Response(
-                {'error': '사용자 승인/거부 처리 중 오류가 발생했습니다.'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
+    def post(self, request, user_id):
+        """사용자 승인/거부 API - 계층 구조에 따른 권한 제한"""
+        approver_user = request.user
+        action = request.data.get('action')
+
+        try:
+            target_user = CompanyUser.objects.get(id=user_id)
+        except CompanyUser.DoesNotExist:
+            return Response({'error': '사용자를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not self._can_approve_user(approver_user, target_user):
+            return Response({'error': '해당 사용자를 승인할 권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if action == 'approve':
+            target_user.status = 'approved'
+            target_user.is_approved = True
+        elif action == 'reject':
+            target_user.status = 'rejected'
+            target_user.is_approved = False
+        else:
+            return Response({'error': '잘못된 액션입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_user.save()
+        return Response({'message': f'사용자가 {action}되었습니다.'}, status=status.HTTP_200_OK)
+
+    def _can_approve_user(self, approver_user, target_user):
+        """승인 권한 검증: 상위 관리자만 하위 사용자 승인 가능"""
+        if approver_user.is_superuser:
+            return True
+
+        try:
+            approver_company_user = CompanyUser.objects.get(django_user=approver_user)
+        except CompanyUser.DoesNotExist:
+            return False
+
+        # 승인자는 관리자여야 함
+        if approver_company_user.role != 'admin':
+            return False
+
+        # 대상 사용자의 회사가 승인자 회사의 하위 회사여야 함
+        approver_company = approver_company_user.company
+        target_company = target_user.company
+        
+        # 자기 자신 또는 같은 회사 직원은 승인 가능
+        if approver_company == target_company:
+            return True
+
+        # 하위 회사인지 확인
+        parent = target_company.parent_company
+        while parent:
+            if parent == approver_company:
+                return True
+            parent = parent.parent_company
+
+        return False
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+from rest_framework.authtoken.models import Token
+
+@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     permission_classes = [AllowAny]
     
@@ -144,8 +135,12 @@ class LoginView(APIView):
                     # 마지막 로그인 시간 업데이트
                     company_user.last_login = timezone.now()
                     company_user.save()
+
+                    # 토큰 생성 또는 가져오기
+                    token, created = Token.objects.get_or_create(user=user)
                     
                     response_data = {
+                        'token': token.key,
                         'id': str(company_user.id),
                         'username': company_user.username,
                         'role': company_user.role,
@@ -179,95 +174,257 @@ class LoginView(APIView):
             )
 
 class DashboardStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """대시보드 통계 데이터를 반환합니다."""
+        user = request.user
+        visible_companies = get_visible_companies(user)
+        visible_users = get_visible_users(user)
+
+        stats = {
+            'total_companies': visible_companies.count(),
+            'pending_approvals': visible_users.filter(status='pending').count(),
+            'today_orders': 0,  # TODO: orders 앱에서 실제 주문 수 계산
+            'low_stock_items': 0  # TODO: inventory 앱에서 계산
+        }
+        return Response(stats)
+
+class DashboardActivitiesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """대시보드 활동 내역을 반환합니다."""
+        user = request.user
+        visible_users = get_visible_users(user)
+
+        recent_logins = visible_users.filter(
+            last_login__gte=timezone.now() - timedelta(hours=24)
+        ).order_by('-last_login')[:5]
+
+        activities = [
+            {
+                'type': 'user',
+                'message': f'{u.username}님이 로그인했습니다.',
+                'time': u.last_login.strftime('%Y-%m-%d %H:%M')
+            }
+            for u in recent_logins
+        ]
+
+        activities.append({
+            'type': 'system',
+            'message': '시스템이 정상적으로 실행 중입니다.',
+            'time': timezone.now().strftime('%Y-%m-%d %H:%M')
+        })
+
+        return Response(activities)
+
+class SignupChoiceView(APIView):
+    """회원가입 유형 선택 페이지"""
     permission_classes = [AllowAny]
     
     def get(self, request):
-        """대시보드 통계 데이터를 반환합니다."""
-        logger.info(f"[DashboardStatsView] 통계 요청 - IP: {request.META.get('REMOTE_ADDR')} - User-Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}")
+        """회원가입 유형 선택 페이지 렌더링"""
+        return render(request, 'companies/signup_choice.html')
+
+class AdminSignupView(APIView):
+    """관리자 회원가입"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """관리자 회원가입 페이지 렌더링"""
+        return render(request, 'companies/admin_signup.html')
+    
+    def post(self, request):
+        """관리자 회원가입 처리"""
+        logger.info(f"[AdminSignupView] 관리자 회원가입 요청 - IP: {request.META.get('REMOTE_ADDR')}")
         
         try:
-            # 실제 데이터베이스에서 통계 계산
-            logger.info("[DashboardStatsView] 데이터베이스 조회 시작")
+            # 필수 필드 검증
+            required_fields = ['username', 'password', 'company_name', 'company_type']
+            for field in required_fields:
+                if not request.data.get(field):
+                    return Response(
+                        {'error': f'{field}는 필수 입력 사항입니다.'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
             
-            # 모든 회사 조회
-            all_companies = Company.objects.all()
-            total_companies = all_companies.count()
-            logger.info(f"[DashboardStatsView] 모든 회사 조회 - 총 {total_companies}개")
+            username = request.data.get('username')
+            password = request.data.get('password')
+            company_name = request.data.get('company_name')
+            company_type = request.data.get('company_type')
+            parent_code = request.data.get('parent_code', '')  # 부모 코드 (선택적)
             
-            # 회사 목록 로깅
-            for company in all_companies:
-                logger.info(f"[DashboardStatsView] 회사 정보: ID={company.id}, 이름={company.name}, 상태={company.status}")
+            # 사용자명 중복 검사
+            if User.objects.filter(username=username).exists():
+                return Response(
+                    {'error': '이미 사용 중인 사용자명입니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            # 대기 중인 승인 조회
-            pending_approvals = CompanyUser.objects.filter(status='pending').count()
-            logger.info(f"[DashboardStatsView] 대기 중인 승인: {pending_approvals}")
+            # 본사가 아닌 경우 부모 코드 필수
+            if company_type != 'headquarters' and not parent_code:
+                return Response(
+                    {'error': '본사가 아닌 경우 상위 업체 코드를 입력해야 합니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            # 오늘 날짜 계산
-            today = timezone.now().date()
-            today_orders = 0  # TODO: orders 앱에서 실제 주문 수 계산
-            logger.info(f"[DashboardStatsView] 오늘 주문 수: {today_orders}")
+            # 부모 업체 검증 (본사가 아닌 경우)
+            parent_company = None
+            if company_type != 'headquarters':
+                try:
+                    parent_company = Company.objects.get(code=parent_code, status=True)
+                    # 부모 업체 타입 검증
+                    if company_type == 'agency' and parent_company.type != 'headquarters':
+                        return Response(
+                            {'error': '협력사는 본사 하위에만 생성할 수 있습니다.'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    elif company_type == 'dealer' and parent_company.type != 'headquarters':
+                        return Response(
+                            {'error': '대리점은 본사 하위에만 생성할 수 있습니다.'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    elif company_type == 'retail' and parent_company.type not in ['agency', 'dealer']:
+                        return Response(
+                            {'error': '판매점은 협력사 또는 대리점 하위에만 생성할 수 있습니다.'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except Company.DoesNotExist:
+                    return Response(
+                        {'error': '유효하지 않은 상위 업체 코드입니다.'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
             
-            # 재고 부족 상품 수 (TODO: inventory 앱에서 계산)
-            low_stock_items = 0
-            logger.info(f"[DashboardStatsView] 재고 부족 상품 수: {low_stock_items}")
+            # Django User 생성
+            django_user = User.objects.create_user(
+                username=username,
+                password=password
+            )
             
-            stats = {
-                'total_companies': total_companies,
-                'pending_approvals': pending_approvals,
-                'today_orders': today_orders,
-                'low_stock_items': low_stock_items
+            # 업체 생성 (코드는 자동 생성됨)
+            company_data = {
+                'name': company_name,
+                'type': company_type,
+                'status': True,
+                'visible': True
             }
             
-            logger.info(f"[DashboardStatsView] 통계 데이터 생성 완료: {json.dumps(stats, ensure_ascii=False)}")
-            return Response(stats)
+            # 부모 업체 설정
+            if parent_company:
+                company_data['parent_company'] = parent_company
+            
+            company = Company.objects.create(**company_data)
+            
+            # CompanyUser 생성 (승인 대기 상태)
+            company_user = CompanyUser.objects.create(
+                company=company,
+                django_user=django_user,
+                username=username,
+                role='admin',
+                status='pending',
+                is_approved=False
+            )
+            
+            logger.info(f"[AdminSignupView] 관리자 회원가입 성공 - 사용자: {username}, 업체: {company.name}, 코드: {company.code}")
+            
+            return Response({
+                'success': True,
+                'message': '회원가입이 완료되었습니다. 상위 업체 관리자 승인 후 로그인할 수 있습니다.',
+                'company_code': company.code
+            }, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
-            logger.error(f"[DashboardStatsView] 통계 계산 오류: {str(e)}", exc_info=True)
+            logger.error(f"[AdminSignupView] 관리자 회원가입 실패: {str(e)}")
             return Response(
-                {'error': str(e)}, 
+                {'error': '회원가입 중 오류가 발생했습니다.'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class DashboardActivitiesView(APIView):
+class CSRFTokenView(APIView):
+    """CSRF 토큰 제공"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        logger.info(f"[CSRFTokenView] CSRF 토큰 요청 - IP: {request.META.get('REMOTE_ADDR')}")
+        try:
+            # CSRF 토큰 생성
+            csrf_token = get_token(request)
+            logger.info(f"[CSRFTokenView] CSRF 토큰 생성 성공")
+            return JsonResponse({'csrf_token': csrf_token})
+        except Exception as e:
+            logger.error(f"[CSRFTokenView] CSRF 토큰 생성 실패: {str(e)}")
+            return JsonResponse({'error': 'CSRF 토큰 생성 실패'}, status=500)
+
+class StaffSignupView(APIView):
+    """직원 회원가입"""
     permission_classes = [AllowAny]
     
     def get(self, request):
-        """대시보드 활동 내역을 반환합니다."""
-        logger.info(f"[DashboardActivitiesView] 활동 요청 - IP: {request.META.get('REMOTE_ADDR')} - User-Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}")
+        """직원 회원가입 페이지 렌더링"""
+        return render(request, 'companies/staff_signup.html')
+    
+    def post(self, request):
+        """직원 회원가입 처리"""
+        logger.info(f"[StaffSignupView] 직원 회원가입 요청 - IP: {request.META.get('REMOTE_ADDR')}")
         
         try:
-            activities = []
-            logger.info("[DashboardActivitiesView] 활동 데이터 수집 시작")
+            # 필수 필드 검증
+            required_fields = ['username', 'password', 'company_code']
+            for field in required_fields:
+                if not request.data.get(field):
+                    return Response(
+                        {'error': f'{field}는 필수 입력 사항입니다.'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
             
-            # 최근 로그인한 사용자들
-            recent_users = CompanyUser.objects.filter(
-                last_login__gte=timezone.now() - timedelta(hours=24)
-            ).order_by('-last_login')[:5]
+            username = request.data.get('username')
+            password = request.data.get('password')
+            company_code = request.data.get('company_code')
             
-            logger.info(f"[DashboardActivitiesView] 최근 로그인 사용자 수: {recent_users.count()}")
+            # 사용자명 중복 검사
+            if User.objects.filter(username=username).exists():
+                return Response(
+                    {'error': '이미 사용 중인 사용자명입니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            for user in recent_users:
-                activity = {
-                    'type': 'user',
-                    'message': f'{user.username}님이 로그인했습니다.',
-                    'time': user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else '방금 전'
-                }
-                activities.append(activity)
-                logger.info(f"[DashboardActivitiesView] 사용자 활동 추가: {activity}")
+            # 업체 코드 검증
+            try:
+                company = Company.objects.get(code=company_code, status=True)
+            except Company.DoesNotExist:
+                return Response(
+                    {'error': '유효하지 않은 업체 코드입니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            # 시스템 상태
-            system_activity = {
-                'type': 'system',
-                'message': '시스템이 정상적으로 실행 중입니다.',
-                'time': timezone.now().strftime('%Y-%m-%d %H:%M')
-            }
-            activities.append(system_activity)
-            logger.info(f"[DashboardActivitiesView] 시스템 활동 추가: {system_activity}")
+            # Django User 생성
+            django_user = User.objects.create_user(
+                username=username,
+                password=password
+            )
             
-            logger.info(f"[DashboardActivitiesView] 활동 데이터 수집 완료 - 총 {len(activities)}개")
-            return Response(activities)
+            # CompanyUser 생성 (승인 대기 상태)
+            company_user = CompanyUser.objects.create(
+                company=company,
+                django_user=django_user,
+                username=username,
+                role='staff',
+                status='pending',
+                is_approved=False
+            )
+            
+            logger.info(f"[StaffSignupView] 직원 회원가입 성공 - 사용자: {username}, 업체: {company.name}")
+            
+            return Response({
+                'success': True,
+                'message': '회원가입이 완료되었습니다. 해당 업체 관리자 승인 후 로그인할 수 있습니다.',
+                'company_name': company.name
+            }, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
-            logger.error(f"[DashboardActivitiesView] 활동 데이터 수집 오류: {str(e)}", exc_info=True)
+            logger.error(f"[StaffSignupView] 직원 회원가입 실패: {str(e)}")
             return Response(
-                {'error': str(e)}, 
+                {'error': '회원가입 중 오류가 발생했습니다.'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

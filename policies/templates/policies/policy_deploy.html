@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}정책 배포 - {{ policy.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .company-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+    }
+    
+    .company-item {
+        display: flex;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .company-item:last-child {
+        border-bottom: none;
+    }
+    
+    .company-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .company-info {
+        flex: 1;
+        margin-left: 10px;
+    }
+    
+    .company-name {
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .company-type {
+        font-size: 0.9em;
+        color: #666;
+    }
+    
+    .deployment-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .deployment-options {
+        background: white;
+        padding: 15px;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+    }
+    
+    .assigned-companies {
+        background: #e8f5e8;
+        border: 1px solid #28a745;
+    }
+    
+    .available-companies {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-share-alt"></i>
+                    정책 배포: {{ policy.title }}
+                </h2>
+                <a href="{% url 'policies:policy_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> 목록으로
+                </a>
+            </div>
+            
+            <!-- 정책 정보 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> 정책 정보</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>제목:</strong> {{ policy.title }}</p>
+                            <p><strong>신청서 타입:</strong> {{ policy.get_form_type_display }}</p>
+                            <p><strong>통신사:</strong> {{ policy.get_carrier_display }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>가입기간:</strong> {{ policy.get_contract_period_display }}</p>
+                            <p><strong>대리점 리베이트:</strong> {{ policy.rebate_agency }}원</p>
+                            <p><strong>판매점 리베이트:</strong> {{ policy.rebate_retail }}원</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 배포 설정 -->
+            <div class="deployment-section">
+                <h4><i class="fas fa-cog"></i> 배포 설정</h4>
+                
+                <form method="post" id="deployForm">
+                    {% csrf_token %}
+                    
+                    <div class="deployment-options">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="custom_rebate">커스텀 리베이트 (선택사항)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="custom_rebate" 
+                                           name="custom_rebate" 
+                                           step="0.01" 
+                                           min="0"
+                                           placeholder="기본 리베이트 사용시 비워두세요">
+                                    <small class="form-text text-muted">
+                                        특별한 리베이트를 적용하려면 금액을 입력하세요. 비워두면 정책의 기본 리베이트가 적용됩니다.
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" 
+                                               class="custom-control-input" 
+                                               id="expose_to_child" 
+                                               name="expose_to_child" 
+                                               checked>
+                                        <label class="custom-control-label" for="expose_to_child">
+                                            하위 업체에 노출
+                                        </label>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        체크하면 배정된 업체의 하위 업체들도 이 정책을 볼 수 있습니다.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 배포할 업체 선택 -->
+                    <div class="mt-4">
+                        <h5><i class="fas fa-building"></i> 배포할 업체 선택</h5>
+                        <div class="company-list available-companies">
+                            {% if available_companies %}
+                                {% for company in available_companies %}
+                                <div class="company-item">
+                                    <input type="checkbox" 
+                                           name="companies" 
+                                           value="{{ company.id }}" 
+                                           id="company_{{ company.id }}"
+                                           class="form-check-input">
+                                    <div class="company-info">
+                                        <div class="company-name">{{ company.name }}</div>
+                                        <div class="company-type">{{ company.get_type_display }}</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">배포 가능한 업체가 없습니다.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- 배포 버튼 -->
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-paper-plane"></i> 선택한 업체에 배포
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg ml-2" onclick="selectAll()">
+                            <i class="fas fa-check-double"></i> 전체 선택
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg ml-2" onclick="deselectAll()">
+                            <i class="fas fa-times"></i> 전체 해제
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- 현재 배정된 업체들 -->
+            {% if assigned_companies %}
+            <div class="deployment-section">
+                <h4><i class="fas fa-check-circle"></i> 현재 배정된 업체들</h4>
+                <div class="company-list assigned-companies">
+                    {% for company in assigned_companies %}
+                    <div class="company-item">
+                        <i class="fas fa-check text-success"></i>
+                        <div class="company-info">
+                            <div class="company-name">{{ company.name }}</div>
+                            <div class="company-type">{{ company.get_type_display }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function selectAll() {
+    document.querySelectorAll('input[name="companies"]').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+function deselectAll() {
+    document.querySelectorAll('input[name="companies"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+// 폼 제출 시 확인
+document.getElementById('deployForm').addEventListener('submit', function(e) {
+    const selectedCompanies = document.querySelectorAll('input[name="companies"]:checked');
+    
+    if (selectedCompanies.length === 0) {
+        e.preventDefault();
+        alert('배포할 업체를 최소 하나 이상 선택해주세요.');
+        return false;
+    }
+    
+    if (!confirm(`선택한 ${selectedCompanies.length}개 업체에 정책을 배포하시겠습니까?`)) {
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+{% endblock %} 

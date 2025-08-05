@@ -22,6 +22,8 @@ from .serializers import (
 logger = logging.getLogger('orders')
 
 
+from .utils import get_visible_orders
+
 class OrderViewSet(viewsets.ModelViewSet):
     """
     주문 관리 ViewSet
@@ -34,26 +36,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """사용자 권한에 따른 쿼리셋 필터링"""
-        user = self.request.user
-        
-        # 슈퍼유저는 모든 주문 조회 가능
-        if user.is_superuser:
-            return Order.objects.all()
-        
-        # CompanyUser인 경우 소속 업체의 주문만 조회
-        try:
-            company_user = user.companyuser
-            if company_user.company.type == 'headquarters':
-                return Order.objects.all()
-            elif company_user.company.type == 'agency':
-                # 협력사는 자신과 하위 판매점의 주문 조회
-                child_companies = company_user.company.child_companies
-                return Order.objects.filter(company__in=child_companies)
-            else:
-                # 판매점은 자신의 주문만 조회
-                return Order.objects.filter(company=company_user.company)
-        except:
-            return Order.objects.none()
+        return get_visible_orders(self.request.user)
     
     def perform_create(self, serializer):
         """주문 생성 시 생성자 정보 추가"""
@@ -160,6 +143,11 @@ class OrderMemoViewSet(viewsets.ModelViewSet):
     queryset = OrderMemo.objects.select_related('order', 'created_by')
     serializer_class = OrderMemoSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """사용자가 볼 수 있는 주문의 메모만 필터링"""
+        visible_orders = get_visible_orders(self.request.user)
+        return self.queryset.filter(order__in=visible_orders)
     
     def perform_create(self, serializer):
         """메모 생성 시 작성자 정보 추가"""
@@ -174,6 +162,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.select_related('order')
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """사용자가 볼 수 있는 주문의 송장만 필터링"""
+        visible_orders = get_visible_orders(self.request.user)
+        return self.queryset.filter(order__in=visible_orders)
     
     def perform_create(self, serializer):
         """송장 생성 시 자동으로 주문 상태 업데이트"""
@@ -210,6 +203,11 @@ class OrderRequestViewSet(viewsets.ModelViewSet):
     """
     queryset = OrderRequest.objects.select_related('order', 'processed_by')
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """사용자가 볼 수 있는 주문의 요청만 필터링"""
+        visible_orders = get_visible_orders(self.request.user)
+        return self.queryset.filter(order__in=visible_orders)
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):

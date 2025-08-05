@@ -108,6 +108,29 @@
   font-size: 12px;
 }
 
+.signup-link {
+  margin-top: 15px;
+  text-align: center;
+}
+
+.signup-link p {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.signup-link a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.signup-link a:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
 @media (max-width: 480px) {
   .login-card {
     padding: 30px 20px;

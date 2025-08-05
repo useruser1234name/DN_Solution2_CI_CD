@@ -16,12 +16,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from companies import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('companies.urls')),
-    path('api/', include('policies.urls')),
-    path('api/', include('orders.urls')),
-    path('api/', include('inventory.urls')),
-    path('api/', include('messaging.urls')),
+    path('api/companies/', include('companies.urls')),
+    path('api/policies/', include('policies.urls')),
+    path('api/orders/', include('orders.urls')),
+    path('api/inventory/', include('inventory.urls')),
+    path('api/messaging/', include('messaging.urls')),
+    # Dashboard API 경로 직접 정의
+    path('api/dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('api/dashboard/activities/', views.DashboardActivitiesView.as_view(), name='dashboard-activities'),
 ]

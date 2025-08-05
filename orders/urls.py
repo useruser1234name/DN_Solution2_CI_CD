@@ -11,5 +11,5 @@ router.register(r'requests', views.OrderRequestViewSet)
 app_name = 'orders'
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
 ] 

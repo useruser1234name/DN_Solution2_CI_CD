@@ -33,6 +33,8 @@ def simple_auth_required(view_func):
     return _wrapped_view
 
 
+from .utils import get_visible_policies
+
 class PolicyListView(ListView):
     """
     정책 목록 조회 View
@@ -43,8 +45,11 @@ class PolicyListView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        """필터링 및 검색 기능"""
-        queryset = Policy.objects.select_related('created_by').prefetch_related('notices')
+        """사용자 계층에 따라 필터링된 정책 목록을 반환합니다."""
+        # 기본 쿼리셋을 계층 필터링된 결과로 설정
+        queryset = get_visible_policies(self.request.user)
+        queryset = queryset.select_related('created_by').prefetch_related('notices')
+        
         
         # 검색 필터
         search = self.request.GET.get('search', '')
@@ -100,6 +105,14 @@ class PolicyListView(ListView):
             'premium_expose': self.request.GET.get('premium_expose', ''),
         }
         
+        # 사용자 업체 정보 (권한 제어용)
+        try:
+            from companies.models import CompanyUser
+            company_user = CompanyUser.objects.get(user=self.request.user)
+            context['user_company'] = company_user.company
+        except CompanyUser.DoesNotExist:
+            context['user_company'] = None
+        
         return context
 
 
@@ -127,6 +140,7 @@ class PolicyDetailView(LoginRequiredMixin, DetailView):
 class PolicyCreateView(LoginRequiredMixin, CreateView):
     """
     정책 생성 View
+    본사와 협력사만 정책 생성 가능
     """
     model = Policy
     template_name = 'policies/policy_form.html'
@@ -136,23 +150,63 @@ class PolicyCreateView(LoginRequiredMixin, CreateView):
     ]
     success_url = reverse_lazy('policies:policy_list')
     
+    def dispatch(self, request, *args, **kwargs):
+        """권한 검증: 본사와 협력사만 정책 생성 가능"""
+        # 슈퍼유저는 모든 권한
+        if request.user.is_superuser:
+            return super().dispatch(request, *args, **kwargs)
+        
+        # CompanyUser 권한 확인
+        try:
+            from companies.models import CompanyUser
+            company_user = CompanyUser.objects.get(django_user=request.user)
+            company = company_user.company
+            
+            # 본사(headquarters) 또는 협력사(agency)만 정책 생성 가능
+            if company.type not in ['headquarters', 'agency']:
+                messages.error(request, '정책 생성 권한이 없습니다. 본사와 협력사만 정책을 생성할 수 있습니다.')
+                return redirect('policies:policy_list')
+                
+        except CompanyUser.DoesNotExist:
+            messages.error(request, '업체 정보를 찾을 수 없습니다.')
+            return redirect('policies:policy_list')
+        
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
-        """폼 유효성 검증 성공 시 처리"""
+        """폼 유효성 검증 및 저장"""
         form.instance.created_by = self.request.user
-        response = super().form_valid(form)
         
-        messages.success(self.request, f'정책 "{self.object.title}"이 성공적으로 생성되었습니다.')
-        logger.info(f"새 정책 생성: {self.object.title} (사용자: {self.request.user.username})")
+        # 정책 생성 로깅
+        logger.info(f"새 정책 생성 시도: {form.instance.title} - 생성자: {self.request.user.username}")
         
-        return response
-    
+        try:
+            response = super().form_valid(form)
+            messages.success(self.request, f'정책 "{form.instance.title}"이 성공적으로 생성되었습니다.')
+            logger.info(f"정책 생성 완료: {form.instance.title} (ID: {form.instance.id})")
+            return response
+        except Exception as e:
+            logger.error(f"정책 생성 실패: {str(e)} - {form.instance.title}")
+            messages.error(self.request, '정책 생성 중 오류가 발생했습니다.')
+            return self.form_invalid(form)
+
     def get_context_data(self, **kwargs):
         """추가 컨텍스트 데이터"""
         context = super().get_context_data(**kwargs)
+        
+        # 필터 옵션들
         context['form_types'] = Policy.FORM_TYPE_CHOICES
         context['carriers'] = Policy.CARRIER_CHOICES
         context['contract_periods'] = Policy.CONTRACT_PERIOD_CHOICES
-        context['is_create'] = True
+        
+        # 현재 사용자의 업체 정보
+        try:
+            from companies.models import CompanyUser
+            company_user = CompanyUser.objects.get(user=self.request.user)
+            context['user_company'] = company_user.company
+        except CompanyUser.DoesNotExist:
+            context['user_company'] = None
+        
         return context
 
 
@@ -322,23 +376,218 @@ def policy_assignment_list(request, policy_pk):
     })
 
 
+@login_required
+@require_http_methods(["GET", "POST"])
+def policy_deploy(request, pk):
+    """
+    정책 배포 뷰
+    선택한 하위 업체들에 정책을 배포
+    """
+    policy = get_object_or_404(Policy, pk=pk)
+    
+    # 권한 확인: 본사와 협력사만 배포 가능
+    if not request.user.is_superuser:
+        try:
+            from companies.models import CompanyUser
+            company_user = CompanyUser.objects.get(django_user=request.user)
+            company = company_user.company
+            
+            if company.type not in ['headquarters', 'agency']:
+                messages.error(request, '정책 배포 권한이 없습니다.')
+                return redirect('policies:policy_list')
+                
+        except CompanyUser.DoesNotExist:
+            messages.error(request, '업체 정보를 찾을 수 없습니다.')
+            return redirect('policies:policy_list')
+    
+    if request.method == 'POST':
+        # 배포 처리
+        company_ids = request.POST.getlist('companies')
+        custom_rebate = request.POST.get('custom_rebate')
+        expose_to_child = request.POST.get('expose_to_child') == 'on'
+        
+        if company_ids:
+            try:
+                # 커스텀 리베이트 처리
+                if custom_rebate:
+                    custom_rebate = float(custom_rebate)
+                else:
+                    custom_rebate = None
+                
+                # 선택된 업체들에 배정
+                assignments = policy.assign_to_selected_companies(
+                    company_ids, 
+                    custom_rebate, 
+                    expose_to_child
+                )
+                
+                messages.success(request, f'정책이 {len(assignments)}개 업체에 성공적으로 배포되었습니다.')
+                logger.info(f"정책 배포 완료: {policy.title} → {len(assignments)}개 업체")
+                
+            except ValueError:
+                messages.error(request, '리베이트 금액이 올바르지 않습니다.')
+            except Exception as e:
+                messages.error(request, f'정책 배포 중 오류가 발생했습니다: {str(e)}')
+                logger.error(f"정책 배포 실패: {str(e)} - {policy.title}")
+        else:
+            messages.warning(request, '배포할 업체를 선택해주세요.')
+    
+    # 배포 가능한 업체 목록 조회
+    try:
+        from companies.models import CompanyUser, Company
+        company_user = CompanyUser.objects.get(django_user=request.user)
+        user_company = company_user.company
+        
+        if request.user.is_superuser or user_company.type == 'headquarters':
+            # 본사: 모든 업체 표시
+            available_companies = Company.objects.filter(status=True).exclude(type='headquarters')
+        elif user_company.type == 'agency':
+            # 협력사: 자신의 하위 업체들만 표시
+            available_companies = Company.objects.filter(
+                parent_company=user_company,
+                status=True
+            )
+        else:
+            available_companies = Company.objects.none()
+            
+    except CompanyUser.DoesNotExist:
+        available_companies = Company.objects.none()
+    
+    # 이미 배정된 업체들
+    assigned_companies = policy.get_assigned_companies()
+    
+    context = {
+        'policy': policy,
+        'available_companies': available_companies,
+        'assigned_companies': assigned_companies,
+        'user_company': getattr(company_user, 'company', None) if 'company_user' in locals() else None,
+    }
+    
+    return render(request, 'policies/policy_deploy.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def policy_bulk_deploy(request, pk):
+    """
+    정책 일괄 배포 API
+    AJAX 요청으로 처리
+    """
+    policy = get_object_or_404(Policy, pk=pk)
+    
+    try:
+        data = json.loads(request.body)
+        company_ids = data.get('company_ids', [])
+        custom_rebate = data.get('custom_rebate')
+        expose_to_child = data.get('expose_to_child', True)
+        
+        if not company_ids:
+            return JsonResponse({'success': False, 'message': '배포할 업체를 선택해주세요.'})
+        
+        # 커스텀 리베이트 처리
+        if custom_rebate:
+            custom_rebate = float(custom_rebate)
+        
+        # 배정 처리
+        assignments = policy.assign_to_selected_companies(
+            company_ids, 
+            custom_rebate, 
+            expose_to_child
+        )
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'{len(assignments)}개 업체에 성공적으로 배포되었습니다.',
+            'deployed_count': len(assignments)
+        })
+        
+    except ValueError:
+        return JsonResponse({'success': False, 'message': '리베이트 금액이 올바르지 않습니다.'})
+    except Exception as e:
+        logger.error(f"정책 일괄 배포 실패: {str(e)} - {policy.title}")
+        return JsonResponse({'success': False, 'message': f'배포 중 오류가 발생했습니다: {str(e)}'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def policy_bulk_remove(request, pk):
+    """
+    정책 일괄 제거 API
+    AJAX 요청으로 처리
+    """
+    policy = get_object_or_404(Policy, pk=pk)
+    
+    try:
+        data = json.loads(request.body)
+        company_ids = data.get('company_ids', [])
+        
+        if not company_ids:
+            return JsonResponse({'success': False, 'message': '제거할 업체를 선택해주세요.'})
+        
+        # 제거 처리
+        companies = Company.objects.filter(id__in=company_ids)
+        removed_count = policy.remove_from_companies(companies)
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'{removed_count}개 업체에서 성공적으로 제거되었습니다.',
+            'removed_count': removed_count
+        })
+        
+    except Exception as e:
+        logger.error(f"정책 일괄 제거 실패: {str(e)} - {policy.title}")
+        return JsonResponse({'success': False, 'message': f'제거 중 오류가 발생했습니다: {str(e)}'})
+
+
+@login_required
+def get_available_companies(request):
+    """
+    배포 가능한 업체 목록 조회 API
+    AJAX 요청으로 처리
+    """
+    try:
+        from companies.models import CompanyUser, Company
+        
+        if request.user.is_superuser:
+            # 슈퍼유저: 모든 업체
+            companies = Company.objects.filter(status=True).exclude(type='headquarters')
+        else:
+            company_user = CompanyUser.objects.get(user=request.user)
+            user_company = company_user.company
+            
+            if user_company.type == 'headquarters':
+                # 본사: 모든 업체
+                companies = Company.objects.filter(status=True).exclude(type='headquarters')
+            elif user_company.type == 'agency':
+                # 협력사: 자신의 하위 업체들
+                companies = Company.objects.filter(
+                    parent_company=user_company,
+                    status=True
+                )
+            else:
+                companies = Company.objects.none()
+        
+        company_data = [{
+            'id': str(company.id),
+            'name': company.name,
+            'type': company.type,
+            'type_display': company.get_type_display()
+        } for company in companies]
+        
+        return JsonResponse({'success': True, 'companies': company_data})
+        
+    except CompanyUser.DoesNotExist:
+        return JsonResponse({'success': False, 'message': '업체 정보를 찾을 수 없습니다.'})
+    except Exception as e:
+        logger.error(f"배포 가능 업체 목록 조회 실패: {str(e)}")
+        return JsonResponse({'success': False, 'message': f'업체 목록 조회 중 오류가 발생했습니다: {str(e)}'})
+
+
 @csrf_exempt
 def policy_api_create(request):
     """
-    정책 생성 API (AJAX) - 테스트용 (인증 완전 제거)
+    정책 생성 API (AJAX) - 본사와 협력사만 정책 생성 가능
     """
-    # 인증 완전 제거 - 모든 요청 허용
-    # Django 기본 인증 시스템 비활성화
-    from django.contrib.auth.models import AnonymousUser
-    from django.contrib.auth import get_user_model
-    
-    # 인증 완전 우회
-    request.user = AnonymousUser()
-    
-    # CSRF 검증 완전 비활성화
-    from django.views.decorators.csrf import csrf_exempt
-    from django.utils.decorators import method_decorator
-    
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -351,27 +600,68 @@ def policy_api_create(request):
                     'message': '정책명은 필수입니다.'
                 })
             
-            # 정책 생성 (인증 완전 제거)
-            policy = Policy.objects.create(
+            # 권한 검증
+            if not request.user.is_authenticated:
+                return JsonResponse({
+                    'success': False,
+                    'message': '로그인이 필요합니다.'
+                })
+            
+            # 본사와 협력사만 정책 생성 가능
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                company = company_user.company
+                
+                if company.type not in ['headquarters', 'agency']:
+                    return JsonResponse({
+                    'success': False,
+                    'message': '정책 생성 권한이 없습니다. 본사와 협력사만 정책을 생성할 수 있습니다.'
+                })
+                    
+            except CompanyUser.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'message': '업체 정보를 찾을 수 없습니다.'
+                })
+            
+            # 정책 생성
+            from decimal import Decimal
+            policy = Policy(
                 title=title,
                 description=data.get('description', ''),
-                form_type=data.get('form_type', 'individual'),
+                form_type=data.get('form_type', 'general'),
                 carrier=data.get('carrier', 'skt'),
                 contract_period=data.get('contract_period', '24'),
-                rebate_agency=data.get('rebate_agency', 0),
-                rebate_retail=data.get('rebate_retail', 0),
-                expose=data.get('expose', True),
-                premium_market_expose=data.get('premium_market_expose', False),
-                created_by=None,  # 인증 완전 제거
+                rebate_agency=Decimal(str(data.get('rebate_agency', 0))),
+                rebate_retail=Decimal(str(data.get('rebate_retail', 0))),
+                expose=bool(data.get('expose', True)),
+                premium_market_expose=bool(data.get('premium_market_expose', False)),
+                created_by=request.user,
                 html_content=''  # HTML 생성 건너뛰기
             )
+            
+            # HTML 생성 없이 저장
+            policy.save(skip_html_generation=True)
             
             logger.info(f"새 정책 생성: {policy.title}")
             
             return JsonResponse({
                 'success': True,
                 'message': '정책이 성공적으로 생성되었습니다.',
-                'policy': PolicySerializer(policy).data
+                'policy': {
+                    'id': str(policy.id),
+                    'title': policy.title,
+                    'description': policy.description,
+                    'form_type': policy.form_type,
+                    'carrier': policy.carrier,
+                    'contract_period': policy.contract_period,
+                    'rebate_agency': float(policy.rebate_agency),
+                    'rebate_retail': float(policy.rebate_retail),
+                    'expose': policy.expose,
+                    'premium_market_expose': policy.premium_market_expose,
+                    'created_at': policy.created_at.isoformat() if policy.created_at else None,
+                }
             })
         
         except json.JSONDecodeError:
@@ -381,9 +671,12 @@ def policy_api_create(request):
             })
         except Exception as e:
             logger.error(f"정책 API 생성 실패: {str(e)}")
+            import traceback
+            logger.error(f"정책 API 생성 실패 상세: {traceback.format_exc()}")
             return JsonResponse({
                 'success': False,
-                'message': f'정책 생성에 실패했습니다: {str(e)}'
+                'message': f'정책 생성에 실패했습니다: {str(e)}',
+                'error_details': str(e)
             })
     
     return JsonResponse({'success': False, 'message': '잘못된 요청입니다.'})
@@ -396,7 +689,8 @@ def policy_api_list(request):
     """
     if request.method == 'GET':
         try:
-            policies = Policy.objects.all()
+            # 사용자 계층에 따라 볼 수 있는 정책만 가져옴
+            policies = get_visible_policies(request.user)
             
             # 필터링
             form_type = request.GET.get('form_type')
@@ -504,32 +798,35 @@ def policy_statistics(request):
     정책 통계 정보
     """
     try:
+        # 사용자 계층에 따라 볼 수 있는 정책만 필터링
+        visible_policies = get_visible_policies(request.user)
+
         # 전체 정책 수
-        total_policies = Policy.objects.count()
+        total_policies = visible_policies.count()
         
         # 노출 중인 정책 수
-        exposed_policies = Policy.objects.filter(expose=True).count()
+        exposed_policies = visible_policies.filter(expose=True).count()
         
         # 프리미엄 마켓 노출 정책 수
-        premium_policies = Policy.objects.filter(premium_market_expose=True).count()
+        premium_policies = visible_policies.filter(premium_market_expose=True).count()
         
         # 신청서 타입별 정책 수
-        form_type_stats = Policy.objects.values('form_type').annotate(
+        form_type_stats = visible_policies.values('form_type').annotate(
             count=Count('id')
         ).order_by('form_type')
         
         # 통신사별 정책 수
-        carrier_stats = Policy.objects.values('carrier').annotate(
+        carrier_stats = visible_policies.values('carrier').annotate(
             count=Count('id')
         ).order_by('carrier')
         
         # 가입기간별 정책 수
-        contract_stats = Policy.objects.values('contract_period').annotate(
+        contract_stats = visible_policies.values('contract_period').annotate(
             count=Count('id')
         ).order_by('contract_period')
         
         # 배정된 정책 수
-        assigned_policies = Policy.objects.filter(assignments__isnull=False).distinct().count()
+        assigned_policies = visible_policies.filter(assignments__isnull=False).distinct().count()
         
         context = {
             'total_policies': total_policies,
