@@ -31,7 +31,7 @@ class Company(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=50, unique=True, verbose_name='업체 코드')
+    code = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name='업체 코드')
     name = models.CharField(max_length=100, verbose_name='업체명')
     type = models.CharField(max_length=20, choices=COMPANY_TYPES, verbose_name='업체 유형')
     parent_company = models.ForeignKey(
@@ -83,8 +83,14 @@ class Company(models.Model):
     
     def save(self, *args, **kwargs):
         """저장 시 로깅 및 검증"""
-        self.full_clean()
         is_new = self.pk is None
+        
+        # 새 업체 생성 시 코드가 없으면 자동 생성
+        if is_new and not self.code:
+            self.code = self.generate_company_code()
+        
+        # 검증은 코드 생성 후에 수행
+        self.full_clean()
         
         if is_new:
             logger.info(f"[Company.save] 새 업체 생성 - 코드: {self.code}, 이름: {self.name}, 유형: {self.type}")
@@ -92,6 +98,43 @@ class Company(models.Model):
             logger.info(f"[Company.save] 업체 수정 - 코드: {self.code}, 이름: {self.name}")
         
         super().save(*args, **kwargs)
+        
+        # 저장 후 코드가 여전히 None이면 다시 생성
+        if self.code is None:
+            self.code = self.generate_company_code()
+            super().save(update_fields=['code'])
+            logger.info(f"[Company.save] 코드 재생성 - 코드: {self.code}")
+    
+    def generate_company_code(self):
+        """업체 코드 자동 생성"""
+        from datetime import datetime
+        
+        # 업체 타입에 따른 접두사
+        type_prefix = {
+            'headquarters': 'A',  # 본사
+            'agency': 'B',        # 협력사
+            'dealer': 'B',        # 대리점
+            'retail': 'C',        # 판매점
+        }.get(self.type, 'X')
+        
+        # 현재 년월 (YYMMDD 형식)
+        current_date = datetime.now().strftime('%y%m%d')
+        current_date_obj = datetime.now().date()
+        
+        # 같은 타입의 업체 중 같은 날짜에 생성된 업체 수 조회
+        today_companies = Company.objects.filter(
+            type=self.type,
+            created_at__date=current_date_obj
+        ).count()
+        
+        # 순번 (01부터 시작)
+        sequence = str(today_companies + 1).zfill(2)
+        
+        # 최종 코드: A-250805-01 형식
+        company_code = f"{type_prefix}-{current_date}-{sequence}"
+        
+        logger.info(f"[Company.generate_company_code] 업체 코드 생성: {company_code}")
+        return company_code
     
     def delete(self, *args, **kwargs):
         """삭제 시 로깅"""

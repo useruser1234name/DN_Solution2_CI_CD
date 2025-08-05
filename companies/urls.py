@@ -8,8 +8,11 @@ router.register(r'users', views.CompanyUserViewSet)
 
 urlpatterns = [
     path('auth/login/', views.LoginView.as_view(), name='login'),
-    path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
-    path('dashboard/activities/', views.DashboardActivitiesView.as_view(), name='dashboard-activities'),
+    path('auth/csrf/', views.CSRFTokenView.as_view(), name='csrf_token'),
     path('users/<uuid:user_id>/approval/', views.UserApprovalView.as_view(), name='user-approval'),
+    # 회원가입 관련 URL
+    path('signup/', views.SignupChoiceView.as_view(), name='signup_choice'),
+    path('signup/admin/', views.AdminSignupView.as_view(), name='admin_signup'),
+    path('signup/staff/', views.StaffSignupView.as_view(), name='staff_signup'),
     path('', include(router.urls)),
 ] 

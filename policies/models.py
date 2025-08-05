@@ -191,12 +191,13 @@ class Policy(models.Model):
     def save(self, *args, **kwargs):
         """저장 시 로깅 및 HTML 자동 생성 처리"""
         is_new = self.pk is None
+        skip_html_generation = kwargs.pop('skip_html_generation', False)
         
         try:
             self.clean()
             
-            # HTML 자동 생성
-            if not self.html_content:
+            # HTML 자동 생성 (skip_html_generation이 False일 때만)
+            if not skip_html_generation and not self.html_content:
                 self.generate_html_content()
             
             super().save(*args, **kwargs)
@@ -297,12 +298,85 @@ class Policy(models.Model):
             return 0
     
     def get_assigned_companies(self):
-        """배정된 업체 목록 반환"""
-        try:
-            return [assignment.company for assignment in self.assignments.select_related('company')]
-        except Exception as e:
-            logger.warning(f"정책 배정 업체 목록 조회 중 오류: {str(e)} - 정책: {self.title}")
-            return []
+        """이 정책이 배정된 업체 목록 반환"""
+        return Company.objects.filter(policy_assignments__policy=self)
+    
+    def assign_to_companies(self, companies, custom_rebate=None, expose_to_child=True):
+        """
+        정책을 여러 업체에 일괄 배정
+        
+        Args:
+            companies: Company 객체 리스트 또는 QuerySet
+            custom_rebate: 커스텀 리베이트 (선택사항)
+            expose_to_child: 하위 업체 노출 여부
+        """
+        assignments = []
+        for company in companies:
+            assignment, created = PolicyAssignment.objects.get_or_create(
+                policy=self,
+                company=company,
+                defaults={
+                    'custom_rebate': custom_rebate,
+                    'expose_to_child': expose_to_child
+                }
+            )
+            if not created:
+                # 기존 배정이 있으면 업데이트
+                assignment.custom_rebate = custom_rebate
+                assignment.expose_to_child = expose_to_child
+                assignment.save()
+            assignments.append(assignment)
+        
+        logger.info(f"정책 '{self.title}'을 {len(assignments)}개 업체에 배정했습니다.")
+        return assignments
+    
+    def assign_to_child_companies(self, parent_company, include_parent=False, custom_rebate=None, expose_to_child=True):
+        """
+        특정 상위 업체의 하위 업체들에 정책 배정
+        
+        Args:
+            parent_company: 상위 업체 (Company 객체)
+            include_parent: 상위 업체도 포함할지 여부
+            custom_rebate: 커스텀 리베이트 (선택사항)
+            expose_to_child: 하위 업체 노출 여부
+        """
+        # 하위 업체들 조회
+        child_companies = Company.objects.filter(parent_company=parent_company)
+        
+        if include_parent:
+            # 상위 업체도 포함
+            target_companies = list(child_companies) + [parent_company]
+        else:
+            target_companies = list(child_companies)
+        
+        return self.assign_to_companies(target_companies, custom_rebate, expose_to_child)
+    
+    def assign_to_selected_companies(self, company_ids, custom_rebate=None, expose_to_child=True):
+        """
+        선택된 업체 ID들에 정책 배정
+        
+        Args:
+            company_ids: 업체 ID 리스트
+            custom_rebate: 커스텀 리베이트 (선택사항)
+            expose_to_child: 하위 업체 노출 여부
+        """
+        companies = Company.objects.filter(id__in=company_ids)
+        return self.assign_to_companies(companies, custom_rebate, expose_to_child)
+    
+    def remove_from_companies(self, companies):
+        """
+        정책을 여러 업체에서 일괄 제거
+        
+        Args:
+            companies: Company 객체 리스트 또는 QuerySet
+        """
+        count = PolicyAssignment.objects.filter(
+            policy=self,
+            company__in=companies
+        ).delete()[0]
+        
+        logger.info(f"정책 '{self.title}'을 {count}개 업체에서 제거했습니다.")
+        return count
     
     def toggle_expose(self):
         """정책 노출 상태를 토글하는 메서드"""

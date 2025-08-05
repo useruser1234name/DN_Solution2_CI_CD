@@ -4,6 +4,24 @@ const API_BASE_URL = 'http://localhost:8001/api';
 
 console.log('[API Service] 초기화 - API_BASE_URL:', API_BASE_URL);
 
+// CSRF 토큰 가져오기 함수
+const getCSRFToken = () => {
+    // localStorage에서 CSRF 토큰 가져오기
+    const token = localStorage.getItem('csrfToken');
+    if (token) {
+        return token;
+    }
+    
+    // fallback: meta 태그나 쿠키에서 가져오기
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaToken) {
+        return metaToken;
+    }
+    
+    const cookieToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+    return cookieToken;
+};
+
 // axios 인스턴스 생성
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -23,13 +41,22 @@ api.interceptors.request.use(
             console.log('[API 요청 데이터]', config.data);
         }
         
-        // 토큰이 있으면 헤더에 추가
+        // CSRF 토큰 추가
+        const csrfToken = getCSRFToken();
+        if (csrfToken) {
+            config.headers['X-CSRFToken'] = csrfToken;
+            console.log('[API 요청] CSRF 토큰 추가됨');
+        } else {
+            console.log('[API 요청] CSRF 토큰 없음');
+        }
+        
+        // 인증 토큰이 있으면 헤더에 추가
         const token = localStorage.getItem('authToken');
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-            console.log('[API 요청] 토큰 추가됨');
+            config.headers.Authorization = `Token ${token}`;
+            console.log('[API 요청] 인증 토큰 추가됨');
         } else {
-            console.log('[API 요청] 토큰 없음');
+            console.log('[API 요청] 인증 토큰 없음');
         }
         
         return config;

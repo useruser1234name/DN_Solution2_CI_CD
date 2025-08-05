@@ -21,7 +21,7 @@ const UserListPage = () => {
         setError(null);
 
         try {
-            const response = await get('users/');
+            const response = await get('companies/users/');
             console.log('[UserListPage] 사용자 목록 응답:', response);
 
             if (response.success) {
@@ -61,7 +61,7 @@ const UserListPage = () => {
         console.log('[UserListPage] 사용자 승인:', userId);
         
         try {
-            const response = await post(`users/${userId}/approval/`, { action: 'approve' });
+            const response = await post(`companies/users/${userId}/approval/`, { action: 'approve' });
             console.log('[UserListPage] 사용자 승인 응답:', response);
 
             if (response.success) {
@@ -85,7 +85,7 @@ const UserListPage = () => {
         }
         
         try {
-            const response = await post(`users/${userId}/approval/`, { action: 'reject' });
+            const response = await post(`companies/users/${userId}/approval/`, { action: 'reject' });
             console.log('[UserListPage] 사용자 거부 응답:', response);
 
             if (response.success) {

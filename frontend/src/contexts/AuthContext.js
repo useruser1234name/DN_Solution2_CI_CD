@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
         try {
             // 백엔드 API 호출
             console.log('[AuthContext] 백엔드 로그인 API 호출');
-            const response = await post('auth/login/', {
+            const response = await post('companies/auth/login/', {
                 username: username,
                 password: password
             });
