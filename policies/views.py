@@ -14,6 +14,10 @@ from django.contrib.auth import get_user_model
 import json
 import logging
 from functools import wraps
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 
 from .models import Policy, PolicyNotice, PolicyAssignment
 from .serializers import PolicySerializer, PolicyNoticeSerializer
@@ -583,49 +587,26 @@ def get_available_companies(request):
         return JsonResponse({'success': False, 'message': f'업체 목록 조회 중 오류가 발생했습니다: {str(e)}'})
 
 
-@csrf_exempt
-def policy_api_create(request):
-    """
-    정책 생성 API (AJAX) - 본사와 협력사만 정책 생성 가능
-    """
-    if request.method == 'POST':
+class PolicyApiCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
         try:
-            data = json.loads(request.body)
-            
-            # 필수 필드 검증
+            data = request.data
             title = data.get('title', '').strip()
             if not title:
-                return JsonResponse({
-                    'success': False,
-                    'message': '정책명은 필수입니다.'
-                })
-            
-            # 권한 검증
-            if not request.user.is_authenticated:
-                return JsonResponse({
-                    'success': False,
-                    'message': '로그인이 필요합니다.'
-                })
-            
+                return Response({'success': False, 'message': '정책명은 필수입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
             # 본사와 협력사만 정책 생성 가능
+            from companies.models import CompanyUser, Company
             try:
-                from companies.models import CompanyUser
                 company_user = CompanyUser.objects.get(django_user=request.user)
                 company = company_user.company
-                
                 if company.type not in ['headquarters', 'agency']:
-                    return JsonResponse({
-                    'success': False,
-                    'message': '정책 생성 권한이 없습니다. 본사와 협력사만 정책을 생성할 수 있습니다.'
-                })
-                    
+                    return Response({'success': False, 'message': '정책 생성 권한이 없습니다. 본사와 협력사만 정책을 생성할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
             except CompanyUser.DoesNotExist:
-                return JsonResponse({
-                    'success': False,
-                    'message': '업체 정보를 찾을 수 없습니다.'
-                })
-            
-            # 정책 생성
+                return Response({'success': False, 'message': '업체 정보를 찾을 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
             from decimal import Decimal
             policy = Policy(
                 title=title,
@@ -638,15 +619,32 @@ def policy_api_create(request):
                 expose=bool(data.get('expose', True)),
                 premium_market_expose=bool(data.get('premium_market_expose', False)),
                 created_by=request.user,
-                html_content=''  # HTML 생성 건너뛰기
+                html_content=''
             )
-            
-            # HTML 생성 없이 저장
             policy.save(skip_html_generation=True)
-            
+
+            # 자식 회사에 할당 (assigned_to 파라미터가 있는 경우)
+            assigned_to = data.get('assigned_to')
+            if assigned_to:
+                try:
+                    target_company = Company.objects.get(id=assigned_to)
+                    # 해당 회사가 현재 사용자의 자식 회사인지 확인
+                    if target_company.parent_company == company:
+                        from .models import PolicyAssignment
+                        PolicyAssignment.objects.create(
+                            policy=policy,
+                            company=target_company,
+                            expose_to_child=True
+                        )
+                        logger.info(f"정책 '{policy.title}'을 {target_company.name}에 할당했습니다.")
+                    else:
+                        logger.warning(f"권한 없는 회사에 정책 할당 시도: {target_company.name}")
+                except Company.DoesNotExist:
+                    logger.warning(f"존재하지 않는 회사에 정책 할당 시도: {assigned_to}")
+
             logger.info(f"새 정책 생성: {policy.title}")
-            
-            return JsonResponse({
+
+            return Response({
                 'success': True,
                 'message': '정책이 성공적으로 생성되었습니다.',
                 'policy': {
@@ -662,83 +660,84 @@ def policy_api_create(request):
                     'premium_market_expose': policy.premium_market_expose,
                     'created_at': policy.created_at.isoformat() if policy.created_at else None,
                 }
-            })
-        
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'message': '잘못된 JSON 형식입니다.'
-            })
+            }, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.error(f"정책 API 생성 실패: {str(e)}")
             import traceback
             logger.error(f"정책 API 생성 실패 상세: {traceback.format_exc()}")
-            return JsonResponse({
-                'success': False,
-                'message': f'정책 생성에 실패했습니다: {str(e)}',
-                'error_details': str(e)
-            })
-    
-    return JsonResponse({'success': False, 'message': '잘못된 요청입니다.'})
+            return Response({'success': False, 'message': f'정책 생성에 실패했습니다: {str(e)}', 'error_details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# 기존 함수형 뷰는 제거 또는 주석 처리
+# @csrf_exempt
+def policy_api_create(request):
+    return Response({'success': False, 'message': '이 API는 더 이상 사용되지 않습니다. (DRF APIView로 대체됨)'}, status=405)
 
 
 @csrf_exempt
 def policy_api_list(request):
     """
     정책 목록 API (AJAX)
+    - received_policies: 상위에서 받은 정책(기존 get_visible_policies)
+    - assigned_policies: 내가 하위에 할당한 정책(내 회사가 parent_company인 하위 업체에 배정된 정책)
     """
     if request.method == 'GET':
         try:
-            # 사용자 계층에 따라 볼 수 있는 정책만 가져옴
-            policies = get_visible_policies(request.user)
-            
-            # 필터링
-            form_type = request.GET.get('form_type')
-            if form_type:
-                policies = policies.filter(form_type=form_type)
-            
-            carrier = request.GET.get('carrier')
-            if carrier:
-                policies = policies.filter(carrier=carrier)
-            
-            contract_period = request.GET.get('contract_period')
-            if contract_period:
-                policies = policies.filter(contract_period=contract_period)
-            
-            expose = request.GET.get('expose')
-            if expose in ['true', 'false']:
-                policies = policies.filter(expose=(expose == 'true'))
-            
-            # 검색
-            search = request.GET.get('search', '')
-            if search:
-                policies = policies.filter(
-                    Q(title__icontains=search) |
-                    Q(description__icontains=search)
-                )
-            
-            # 페이지네이션
-            page = request.GET.get('page', 1)
-            paginator = Paginator(policies, 20)
-            policies_page = paginator.get_page(page)
-            
-            serializer = PolicySerializer(policies_page, many=True)
-            
+            from .utils import get_received_policies, get_assigned_policies
+            user = request.user
+            # 1. 상위에서 받은 정책
+            received_policies = get_received_policies(user)
+
+            # 2. 내가 하위에 할당한 정책
+            assigned_policies = get_assigned_policies(user)
+
+            # 필터링(공통)
+            def apply_filters(qs):
+                form_type = request.GET.get('form_type')
+                if form_type:
+                    qs = qs.filter(form_type=form_type)
+                carrier = request.GET.get('carrier')
+                if carrier:
+                    qs = qs.filter(carrier=carrier)
+                contract_period = request.GET.get('contract_period')
+                if contract_period:
+                    qs = qs.filter(contract_period=contract_period)
+                expose = request.GET.get('expose')
+                if expose in ['true', 'false']:
+                    qs = qs.filter(expose=(expose == 'true'))
+                search = request.GET.get('search', '')
+                if search:
+                    qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
+                return qs
+
+            received_policies = apply_filters(received_policies)
+            assigned_policies = apply_filters(assigned_policies)
+
+            # 페이지네이션(각각)
+            page = int(request.GET.get('page', 1))
+            paginator1 = Paginator(received_policies, 20)
+            received_page = paginator1.get_page(page)
+            paginator2 = Paginator(assigned_policies, 20)
+            assigned_page = paginator2.get_page(page)
+
+            serializer1 = PolicySerializer(received_page, many=True)
+            serializer2 = PolicySerializer(assigned_page, many=True)
+
             return JsonResponse({
                 'success': True,
-                'policies': serializer.data,
-                'total_pages': paginator.num_pages,
-                'current_page': int(page),
-                'total_count': paginator.count
+                'received_policies': serializer1.data,
+                'assigned_policies': serializer2.data,
+                'received_total_pages': paginator1.num_pages,
+                'assigned_total_pages': paginator2.num_pages,
+                'current_page': page,
+                'received_total_count': paginator1.count,
+                'assigned_total_count': paginator2.count
             })
-        
         except Exception as e:
             logger.error(f"정책 API 목록 조회 실패: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'message': '정책 목록 조회에 실패했습니다.'
             })
-    
     return JsonResponse({'success': False, 'message': '잘못된 요청입니다.'})
 
 

@@ -106,7 +106,7 @@ const Sidebar = () => {
     return (
         <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-header">
-                <h2 className="sidebar-title">HB Admin</h2>
+                <h2 className="sidebar-title">DN_Solution</h2>
                 <button 
                     className="collapse-btn"
                     onClick={handleToggleCollapse}

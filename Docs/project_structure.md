@@ -7,7 +7,7 @@
 
 ```
 DN_Solution/
-├── 📁 hb_admin/                 # Django 프로젝트 설정
+├── 📁 dn_solution/                 # Django 프로젝트 설정
 │   ├── settings.py              # Django 설정
 │   ├── urls.py                  # 메인 URL 설정
 │   └── wsgi.py                  # WSGI 설정
@@ -52,8 +52,8 @@ DN_Solution/
 ### 🔧 **Django 백엔드**
 | 파일 | 설명 | 상태 |
 |------|------|------|
-| `hb_admin/settings.py` | Django 설정 (로깅, CORS, 미들웨어) | ✅ 완료 |
-| `hb_admin/urls.py` | 메인 URL 라우팅 | ✅ 완료 |
+| `dn_solution/settings.py` | Django 설정 (로깅, CORS, 미들웨어) | ✅ 완료 |
+| `dn_solution/urls.py` | 메인 URL 라우팅 | ✅ 완료 |
 | `companies/models.py` | 데이터 모델 (Company, CompanyUser, CompanyMessage) | ✅ 완료 |
 | `companies/views.py` | API 뷰 (ViewSet, LoginView, DashboardView) | ✅ 완료 |
 | `companies/serializers.py` | 데이터 직렬화 | ✅ 완료 |

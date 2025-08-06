@@ -27,9 +27,9 @@ urlpatterns = [
     path('<uuid:policy_pk>/assignments/', views.policy_assignment_list, name='policy_assignments'),
     
     # API 엔드포인트
-    path('list/', views.policy_api_list, name='api_list'),
-    path('create/', views.policy_api_create, name='api_create'),
-    path('check-duplicate/', views.check_duplicate_policy, name='check_duplicate'),
+    path('api/list/', views.policy_api_list, name='api_list'),
+    path('api/create/', views.PolicyApiCreateView.as_view(), name='api_create'),
+    path('api/check-duplicate/', views.check_duplicate_policy, name='check_duplicate'),
     
     # 통계 및 대시보드
     path('statistics/', views.policy_statistics, name='statistics'),

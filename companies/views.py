@@ -357,3 +357,19 @@ class StaffSignupView(APIView):
                 {'error': '회원가입 중 오류가 발생했습니다.'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class ChildCompaniesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            company_user = CompanyUser.objects.get(django_user=user)
+            child_companies = Company.objects.filter(parent_company=company_user.company)
+            data = [{'id': company.id, 'name': company.name} for company in child_companies]
+            return Response({'success': True, 'data': data}, status=status.HTTP_200_OK)
+        except CompanyUser.DoesNotExist:
+            return Response({'success': False, 'message': '사용자 정보가 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f'자식 회사 목록 조회 실패: {str(e)}')
+            return Response({'success': False, 'message': '자식 회사 목록 조회에 실패했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

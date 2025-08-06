@@ -571,6 +571,15 @@ class PolicyAssignment(models.Model):
         verbose_name="배정일시"
     )
     
+    # 할당된 회사 이름
+    assigned_to_name = models.CharField(
+        max_length=200,
+        verbose_name="할당된 회사 이름",
+        help_text="정책이 할당된 회사의 이름",
+        blank=True,
+        null=True
+    )
+    
     class Meta:
         verbose_name = "정책 배정"
         verbose_name_plural = "정책 배정 목록"
@@ -613,6 +622,11 @@ class PolicyAssignment(models.Model):
                 logger.info(f"정책이 업체에 배정되었습니다: {self.policy.title} → {self.company.name}{rebate_info}")
             else:
                 logger.info(f"정책 배정이 수정되었습니다: {self.policy.title} → {self.company.name}")
+            
+            # assigned_to_name 필드 업데이트 (중복 저장 방지)
+            if self.company and not self.assigned_to_name:
+                self.assigned_to_name = self.company.name
+                super().save(update_fields=['assigned_to_name'])
         
         except Exception as e:
             logger.error(f"정책 배정 저장 중 오류 발생: {str(e)} - {self.policy.title} → {self.company.name}")

@@ -38,3 +38,38 @@ def get_visible_policies(user):
 
     # 두 조건을 OR로 결합하여 중복 없이 모든 관련 정책을 가져옴
     return Policy.objects.filter(created_by_companies_q | assigned_to_me_q).distinct()
+
+def get_received_policies(user):
+    """
+    상위에서 받은 정책들을 반환합니다.
+    """
+    return get_visible_policies(user)
+
+def get_assigned_policies(user):
+    """
+    내가 하위에 할당한 정책들을 반환합니다.
+    """
+    if not user.is_authenticated:
+        return Policy.objects.none()
+
+    if user.is_superuser:
+        return Policy.objects.all()
+
+    try:
+        company_user = CompanyUser.objects.get(django_user=user)
+        my_company = company_user.company
+    except CompanyUser.DoesNotExist:
+        return Policy.objects.none()
+
+    # 하위 업체(내 회사가 parent_company) 목록
+    child_companies = my_company.child_companies.all()
+    if not child_companies:
+        return Policy.objects.none()
+    
+    # 하위 업체에 배정된 정책들
+    from .models import PolicyAssignment
+    assigned_policy_ids = PolicyAssignment.objects.filter(
+        company__in=child_companies
+    ).values_list('policy_id', flat=True).distinct()
+    
+    return Policy.objects.filter(id__in=assigned_policy_ids).distinct()

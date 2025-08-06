@@ -63,7 +63,7 @@ const LoginPage = () => {
     return (
         <div className="login-container">
             <div className="login-box">
-                <h1>HB Admin</h1>
+                <h1>DN_Solution</h1>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label htmlFor="username">아이디</label>

@@ -5,9 +5,19 @@ from .models import Company, CompanyUser
 
 
 class CompanySerializer(serializers.ModelSerializer):
+    parent_company_name = serializers.SerializerMethodField()
+    child_companies = serializers.SerializerMethodField()
+
     class Meta:
         model = Company
         fields = '__all__'
+        extra_fields = ['parent_company_name', 'child_companies']
+
+    def get_parent_company_name(self, obj):
+        return obj.parent_company.name if obj.parent_company else None
+
+    def get_child_companies(self, obj):
+        return [child.name for child in obj.child_companies]
 
 
 class CompanyUserSerializer(serializers.ModelSerializer):

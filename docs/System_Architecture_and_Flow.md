@@ -64,7 +64,7 @@ DN_solution/
 │   ├── urls.py             # 앱별 URL 라우팅
 │   ├── views.py            # DRF ViewSet (API 뷰 로직)
 │   └── templates/          # HTML 템플릿 (예: model_test.html)
-├── hb_admin/               # Django 프로젝트 메인 설정
+├── dn_solution/               # Django 프로젝트 메인 설정
 │   ├── __init__.py
 │   ├── asgi.py             # ASGI 설정
 │   ├── settings.py         # 프로젝트 설정 (DB, 앱 등록, 미들웨어 등)

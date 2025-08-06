@@ -183,7 +183,7 @@ Python의 `logging` 모듈에서 제공하는 표준 로깅 레벨을 목적에 
             },
         }
         ```
-    *   **테스트 실행:** `python manage.py test --settings=hb_admin.test_settings companies.tests` (만약 별도의 테스트 설정 파일을 사용한다면).
+    *   **테스트 실행:** `python manage.py test --settings=dn_solution.test_settings companies.tests` (만약 별도의 테스트 설정 파일을 사용한다면).
 
 ## 4. 엣지 케이스 및 예외 처리 (Edge Cases and Exception Handling)
 
@@ -226,7 +226,7 @@ Python의 `logging` 모듈에서 제공하는 표준 로깅 레벨을 목적에 
 Django REST Framework는 중앙 집중식 예외 처리를 위한 메커니즘을 제공합니다. `settings.py`에서 `REST_FRAMEWORK` 설정의 `EXCEPTION_HANDLER`를 커스터마이징하여 모든 API 예외를 일관된 형식으로 처리할 수 있습니다.
 
 ```python
-# hb_admin/settings.py
+# dn_solution/settings.py
 
 REST_FRAMEWORK = {
     # ...

@@ -112,6 +112,8 @@ const CompanyListPage = () => {
                             <th>업체명</th>
                             <th>유형</th>
                             <th>상태</th>
+                            <th>상위 업체</th>
+                            <th>자식 업체</th>
                             <th>생성일</th>
                             <th>작업</th>
                         </tr>
@@ -127,6 +129,8 @@ const CompanyListPage = () => {
                                         {getStatusDisplay(company.status)}
                                     </span>
                                 </td>
+                                <td>{company.parent_company_name || '-'}</td>
+                                <td>{company.child_companies && company.child_companies.length > 0 ? company.child_companies.join(', ') : '-'}</td>
                                 <td>{new Date(company.created_at).toLocaleDateString()}</td>
                                 <td>
                                     <button className="action-btn edit">수정</button>

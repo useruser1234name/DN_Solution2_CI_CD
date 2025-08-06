@@ -3,7 +3,7 @@ import sys
 import django
 
 # Django 설정
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'hb_admin.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dn_solution.settings')
 django.setup()
 
 from django.contrib.auth.models import User
