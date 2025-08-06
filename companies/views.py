@@ -27,6 +27,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
+        # 계층별 권한 필터링이 적용된 회사 목록 반환
         return get_visible_companies(self.request.user)
 
 class CompanyUserViewSet(viewsets.ModelViewSet):
@@ -35,6 +36,7 @@ class CompanyUserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # 계층별 권한 필터링이 적용된 사용자 목록 반환
         return get_visible_users(self.request.user)
 
 class UserApprovalView(APIView):
@@ -101,77 +103,17 @@ from django.utils.decorators import method_decorator
 
 from rest_framework.authtoken.models import Token
 
-@method_decorator(csrf_exempt, name='dispatch')
-class LoginView(APIView):
-    permission_classes = [AllowAny]
-    
-    def post(self, request):
-        """로그인 API"""
-        logger.info(f"[LoginView] 로그인 요청 - IP: {request.META.get('REMOTE_ADDR')} - User-Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}")
-        
-        try:
-            username = request.data.get('username')
-            password = request.data.get('password')
-            
-            logger.info(f"[LoginView] 로그인 시도 - 사용자명: {username}")
-            
-            # Django 인증 시스템 사용
-            from django.contrib.auth import authenticate
-            user = authenticate(username=username, password=password)
-            
-            if user is not None:
-                # CompanyUser 조회
-                try:
-                    company_user = CompanyUser.objects.get(django_user=user)
-                    
-                    # 승인된 사용자만 로그인 허용
-                    if not company_user.is_approved:
-                        logger.warning(f"[LoginView] 승인되지 않은 사용자 로그인 시도: {username}")
-                        return Response(
-                            {'error': '승인되지 않은 사용자입니다. 관리자에게 문의하세요.'},
-                            status=status.HTTP_401_UNAUTHORIZED
-                        )
-                    
-                    # 마지막 로그인 시간 업데이트
-                    company_user.last_login = timezone.now()
-                    company_user.save()
+# LoginView, CSRFTokenView 등 세션/CSRF 기반 인증 관련 APIView 제거
 
-                    # 토큰 생성 또는 가져오기
-                    token, created = Token.objects.get_or_create(user=user)
-                    
-                    response_data = {
-                        'token': token.key,
-                        'id': str(company_user.id),
-                        'username': company_user.username,
-                        'role': company_user.role,
-                        'status': company_user.status,
-                        'company_name': company_user.company.name,
-                        'company_type': company_user.company.get_type_display(),
-                        'message': '로그인 성공'
-                    }
-                    
-                    logger.info(f"[LoginView] 로그인 성공 - 사용자: {username}")
-                    return Response(response_data, status=status.HTTP_200_OK)
-                    
-                except CompanyUser.DoesNotExist:
-                    logger.warning(f"[LoginView] CompanyUser가 존재하지 않음: {username}")
-                    return Response(
-                        {'error': '사용자 정보를 찾을 수 없습니다.'},
-                        status=status.HTTP_401_UNAUTHORIZED
-                    )
-            else:
-                logger.warning(f"[LoginView] 로그인 실패 - 잘못된 인증 정보: {username}")
-                return Response(
-                    {'error': '아이디 또는 비밀번호가 올바르지 않습니다.'},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-                
-        except Exception as e:
-            logger.error(f"[LoginView] 로그인 처리 오류: {str(e)}", exc_info=True)
-            return Response(
-                {'error': '로그인 처리 중 오류가 발생했습니다.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    커스텀 JWT 로그인 뷰
+    승인된 CompanyUser만 로그인 가능
+    """
+    serializer_class = CustomTokenObtainPairSerializer
 
 class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -341,20 +283,7 @@ class AdminSignupView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class CSRFTokenView(APIView):
-    """CSRF 토큰 제공"""
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        logger.info(f"[CSRFTokenView] CSRF 토큰 요청 - IP: {request.META.get('REMOTE_ADDR')}")
-        try:
-            # CSRF 토큰 생성
-            csrf_token = get_token(request)
-            logger.info(f"[CSRFTokenView] CSRF 토큰 생성 성공")
-            return JsonResponse({'csrf_token': csrf_token})
-        except Exception as e:
-            logger.error(f"[CSRFTokenView] CSRF 토큰 생성 실패: {str(e)}")
-            return JsonResponse({'error': 'CSRF 토큰 생성 실패'}, status=500)
+# CSRFTokenView 제거
 
 class StaffSignupView(APIView):
     """직원 회원가입"""

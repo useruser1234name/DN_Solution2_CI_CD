@@ -37,78 +37,29 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (username, password) => {
         console.log('[AuthContext] 로그인 시도:', { username, password: '***' });
-        
         try {
-            // 백엔드 API 호출
-            console.log('[AuthContext] 백엔드 로그인 API 호출');
-            const response = await post('companies/auth/login/', {
+            // JWT 토큰 발급 엔드포인트 호출
+            console.log('[AuthContext] JWT 로그인 API 호출');
+            const response = await post('companies/auth/jwt/login/', {
                 username: username,
                 password: password
             });
-
-            console.log('[AuthContext] 백엔드 응답:', response);
-
-            if (response.success) {
+            console.log('[AuthContext] JWT 응답:', response);
+            if (response.success && response.data.access) {
                 const userData = {
-                    id: response.data.id || 1,
                     username: username,
-                    email: response.data.email || 'admin@example.com',
-                    role: response.data.role || 'admin',
-                    token: response.data.token || 'temp-token-' + Date.now()
+                    token: response.data.access,
                 };
-                
-                console.log('[AuthContext] 로그인 성공:', userData);
                 setUser(userData);
                 localStorage.setItem('user', JSON.stringify(userData));
-                localStorage.setItem('authToken', userData.token);
-                
+                localStorage.setItem('authToken', response.data.access);
                 return { success: true, message: '로그인 성공' };
             } else {
-                console.log('[AuthContext] 백엔드 로그인 실패, 임시 로그인 시도');
-                
-                // 백엔드 API 실패 시 임시 로그인 로직 사용
-                if (username === 'admin' && password === 'admin1234') {
-                    const userData = {
-                        id: 1,
-                        username: username,
-                        email: 'admin@example.com',
-                        role: 'admin',
-                        token: 'temp-token-' + Date.now()
-                    };
-                    
-                    console.log('[AuthContext] 임시 로그인 성공:', userData);
-                    setUser(userData);
-                    localStorage.setItem('user', JSON.stringify(userData));
-                    localStorage.setItem('authToken', userData.token);
-                    
-                    return { success: true, message: '로그인 성공 (임시)' };
-                } else {
-                    console.log('[AuthContext] 로그인 실패: 잘못된 인증 정보');
-                    return { success: false, message: '아이디 또는 비밀번호가 올바르지 않습니다.' };
-                }
+                return { success: false, message: '아이디 또는 비밀번호가 올바르지 않습니다.' };
             }
         } catch (error) {
             console.error('[AuthContext] 로그인 중 오류:', error);
-            
-            // 네트워크 오류 시 임시 로그인 로직 사용
-            if (username === 'admin' && password === 'admin1234') {
-                const userData = {
-                    id: 1,
-                    username: username,
-                    email: 'admin@example.com',
-                    role: 'admin',
-                    token: 'temp-token-' + Date.now()
-                };
-                
-                console.log('[AuthContext] 네트워크 오류로 임시 로그인 사용:', userData);
-                setUser(userData);
-                localStorage.setItem('user', JSON.stringify(userData));
-                localStorage.setItem('authToken', userData.token);
-                
-                return { success: true, message: '로그인 성공 (오프라인 모드)' };
-            } else {
-                return { success: false, message: '로그인 중 오류가 발생했습니다.' };
-            }
+            return { success: false, message: '로그인 중 오류가 발생했습니다.' };
         }
     };
 

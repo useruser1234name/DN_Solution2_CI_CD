@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
@@ -13,30 +13,7 @@ const LoginPage = () => {
 
     console.log('[LoginPage] 컴포넌트 렌더링');
 
-    // CSRF 토큰 가져오기
-    useEffect(() => {
-        const fetchCSRFToken = async () => {
-            try {
-                console.log('[LoginPage] CSRF 토큰 가져오기 시작');
-                const response = await fetch('http://localhost:8001/api/companies/auth/csrf/', {
-                    method: 'GET',
-                    credentials: 'include',
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('[LoginPage] CSRF 토큰 가져오기 성공');
-                    // CSRF 토큰을 localStorage에 저장
-                    localStorage.setItem('csrfToken', data.csrf_token);
-                } else {
-                    console.log('[LoginPage] CSRF 토큰 가져오기 실패:', response.status);
-                }
-            } catch (error) {
-                console.error('[LoginPage] CSRF 토큰 가져오기 오류:', error);
-            }
-        };
-        
-        fetchCSRFToken();
-    }, []);
+    // CSRF 토큰 관련 useEffect 제거
 
     const handleSubmit = async (e) => {
         e.preventDefault();

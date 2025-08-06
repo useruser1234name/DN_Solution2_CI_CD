@@ -61,16 +61,22 @@
 *   **`CompanySerializer`:** `Company` 모델의 직렬화/역직렬화를 담당합니다. `type_display`, `users_count`, `parent_company_name`, `child_companies`와 같은 읽기 전용 필드를 포함하여 데이터 표현을 풍부하게 합니다.
 *   **`CompanyUserSerializer`:** `CompanyUser` 모델의 직렬화/역직렬화를 담당합니다. `password` 필드를 `write_only`로 설정하여 보안을 강화합니다.
 *   **`CompanyMessageSerializer`:** `CompanyMessage` 모델의 직렬화/역직렬화를 담당합니다.
+*   **`CustomTokenObtainPairSerializer`:** JWT 토큰 발급 시 이중 인증 시스템을 구현합니다:
+    *   Django User 인증 후 연결된 `CompanyUser` 존재 여부 확인
+    *   `CompanyUser.is_approved` 및 `status='approved'` 상태 검증
+    *   소속 `Company.status` 활성화 상태 확인
+    *   JWT 페이로드에 업체 정보 (company_id, company_name, company_type, role) 포함
+    *   승인되지 않은 사용자의 로그인을 차단하여 보안 강화
 *   **유효성 검증:** 각 시리얼라이저의 `validate_필드명()` 및 `validate()` 메서드를 통해 API 요청 데이터의 유효성을 검증합니다.
 
 #### 2.1.3. 뷰셋 (`views.py`)
 
 *   **`CompanyViewSet`:** `Company` 모델에 대한 CRUD 및 추가 액션(일괄 삭제, 상태 토글, 사용자 목록 조회)을 제공합니다.
-    *   **`get_queryset()` (권한 필터링 핵심):**
-        *   `user.is_superuser`: 모든 `Company` 객체 반환.
-        *   `headquarters` 타입 `CompanyUser`: 모든 `Company` 객체 반환.
-        *   `agency` 타입 `CompanyUser`: 자신의 `Company` 객체와 `parent_company`가 자신인 `retail` 타입 `Company` 객체들을 반환.
-        *   `retail` 타입 `CompanyUser`: 자신의 `Company` 객체만 반환.
+    *   **`get_queryset()` (계층적 권한 필터링):** `companies/utils.py`의 `get_visible_companies()` 함수를 사용하여 일관된 권한 제어를 적용합니다:
+        *   **본사 사용자:** 모든 하위 업체 (자신 + 1,2단계 하위) 접근 가능
+        *   **협력사 사용자:** 자신과 직속 하위 판매점만 접근 가능  
+        *   **판매점 사용자:** 자신의 업체만 접근 가능
+        *   **슈퍼유저:** 모든 업체 접근 가능
     *   **`create()` (Company 생성 정책):**
         *   **현재 로직:** 본사 계정은 협력사를 생성할 수 있으며, 유효한 상위 협력사를 지정하는 경우 판매점도 생성할 수 있습니다. 협력사 계정은 자신의 하위에 판매점을 생성할 수 있습니다.
         *   **향후 강화 방안 (본사의 판매점 직접 생성 금지):** `create` 메서드 내에서 요청을 보낸 사용자가 본사 계정이고 생성하려는 `Company`의 `type`이 `retail`인 경우 `HTTP_403_FORBIDDEN` 또는 `HTTP_400_BAD_REQUEST`를 반환하는 로직을 추가할 수 있습니다.
@@ -183,9 +189,11 @@
 
 ## 3. 공통 백엔드 설계 요소
 
-*   **인증 및 권한:**
-    *   `rest_framework.permissions.IsAuthenticated`를 사용하여 인증된 사용자만 API 접근을 허용합니다.
-    *   `CompanyViewSet.get_queryset()`에서 객체 레벨 권한을 구현하여 사용자의 역할에 따라 접근 가능한 데이터를 제한합니다.
+*   **JWT 기반 인증 및 권한:**
+    *   `rest_framework_simplejwt.authentication.JWTAuthentication`을 사용하여 JWT 토큰 기반 인증을 제공합니다.
+    *   `CustomTokenObtainPairView` 및 `CustomTokenObtainPairSerializer`를 통해 이중 인증 시스템을 구현합니다.
+    *   `companies/utils.py`의 유틸리티 함수들을 통해 Django Admin과 API ViewSet에서 일관된 계층적 권한 제어를 적용합니다.
+    *   CORS 설정을 통해 프론트엔드-백엔드 간 안전한 크로스 도메인 통신을 지원합니다.
 *   **데이터 유효성 검증:**
     *   **모델 레벨:** `models.py`의 `clean()` 메서드를 통해 데이터베이스 저장 전 비즈니스 규칙을 검증합니다.
     *   **시리얼라이저 레벨:** `serializers.py`의 `validate_필드명()` 및 `validate()` 메서드를 통해 API 요청 데이터의 형식을 검증하고 비즈니스 규칙을 확인합니다.

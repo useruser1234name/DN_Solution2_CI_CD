@@ -53,7 +53,9 @@ class CompanyAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
             return qs
-        return qs.filter(status=True)
+        from .utils import get_accessible_company_ids
+        accessible_ids = get_accessible_company_ids(request.user)
+        return qs.filter(id__in=accessible_ids)
 
 
 @admin.register(CompanyUser)
@@ -87,7 +89,9 @@ class CompanyUserAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
             return qs
-        return qs.filter(company__status=True)
+        from .utils import get_accessible_company_ids
+        accessible_ids = get_accessible_company_ids(request.user)
+        return qs.filter(company__id__in=accessible_ids)
     
     def save_model(self, request, obj, form, change):
         """모델 저장 시 추가 처리"""

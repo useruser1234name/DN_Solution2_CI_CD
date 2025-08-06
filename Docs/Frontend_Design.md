@@ -1,323 +1,202 @@
 # 프론트엔드 설계 (Frontend Design)
 
-이 문서는 `DN_solution` 프로젝트의 프론트엔드 시스템에 대한 상세 설계를 다룹니다. React 기반의 SPA(Single Page Application) 아키텍처, 컴포넌트 구조, 상태 관리, 그리고 백엔드와의 통신 방식을 중심으로 설명합니다.
+이 문서는 `DN_solution` 프로젝트의 프론트엔드 애플리케이션 설계에 대한 상세 내용을 다룹니다. 사용자 인터페이스(UI)의 구성, 사용자 경험(UX) 원칙, 백엔드 API와의 연동 방식, 그리고 사용자 역할에 따른 UI 접근 제어 전략에 초점을 맞춥니다.
 
 ## 1. 아키텍처 및 기술 스택
 
-*   **프레임워크:** React 18.x
-*   **라우팅:** React Router v6
-*   **상태 관리:** React Context API
-*   **HTTP 클라이언트:** Fetch API (기본) 또는 Axios
-*   **스타일링:** CSS Modules 또는 Styled Components
-*   **빌드 도구:** Create React App (CRA)
-*   **개발 서버:** React Development Server (포트 3000)
-
-## 2. 프로젝트 구조
-
-```
-frontend/
-├── public/
-│   ├── index.html
-│   ├── favicon.ico
-│   └── manifest.json
-├── src/
-│   ├── components/          # 재사용 가능한 UI 컴포넌트
-│   │   ├── Sidebar.js
-│   │   └── Sidebar.css
-│   ├── contexts/            # React Context (상태 관리)
-│   │   └── AuthContext.js
-│   ├── pages/               # 페이지 컴포넌트
-│   │   ├── LoginPage.js
-│   │   ├── SignUpPage.js
-│   │   ├── CompanyManagementPage.js
-│   │   ├── UserApprovalPage.js
-│   │   ├── DebugPage.js
-│   │   ├── MainLayout.js
-│   │   └── MainLayout.css
-│   ├── services/            # API 통신 로직
-│   │   ├── api.js
-│   │   ├── authService.js
-│   │   ├── companyService.js
-│   │   └── userService.js
-│   ├── hooks/               # 커스텀 React Hooks
-│   ├── utils/               # 유틸리티 함수
-│   ├── App.js               # 메인 App 컴포넌트
-│   ├── App.css
-│   ├── index.js             # 애플리케이션 진입점
-│   └── index.css
-├── package.json
-└── README.md
-```
-
-## 3. 핵심 컴포넌트 설계
-
-### 3.1. 인증 시스템 (`AuthContext.js`)
-
-*   **목적:** 사용자 인증 상태를 전역적으로 관리하고, 로그인/로그아웃 기능을 제공합니다.
-*   **주요 기능:**
-    *   사용자 정보 저장 및 관리
-    *   로그인/로그아웃 처리
-    *   인증 상태 확인
-    *   자동 로그인 체크
-
-```javascript
-// AuthContext.js 예시
-const AuthContext = createContext();
-
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    const login = async (username, password) => {
-        // 로그인 로직
-    };
-
-    const logout = async () => {
-        // 로그아웃 로직
-    };
-
-    const checkAuth = async () => {
-        // 인증 상태 확인
-    };
-
-    return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
-            {children}
-        </AuthContext.Provider>
-    );
-};
-```
-
-### 3.2. 라우팅 시스템 (`App.js`)
-
-*   **목적:** 페이지 간 네비게이션을 관리하고, 인증 상태에 따른 접근 제어를 수행합니다.
-*   **주요 기능:**
-    *   공개 라우트 (로그인, 회원가입)
-    *   보호된 라우트 (인증 필요)
-    *   인증 상태에 따른 리다이렉션
-
-```javascript
-// App.js 라우팅 예시
-<Routes>
-    <Route path="/login" element={<LoginPage />} />
-    <Route path="/signup" element={<SignUpPage />} />
-    <Route path="/debug" element={<DebugPage />} />
-    <Route path="/" element={
-        <ProtectedRoute>
-            <MainLayout />
-        </ProtectedRoute>
-    } />
-    <Route path="/company-management" element={
-        <ProtectedRoute>
-            <MainLayout>
-                <CompanyManagementPage />
-            </MainLayout>
-        </ProtectedRoute>
-    } />
-    <Route path="/user-approval" element={
-        <ProtectedRoute>
-            <MainLayout>
-                <UserApprovalPage />
-            </MainLayout>
-        </ProtectedRoute>
-    } />
-</Routes>
-```
-
-### 3.3. API 통신 (`services/`)
-
-*   **목적:** 백엔드 API와의 통신을 담당하고, 에러 처리와 응답 변환을 수행합니다.
-*   **주요 기능:**
-    *   HTTP 요청 처리
-    *   에러 핸들링
-    *   응답 데이터 변환
-    *   인증 토큰 관리
-
-```javascript
-// api.js 예시
-const apiRequest = async (url, options = {}) => {
-    const config = {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers,
-        },
-        credentials: 'include',
-    };
-
-    try {
-        const response = await fetch(url, config);
-        
-        if (!response.ok) {
-            let errorMessage = `HTTP error! status: ${response.status}`;
-            try {
-                const errorData = await response.json();
-                if (errorData.error) {
-                    errorMessage = errorData.error;
-                } else if (errorData.detail) {
-                    errorMessage = errorData.detail;
-                }
-            } catch (e) {
-                // JSON 파싱 실패 시 기본 메시지 사용
-            }
-            const error = new Error(errorMessage);
-            error.status = response.status;
-            throw error;
-        }
-
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        throw error;
-    }
-};
-```
-
-## 4. 계층별 승인 시스템 UI
-
-### 4.1. 회원가입 페이지 (`SignUpPage.js`)
-
-*   **목적:** 계층별 회원가입을 위한 직관적인 UI를 제공합니다.
-*   **주요 기능:**
-    *   업체 유형 선택 (본사/협력사/판매점)
-    *   상위 업체 코드 입력 (동적 필드)
-    *   실시간 유효성 검증
-    *   사용자 친화적인 에러 메시지
-
-```javascript
-// SignUpPage.js 핵심 로직
-const getParentCompanyLabel = () => {
-    switch (formData.company_type) {
-        case 'headquarters':
-            return '본사는 상위 업체가 없습니다';
-        case 'agency':
-            return '본사 코드';
-        case 'retail':
-            return '협력사 코드';
-        default:
-            return '상위 업체 코드';
-    }
-};
-
-const isParentCodeRequired = () => {
-    return formData.company_type !== 'headquarters';
-};
-```
-
-### 4.2. 사용자 승인 페이지 (`UserApprovalPage.js`)
-
-*   **목적:** 승인 대기 중인 사용자 목록을 표시하고 승인/거절 기능을 제공합니다.
-*   **주요 기능:**
-    *   승인 대기 사용자 목록 조회
-    *   승인/거절 버튼
-    *   사용자 상세 정보 표시
-    *   실시간 상태 업데이트
-
-### 4.3. 디버그 페이지 (`DebugPage.js`)
-
-*   **목적:** API 연결 상태를 테스트하고 문제 진단을 돕습니다.
-*   **주요 기능:**
-    *   API 엔드포인트 테스트
-    *   응답/에러 로그 표시
-    *   연결 상태 확인
-
-## 5. 상태 관리 전략
-
-### 5.1. React Context API 활용
-
-*   **인증 상태:** `AuthContext`를 통해 전역적으로 관리
-*   **사용자 정보:** 로그인한 사용자의 정보를 전역 상태로 관리
-*   **로딩 상태:** API 요청 중 로딩 상태를 관리
-
-### 5.2. 로컬 상태 관리
-
-*   **폼 데이터:** 각 페이지의 폼 입력값을 로컬 상태로 관리
-*   **UI 상태:** 모달, 드롭다운 등의 UI 상태를 로컬 상태로 관리
-*   **에러 상태:** 각 컴포넌트의 에러 메시지를 로컬 상태로 관리
-
-## 6. UI/UX 설계 원칙
-
-### 6.1. 반응형 디자인
-
-*   **모바일 우선:** 모바일 디바이스에서 최적화된 경험 제공
-*   **데스크톱 호환:** 데스크톱에서도 최적화된 레이아웃 제공
-*   **접근성:** 키보드 네비게이션, 스크린 리더 지원
-
-### 6.2. 사용자 경험 (UX)
-
-*   **직관적 네비게이션:** 사용자가 쉽게 원하는 기능을 찾을 수 있도록 설계
-*   **피드백 제공:** 모든 사용자 액션에 대한 적절한 피드백 제공
-*   **에러 처리:** 사용자 친화적인 에러 메시지와 복구 방법 제시
-
-### 6.3. 시각적 디자인
-
-*   **일관된 디자인 시스템:** 색상, 타이포그래피, 간격의 일관성 유지
-*   **계층적 정보 구조:** 중요도에 따른 정보의 시각적 계층화
-*   **로딩 상태:** API 요청 중 적절한 로딩 인디케이터 제공
-
-## 7. 보안 고려사항
-
-### 7.1. 인증 및 권한
-
-*   **세션 관리:** 백엔드 세션과 연동하여 인증 상태 관리
-*   **라우트 보호:** 인증되지 않은 사용자의 보호된 페이지 접근 차단
-*   **권한 기반 UI:** 사용자 권한에 따른 UI 요소 표시/숨김
-
-### 7.2. 데이터 보안
-
-*   **민감 정보 보호:** 비밀번호 등 민감한 정보의 안전한 처리
-*   **입력 검증:** 클라이언트 측 입력 검증 (서버 검증과 병행)
-*   **XSS 방지:** 사용자 입력의 안전한 렌더링
-
-## 8. 성능 최적화
-
-### 8.1. 코드 분할 (Code Splitting)
-
-*   **라우트 기반 분할:** 각 페이지를 별도 청크로 분할하여 초기 로딩 시간 단축
-*   **컴포넌트 지연 로딩:** 필요 시에만 컴포넌트 로딩
-
-### 8.2. 캐싱 전략
-
-*   **API 응답 캐싱:** 자주 조회되는 데이터의 캐싱
-*   **정적 자원 캐싱:** CSS, JS 파일의 브라우저 캐싱 활용
-
-### 8.3. 번들 최적화
-
-*   **트리 쉐이킹:** 사용하지 않는 코드 제거
-*   **압축:** JavaScript, CSS 파일 압축
-*   **이미지 최적화:** WebP 등 최신 이미지 포맷 활용
-
-## 9. 테스트 전략
-
-### 9.1. 단위 테스트
-
-*   **컴포넌트 테스트:** 각 React 컴포넌트의 독립적 테스트
-*   **유틸리티 함수 테스트:** 순수 함수들의 테스트
-*   **훅 테스트:** 커스텀 React 훅의 테스트
-
-### 9.2. 통합 테스트
-
-*   **API 통신 테스트:** 백엔드와의 통신 테스트
-*   **사용자 플로우 테스트:** 전체 사용자 여정 테스트
-*   **인증 플로우 테스트:** 로그인/로그아웃 과정 테스트
-
-### 9.3. E2E 테스트
-
-*   **실제 브라우저 테스트:** 실제 사용자 시나리오 테스트
-*   **크로스 브라우저 테스트:** 다양한 브라우저에서의 호환성 테스트
-
-## 10. 배포 및 운영
-
-### 10.1. 빌드 프로세스
-
-*   **개발 빌드:** 개발 환경을 위한 최적화된 빌드
-*   **프로덕션 빌드:** 운영 환경을 위한 최적화된 빌드
-*   **환경 변수:** 개발/운영 환경별 설정 분리
-
-### 10.2. 배포 전략
-
-*   **정적 파일 호스팅:** Nginx, Apache 등을 통한 정적 파일 서빙
-*   **CDN 활용:** 글로벌 사용자를 위한 CDN 활용
-*   **무중단 배포:** Blue-Green 배포 등 무중단 배포 전략
-
-이 문서는 `DN_solution` 프론트엔드 시스템의 설계와 구현 방식을 이해하는 데 필요한 모든 정보를 제공합니다.
+### 1.1. 현재 구현된 React SPA 프론트엔드
+
+*   **아키텍처:** React 기반의 SPA(Single Page Application)로 컴포넌트 기반 개발을 통해 재사용성과 유지보수성을 확보합니다.
+*   **프레임워크:** React 18 (함수형 컴포넌트 + Hooks)
+*   **라우팅:** React Router DOM을 사용한 클라이언트 사이드 라우팅 및 `ProtectedRoute` 컴포넌트를 통한 인증 기반 라우트 가드
+*   **상태 관리:** React Context API (`AuthContext`)를 통한 전역 인증 상태 관리
+*   **API 통신:** `axios`를 사용한 RESTful API 통신 및 JWT 토큰 자동 관리
+*   **스타일링:** CSS 모듈 및 컴포넌트 레벨 CSS 파일을 통한 스타일 관리
+*   **인증 시스템:** JWT 토큰 기반 인증 (`localStorage` 저장, 자동 갱신 지원)
+
+### 1.2. 주요 컴포넌트 구조
+
+*   **`App.js`:** 메인 애플리케이션 컴포넌트 및 라우팅 설정
+*   **`AuthContext.js`:** 전역 인증 상태 관리 및 JWT 토큰 처리
+*   **`ProtectedRoute.js`:** 인증 기반 라우트 보호 컴포넌트
+*   **`Sidebar.js`:** 네비게이션 사이드바 컴포넌트
+*   **`MainLayout.js`:** 레이아웃 래퍼 컴포넌트
+*   **Page 컴포넌트들:** `LoginPage`, `DashboardPage`, `CompanyListPage`, `UserListPage` 등
+
+### 1.3. Django 템플릿 기반 정책 관리 인터페이스 (유지)
+
+*   **아키텍처:** Django 템플릿 기반의 서버 사이드 렌더링 (SSR)  
+*   **프레임워크:** Django 5.2 템플릿 시스템
+*   **UI 라이브러리:** Bootstrap 5, Font Awesome 6.0.0
+*   **JavaScript:** 바닐라 JavaScript, AJAX (fetch API)
+*   **CSS:** 커스텀 CSS + Bootstrap 클래스
+*   **상태 관리:** Django 세션 기반 사용자 상태 관리
+*   **라우팅:** Django URL 라우팅 시스템
+
+## 2. UI/UX 원칙
+
+*   **사용자 중심 디자인:** 각 사용자 역할(슈퍼계정, 본사, 협력사, 판매점)의 니즈와 워크플로우를 이해하고, 그에 최적화된 UI를 제공합니다.
+*   **직관적인 내비게이션:** 사용자가 시스템 내에서 자신의 위치를 쉽게 파악하고, 필요한 기능에 빠르게 접근할 수 있도록 명확하고 간결한 내비게이션 구조를 설계합니다.
+*   **일관성:** 애플리케이션 전반에 걸쳐 시각적 디자인, 상호작용 패턴, 용어 사용에 일관성을 유지하여 학습 곡선을 줄이고 사용성을 높입니다.
+*   **피드백:** 사용자 액션에 대한 즉각적이고 명확한 시각적 피드백(로딩 인디케이터, 성공/오류 메시지, 유효성 검증 피드백)을 제공합니다.
+*   **반응형 디자인:** 다양한 디바이스(데스크톱, 태블릿, 모바일) 및 화면 크기에서 최적의 레이아웃과 사용자 경험을 제공하도록 유연하게 설계합니다.
+
+## 3. 현재 구현된 정책 관리 인터페이스
+
+### 3.1. 정책 목록 페이지 (`policy_list.html`)
+
+*   **필터링 시스템:**
+    *   검색 필드: 정책 제목 또는 설명으로 검색
+    *   신청서 타입 필터: 드롭다운 선택
+    *   통신사 필터: SKT, KT, LG U+ 등
+    *   가입기간 필터: 12개월, 24개월 등
+    *   노출 상태 필터: 노출/비노출
+    *   프리미엄 마켓 필터: 노출/비노출
+*   **정책 테이블:**
+    *   정책 제목, 신청서 타입, 통신사, 가입기간
+    *   대리점/판매점 리베이트 금액
+    *   토글 스위치: 노출 상태, 프리미엄 마켓 노출
+    *   배정 업체 수 표시
+    *   액션 버튼: 상세보기, 수정, HTML 재생성, 삭제
+*   **실시간 기능:**
+    *   AJAX 기반 토글 스위치 상태 변경
+    *   HTML 재생성 버튼
+    *   실시간 메시지 표시 (성공/오류)
+*   **페이지네이션:** Bootstrap 스타일 페이지네이션
+
+### 3.2. 정책 생성/수정 폼 (`policy_form.html`)
+
+*   **단계별 입력 섹션:**
+    *   **기본 정보:** 정책 제목, 설명 (필수 입력)
+    *   **신청서 설정:** 신청서 타입 선택
+    *   **필터링 설정:** 통신사, 가입기간 선택
+    *   **리베이트 설정:** 대리점/판매점 리베이트 금액
+    *   **노출 설정:** 프론트엔드 노출, 프리미엄 마켓 노출 체크박스
+*   **실시간 중복 체크:**
+    *   정책 제목 입력 시 중복 체크 버튼
+    *   AJAX 기반 실시간 검증
+    *   결과 표시 (성공/오류)
+*   **클라이언트 사이드 유효성 검증:**
+    *   필수 필드 검증
+    *   실시간 오류 메시지 표시
+    *   폼 제출 시 로딩 상태 표시
+
+### 3.3. 디자인 시스템
+
+*   **색상 팔레트:**
+    *   Primary: #007bff (Bootstrap blue)
+    *   Success: #28a745 (Bootstrap green)
+    *   Danger: #dc3545 (Bootstrap red)
+    *   Secondary: #6c757d (Bootstrap gray)
+*   **컴포넌트:**
+    *   **토글 스위치:** CSS 기반 커스텀 토글 스위치
+    *   **버튼:** Bootstrap 스타일 버튼 (primary, secondary, success, danger, outline)
+    *   **카드:** Bootstrap 카드 컴포넌트
+    *   **테이블:** 반응형 테이블 디자인
+    *   **폼:** Bootstrap 폼 스타일링
+*   **아이콘:** Font Awesome 6.0.0 아이콘 사용
+
+## 4. UI 접근 제어 전략 (사용자 역할 기반)
+
+프론트엔드 애플리케이션은 백엔드에서 이미 제어되는 권한을 시각적으로 반영하고, 사용자에게 불필요한 기능이나 정보를 노출하지 않음으로써 사용자 경험을 개선하고 보안을 강화합니다.
+
+### 4.1. 핵심 원칙
+
+*   **백엔드 권한(Authorization)이 최우선:** UI 레벨의 제어는 사용자 경험을 위한 것이며, 악의적인 사용자가 UI를 우회하여 직접 API 요청을 보낼 수 있으므로, **백엔드에서의 철저한 권한 검증은 필수적**입니다.
+*   **역할 기반 제어:** 사용자의 역할 정보를 기반으로 UI 요소를 조건부로 렌더링하거나, 라우팅 접근을 제어합니다.
+
+### 4.2. 구현 방식
+
+*   **인증 후 역할 정보 획득:**
+    *   사용자 로그인 성공 시, Django 세션에 사용자의 역할 정보를 저장합니다.
+    *   템플릿에서 `request.user`를 통해 사용자 정보에 접근합니다.
+*   **조건부 렌더링 (Conditional Rendering):**
+    *   **내비게이션 메뉴/사이드바:** 사용자의 역할에 따라 접근 권한이 없는 메뉴 항목은 아예 화면에 표시하지 않습니다.
+        *   예: 판매점 사용자에게는 '협력사 관리', '본사 설정' 메뉴를 숨김.
+    *   **버튼 및 액션:** 특정 작업(생성, 수정, 삭제, 상태 변경 등)을 수행하는 버튼을 권한이 없는 사용자에게는 숨기거나 비활성화(disabled)하여 클릭할 수 없게 만듭니다.
+        *   예: 협력사 사용자에게는 다른 협력사를 생성하는 버튼을 숨김.
+    *   **데이터 테이블 컬럼/행:** 특정 역할만 볼 수 있는 민감한 정보가 포함된 테이블의 컬럼이나 행을 숨깁니다.
+    *   **폼 필드:** 특정 역할만 수정할 수 있는 필드는 읽기 전용으로 표시하거나 숨깁니다.
+*   **동적 라우팅/내비게이션 (Dynamic Routing/Navigation):**
+    *   Django URL 패턴에서 사용자 권한에 따른 접근 제어를 구현합니다.
+    *   뷰에서 `LoginRequiredMixin`과 커스텀 권한 클래스를 사용하여 페이지 접근을 제어합니다.
+
+### 4.3. 역할별 UI 반영 상세
+
+*   **슈퍼계정 (Superuser):**
+    *   **UI 반영:** 모든 메뉴 항목, 모든 버튼, 모든 데이터 테이블의 모든 컬럼을 표시합니다. 관리자 대시보드에 대한 완전한 접근 권한을 부여합니다.
+*   **본사 계정 (`Company.type = 'headquarters'`에 속한 `CompanyUser`):**
+    *   **UI 반영:** 슈퍼계정과 유사하게 대부분의 관리 기능을 제공합니다. '본사 설정'과 같은 특정 메뉴는 본사 계정만 접근 가능하도록 합니다. 다른 계층의 업체 및 사용자 목록을 조회하고 관리할 수 있는 UI 요소를 제공합니다.
+    *   **`Company` 생성 정책 반영:** 백엔드 정책에 따라 본사가 판매점을 직접 생성하는 것이 금지될 경우, '새로운 Company 생성' 폼에서 '업체 유형'을 '판매점'으로 선택하는 옵션을 비활성화하거나, 아예 해당 폼 자체를 숨깁니다.
+*   **협력사 계정 (`Company.type = 'agency'`에 속한 `CompanyUser`):**
+    *   **UI 반영:** '내 협력사 정보', '내 판매점 관리'와 같은 메뉴를 제공합니다. 다른 협력사나 본사 관련 메뉴는 숨기거나 비활성화합니다. 판매점 생성 버튼은 제공하되, 상위 업체 선택 시 자신의 협력사로 자동 지정되거나 선택지가 제한되도록 합니다. 사용자 생성 시, 소속 업체 선택지를 자신의 협력사 또는 하위 판매점으로 제한합니다.
+*   **판매점 계정 (`Company.type = 'retail'`에 속한 `CompanyUser`):**
+    *   **UI 반영:** '내 판매점 정보', '내 직원 관리'와 같은 최소한의 메뉴만 제공합니다. 다른 업체 관련 메뉴는 모두 숨기거나 비활성화합니다. 사용자 생성 시, 소속 업체 선택지를 자신의 판매점으로 고정합니다.
+
+## 5. React SPA - 백엔드 API 연동
+
+### 5.1. JWT 기반 인증 흐름
+
+*   **로그인 프로세스:** 
+    *   사용자가 로그인 폼에 자격 증명 입력
+    *   `AuthContext.login()` 함수가 `/api/companies/auth/jwt/login/` 엔드포인트 호출
+    *   성공 시 Access Token과 Refresh Token을 `localStorage`에 저장
+    *   사용자 정보를 `AuthContext` 전역 상태에 저장
+*   **자동 토큰 관리:**
+    *   `axios` 인터셉터가 모든 API 요청에 자동으로 `Authorization: Bearer <token>` 헤더 추가
+    *   401 오류 발생 시 자동으로 Refresh Token을 사용하여 새 Access Token 획득
+    *   토큰 갱신 실패 시 자동으로 로그아웃 및 로그인 페이지로 리다이렉트
+
+### 5.2. API 서비스 (`services/api.js`)
+
+*   **중앙화된 API 관리:** 모든 HTTP 요청을 중앙화하여 일관된 에러 처리 및 로깅 제공
+*   **RESTful 메서드:** `get`, `post`, `put`, `patch`, `delete` 함수를 통한 표준화된 API 호출
+*   **에러 처리:** HTTP 상태 코드별 세분화된 에러 처리 및 사용자 친화적 메시지 제공
+*   **로깅:** 모든 API 요청/응답에 대한 상세 로깅으로 디버깅 지원
+
+### 5.3. 컴포넌트별 API 연동
+
+*   **`LoginPage`:** JWT 로그인 API 호출 및 인증 상태 관리
+*   **`DashboardPage`:** 대시보드 통계 데이터 비동기 로딩 (`useEffect`, `useCallback` 활용)
+*   **`CompanyListPage`:** 계층적 권한에 따른 업체 목록 조회
+*   **`UserListPage`:** 사용자 목록 조회 및 관리 기능
+
+### 5.4. Django 템플릿 기반 AJAX 통신 (정책 관리)
+
+*   **CSRF 토큰:** Django의 CSRF 보호를 위해 모든 AJAX 요청에 CSRF 토큰을 포함합니다.
+*   **JSON 응답:** API 엔드포인트에서 JSON 형태의 응답을 받아 처리합니다.
+*   **실시간 피드백:** 사용자 액션에 대한 즉각적인 피드백을 제공합니다.
+
+## 6. 현재 구현 현황 및 향후 발전 방향
+
+### 6.1. 현재 구현된 기능
+
+✅ **완료된 기능:**
+*   React SPA 기본 구조 (라우팅, 인증, 레이아웃)
+*   JWT 기반 인증 시스템 및 자동 토큰 관리
+*   계층적 권한 제어가 적용된 대시보드
+*   중앙화된 API 서비스 및 에러 처리
+*   Django 템플릿 기반 정책 관리 인터페이스
+
+### 6.2. 향후 개선 및 확장 계획
+
+🔄 **단기 개선 사항 (1-2개월):**
+*   업체 관리 페이지 React 전환
+*   사용자 관리 페이지 React 전환  
+*   정책 관리 시스템의 React 전환
+*   향상된 에러 처리 및 사용자 피드백
+
+🚀 **중장기 확장 계획 (3-6개월):**
+*   TypeScript 도입으로 타입 안정성 강화
+*   상태 관리 라이브러리 (Redux Toolkit) 도입
+*   UI 컴포넌트 라이브러리 (Material-UI, Ant Design) 적용
+*   실시간 알림 시스템 (WebSocket)
+*   PWA (Progressive Web App) 지원
+
+### 6.3. 아키텍처 진화 방향
+
+*   **마이크로 프론트엔드:** 각 비즈니스 도메인별로 독립된 React 앱 구성
+*   **SSR/SSG:** Next.js 도입을 통한 성능 최적화 및 SEO 개선
+*   **모니터링:** 프론트엔드 성능 모니터링 및 오류 추적 시스템 도입
+
+이 문서는 `DN_solution` 프로젝트의 프론트엔드 애플리케이션 현재 상태와 미래 발전 방향을 제시하는 종합적인 가이드라인을 제공합니다.

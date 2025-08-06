@@ -1,5 +1,6 @@
 from django.db.models import Q
 from .models import Company, CompanyUser
+from django.db import models
 
 def get_all_child_company_ids(company):
     """
@@ -13,29 +14,47 @@ def get_all_child_company_ids(company):
 
 def get_visible_companies(user):
     """
-    사용자의 계층에 따라 볼 수 있는 회사들을 반환합니다.
+    사용자 계층에 따라 볼 수 있는 회사들을 반환합니다.
     """
     if not user.is_authenticated:
         return Company.objects.none()
-
-    if user.is_superuser:
-        return Company.objects.all()
-
-    try:
-        company_user = CompanyUser.objects.get(django_user=user)
-        user_company = company_user.company
-    except CompanyUser.DoesNotExist:
-        return Company.objects.none()
-
-    # 자신과 모든 하위 회사를 포함
-    company_ids = get_all_child_company_ids(user_company)
-    company_ids.add(user_company.id)
-
-    return Company.objects.filter(id__in=company_ids)
+    accessible_ids = get_accessible_company_ids(user)
+    return Company.objects.filter(id__in=accessible_ids)
 
 def get_visible_users(user):
     """
-    사용자의 계층에 따라 볼 수 있는 사용자들을 반환합니다.
+    사용자 계층에 따라 볼 수 있는 사용자들을 반환합니다.
     """
-    visible_companies = get_visible_companies(user)
-    return CompanyUser.objects.filter(company__in=visible_companies)
+    accessible_ids = get_accessible_company_ids(user)
+    return CompanyUser.objects.filter(company__id__in=accessible_ids)
+
+def get_accessible_company_ids(user):
+    """
+    로그인한 사용자가 접근 가능한 업체 id 리스트 반환
+    """
+    if user.is_superuser:
+        return Company.objects.values_list('id', flat=True)
+    try:
+        company_user = CompanyUser.objects.get(django_user=user)
+    except CompanyUser.DoesNotExist:
+        return Company.objects.none()
+    company = company_user.company
+
+    if company.is_headquarters:
+        # 본사는 모든 하위 업체 접근 가능 (자기 자신 + 1, 2단계 하위)
+        return Company.objects.filter(
+            models.Q(id=company.id) |
+            models.Q(parent_company=company) |
+            models.Q(parent_company__parent_company=company)
+        ).values_list('id', flat=True)
+    elif company.is_agency:
+        # 협력사는 자기 자신 + 하위(판매점)만
+        return Company.objects.filter(
+            models.Q(id=company.id) |
+            models.Q(parent_company=company)
+        ).values_list('id', flat=True)
+    elif company.is_retail:
+        # 판매점은 자기 자신만
+        return Company.objects.filter(id=company.id).values_list('id', flat=True)
+    else:
+        return Company.objects.none()

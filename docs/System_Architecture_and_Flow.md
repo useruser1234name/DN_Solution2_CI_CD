@@ -156,19 +156,41 @@ DN_solution/
         *   `Policy.premium_market_expose` 필드로 프리미엄 마켓 노출 제어
         *   `Policy.generate_html_content()`로 정책 상세페이지 HTML 자동 생성
 
-## 4. 인증 및 권한 흐름
+## 4. JWT 기반 인증 및 권한 흐름
 
-시스템의 모든 API 요청은 인증 및 권한 검증 과정을 거칩니다.
+시스템은 JWT (JSON Web Token) 기반의 상태 비저장 인증을 사용하여 클라우드 환경에 최적화된 보안 체계를 제공합니다.
 
-1.  **사용자 로그인:** 프론트엔드에서 사용자(예: `CompanyUser`)가 로그인 요청을 보냅니다.
-2.  **인증 처리:** 백엔드에서 사용자 자격 증명(username, password)을 확인하고, 성공 시 Django 세션을 생성합니다.
-3.  **API 요청:** 프론트엔드는 이후 모든 API 요청에 세션 정보를 포함하여 보냅니다.
-4.  **`IsAuthenticated` 권한 검증:** DRF의 `IsAuthenticated` 권한 클래스가 요청을 가로채어 세션의 유효성을 검증하고 사용자를 인증합니다.
-5.  **`CompanyViewSet.get_queryset()` 권한 필터링:**
-    *   인증된 사용자의 `CompanyUser` 정보(소속 `Company`의 `type` 및 `id`)를 기반으로, 해당 사용자가 접근할 수 있는 `Company` 객체들로 쿼리셋을 필터링합니다.
-    *   예: 협력사 사용자가 업체 목록을 요청하면, 자신의 협력사와 그 하위 판매점만 포함된 쿼리셋이 반환됩니다.
-6.  **객체 레벨 권한:** `get_object()`와 같은 메서드에서 특정 객체에 대한 접근 권한을 추가적으로 확인할 수 있습니다.
-7.  **응답:** 필터링된 데이터만 사용자에게 반환됩니다.
+### 4.1. JWT 인증 흐름
+
+1.  **사용자 로그인:** React 프론트엔드에서 사용자(Django User)가 `/api/companies/auth/jwt/login/` 엔드포인트로 로그인 요청을 보냅니다.
+2.  **커스텀 JWT 인증 처리:** `CustomTokenObtainPairSerializer`가 다음 과정을 수행합니다:
+    *   Django User 자격 증명(username, password) 검증
+    *   연결된 `CompanyUser` 존재 여부 확인
+    *   `CompanyUser.is_approved` 및 `status='approved'` 상태 검증
+    *   소속 `Company.status` 활성화 상태 확인
+    *   JWT 토큰에 업체 정보 (company_id, company_name, company_type, role 등) 포함
+3.  **토큰 발급:** 검증이 완료되면 Access Token과 Refresh Token을 발급합니다.
+4.  **프론트엔드 토큰 저장:** React 앱이 토큰을 `localStorage`에 저장하고 `AuthContext`로 전역 상태를 관리합니다.
+
+### 4.2. API 요청 권한 흐름
+
+1.  **API 요청:** 프론트엔드가 모든 API 요청에 `Authorization: Bearer <access_token>` 헤더를 포함하여 보냅니다.
+2.  **JWT 인증 미들웨어:** `rest_framework_simplejwt.authentication.JWTAuthentication`이 토큰을 검증하고 사용자를 인증합니다.
+3.  **계층적 권한 필터링:** `companies/utils.py`의 유틸리티 함수들이 사용자의 계층에 따른 접근 제어를 수행합니다:
+    *   `get_accessible_company_ids()`: 사용자가 접근 가능한 업체 ID 목록 반환
+    *   `get_visible_companies()`: 사용자가 볼 수 있는 업체 쿼리셋 반환
+    *   `get_visible_users()`: 사용자가 볼 수 있는 사용자 쿼리셋 반환
+4.  **ViewSet 레벨 권한 제어:**
+    *   `CompanyViewSet.get_queryset()`: 계층적 업체 필터링
+    *   `CompanyUserViewSet.get_queryset()`: 계층적 사용자 필터링
+    *   Django Admin의 `get_queryset()`: 동일한 권한 로직 적용
+5.  **응답:** 권한이 검증된 데이터만 JSON 형태로 반환됩니다.
+
+### 4.3. 토큰 갱신 흐름
+
+1.  **토큰 만료:** Access Token 만료 시 자동으로 Refresh Token을 사용하여 새로운 Access Token을 요청합니다.
+2.  **자동 갱신:** `axios` 인터셉터가 401 오류를 감지하여 자동으로 토큰 갱신을 처리합니다.
+3.  **로그아웃:** 토큰 무효화 또는 만료 시 자동으로 로그인 페이지로 리다이렉트됩니다.
 
 ## 5. 정책 관리 시스템 상세 흐름
 

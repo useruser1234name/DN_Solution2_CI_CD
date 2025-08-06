@@ -4,24 +4,34 @@
 
 ## 1. 아키텍처 및 기술 스택
 
-### 1.1. 현재 구현된 프론트엔드
+### 1.1. 현재 구현된 React SPA 프론트엔드
 
-*   **아키텍처:** Django 템플릿 기반의 서버 사이드 렌더링 (SSR)
+*   **아키텍처:** React 기반의 SPA(Single Page Application)로 컴포넌트 기반 개발을 통해 재사용성과 유지보수성을 확보합니다.
+*   **프레임워크:** React 18 (함수형 컴포넌트 + Hooks)
+*   **라우팅:** React Router DOM을 사용한 클라이언트 사이드 라우팅 및 `ProtectedRoute` 컴포넌트를 통한 인증 기반 라우트 가드
+*   **상태 관리:** React Context API (`AuthContext`)를 통한 전역 인증 상태 관리
+*   **API 통신:** `axios`를 사용한 RESTful API 통신 및 JWT 토큰 자동 관리
+*   **스타일링:** CSS 모듈 및 컴포넌트 레벨 CSS 파일을 통한 스타일 관리
+*   **인증 시스템:** JWT 토큰 기반 인증 (`localStorage` 저장, 자동 갱신 지원)
+
+### 1.2. 주요 컴포넌트 구조
+
+*   **`App.js`:** 메인 애플리케이션 컴포넌트 및 라우팅 설정
+*   **`AuthContext.js`:** 전역 인증 상태 관리 및 JWT 토큰 처리
+*   **`ProtectedRoute.js`:** 인증 기반 라우트 보호 컴포넌트
+*   **`Sidebar.js`:** 네비게이션 사이드바 컴포넌트
+*   **`MainLayout.js`:** 레이아웃 래퍼 컴포넌트
+*   **Page 컴포넌트들:** `LoginPage`, `DashboardPage`, `CompanyListPage`, `UserListPage` 등
+
+### 1.3. Django 템플릿 기반 정책 관리 인터페이스 (유지)
+
+*   **아키텍처:** Django 템플릿 기반의 서버 사이드 렌더링 (SSR)  
 *   **프레임워크:** Django 5.2 템플릿 시스템
 *   **UI 라이브러리:** Bootstrap 5, Font Awesome 6.0.0
 *   **JavaScript:** 바닐라 JavaScript, AJAX (fetch API)
 *   **CSS:** 커스텀 CSS + Bootstrap 클래스
 *   **상태 관리:** Django 세션 기반 사용자 상태 관리
 *   **라우팅:** Django URL 라우팅 시스템
-
-### 1.2. 향후 확장 방향 (SPA)
-
-*   **아키텍처:** SPA(Single Page Application) 아키텍처를 기반으로 하며, 컴포넌트 기반 개발을 통해 재사용성과 유지보수성을 극대화합니다.
-*   **프레임워크/라이브러리:** React, Vue.js, 또는 Angular 중 하나를 선택하여 개발합니다.
-*   **상태 관리:** 선택된 프레임워크에 맞는 전역 상태 관리 라이브러리 (예: Redux, Vuex, NgRx)를 사용하여 애플리케이션의 복잡한 상태를 효율적으로 관리합니다.
-*   **UI 라이브러리/디자인 시스템:** Material-UI, Ant Design, Vuetify, Angular Material 등 검증된 UI 컴포넌트 라이브러리를 활용하여 개발 속도를 높이고 일관된 디자인을 유지합니다.
-*   **라우팅:** 프레임워크에 내장된 라우터 (예: React Router, Vue Router, Angular Router)를 사용하여 클라이언트 측 라우팅을 구현합니다.
-*   **API 통신:** `axios` 또는 `fetch` API를 사용하여 백엔드 RESTful API와 비동기적으로 통신합니다.
 
 ## 2. UI/UX 원칙
 
@@ -123,32 +133,70 @@
 *   **판매점 계정 (`Company.type = 'retail'`에 속한 `CompanyUser`):**
     *   **UI 반영:** '내 판매점 정보', '내 직원 관리'와 같은 최소한의 메뉴만 제공합니다. 다른 업체 관련 메뉴는 모두 숨기거나 비활성화합니다. 사용자 생성 시, 소속 업체 선택지를 자신의 판매점으로 고정합니다.
 
-## 5. 백엔드 API 연동
+## 5. React SPA - 백엔드 API 연동
 
-*   **API 엔드포인트:** 백엔드에서 정의된 RESTful API 엔드포인트(예: `/api/companies/`, `/api/companies/users/`)를 사용하여 데이터를 요청하고 전송합니다.
-*   **인증:** 로그인 시 Django 세션 기반 인증을 사용하며, 모든 API 요청에서 사용자 인증 상태를 확인합니다.
-*   **오류 처리:** 백엔드에서 반환하는 HTTP 상태 코드(예: 400, 401, 403, 404, 500)와 오류 메시지를 적절히 파싱하여 사용자에게 친화적인 메시지를 표시합니다.
-*   **데이터 동기화:** 데이터 변경(생성, 수정, 삭제) 후에는 UI를 업데이트하기 위해 관련 데이터를 다시 로드하거나, 프론트엔드 상태를 직접 업데이트하여 백엔드와의 데이터 일관성을 유지합니다.
+### 5.1. JWT 기반 인증 흐름
 
-### 5.1. AJAX 통신
+*   **로그인 프로세스:** 
+    *   사용자가 로그인 폼에 자격 증명 입력
+    *   `AuthContext.login()` 함수가 `/api/companies/auth/jwt/login/` 엔드포인트 호출
+    *   성공 시 Access Token과 Refresh Token을 `localStorage`에 저장
+    *   사용자 정보를 `AuthContext` 전역 상태에 저장
+*   **자동 토큰 관리:**
+    *   `axios` 인터셉터가 모든 API 요청에 자동으로 `Authorization: Bearer <token>` 헤더 추가
+    *   401 오류 발생 시 자동으로 Refresh Token을 사용하여 새 Access Token 획득
+    *   토큰 갱신 실패 시 자동으로 로그아웃 및 로그인 페이지로 리다이렉트
+
+### 5.2. API 서비스 (`services/api.js`)
+
+*   **중앙화된 API 관리:** 모든 HTTP 요청을 중앙화하여 일관된 에러 처리 및 로깅 제공
+*   **RESTful 메서드:** `get`, `post`, `put`, `patch`, `delete` 함수를 통한 표준화된 API 호출
+*   **에러 처리:** HTTP 상태 코드별 세분화된 에러 처리 및 사용자 친화적 메시지 제공
+*   **로깅:** 모든 API 요청/응답에 대한 상세 로깅으로 디버깅 지원
+
+### 5.3. 컴포넌트별 API 연동
+
+*   **`LoginPage`:** JWT 로그인 API 호출 및 인증 상태 관리
+*   **`DashboardPage`:** 대시보드 통계 데이터 비동기 로딩 (`useEffect`, `useCallback` 활용)
+*   **`CompanyListPage`:** 계층적 권한에 따른 업체 목록 조회
+*   **`UserListPage`:** 사용자 목록 조회 및 관리 기능
+
+### 5.4. Django 템플릿 기반 AJAX 통신 (정책 관리)
 
 *   **CSRF 토큰:** Django의 CSRF 보호를 위해 모든 AJAX 요청에 CSRF 토큰을 포함합니다.
 *   **JSON 응답:** API 엔드포인트에서 JSON 형태의 응답을 받아 처리합니다.
 *   **실시간 피드백:** 사용자 액션에 대한 즉각적인 피드백을 제공합니다.
 
-## 6. 향후 SPA 전환 계획
+## 6. 현재 구현 현황 및 향후 발전 방향
 
-### 6.1. 단계적 전환
+### 6.1. 현재 구현된 기능
 
-1. **1단계:** 현재 Django 템플릿 기반 시스템 유지
-2. **2단계:** API 우선 설계로 백엔드 API 완성
-3. **3단계:** SPA 프론트엔드 개발 및 점진적 전환
-4. **4단계:** 완전한 SPA 시스템으로 전환
+✅ **완료된 기능:**
+*   React SPA 기본 구조 (라우팅, 인증, 레이아웃)
+*   JWT 기반 인증 시스템 및 자동 토큰 관리
+*   계층적 권한 제어가 적용된 대시보드
+*   중앙화된 API 서비스 및 에러 처리
+*   Django 템플릿 기반 정책 관리 인터페이스
 
-### 6.2. 기술 스택 선택 기준
+### 6.2. 향후 개선 및 확장 계획
 
-*   **React:** 대규모 커뮤니티, 풍부한 생태계, TypeScript 지원
-*   **Vue.js:** 학습 곡선이 낮고, 점진적 도입 가능
-*   **Angular:** 엔터프라이즈급 기능, TypeScript 기본 지원
+🔄 **단기 개선 사항 (1-2개월):**
+*   업체 관리 페이지 React 전환
+*   사용자 관리 페이지 React 전환  
+*   정책 관리 시스템의 React 전환
+*   향상된 에러 처리 및 사용자 피드백
 
-이 문서는 `DN_solution` 프로젝트의 프론트엔드 애플리케이션을 설계하고 구현하는 데 필요한 상세한 가이드라인을 제공합니다.
+🚀 **중장기 확장 계획 (3-6개월):**
+*   TypeScript 도입으로 타입 안정성 강화
+*   상태 관리 라이브러리 (Redux Toolkit) 도입
+*   UI 컴포넌트 라이브러리 (Material-UI, Ant Design) 적용
+*   실시간 알림 시스템 (WebSocket)
+*   PWA (Progressive Web App) 지원
+
+### 6.3. 아키텍처 진화 방향
+
+*   **마이크로 프론트엔드:** 각 비즈니스 도메인별로 독립된 React 앱 구성
+*   **SSR/SSG:** Next.js 도입을 통한 성능 최적화 및 SEO 개선
+*   **모니터링:** 프론트엔드 성능 모니터링 및 오류 추적 시스템 도입
+
+이 문서는 `DN_solution` 프로젝트의 프론트엔드 애플리케이션 현재 상태와 미래 발전 방향을 제시하는 종합적인 가이드라인을 제공합니다.

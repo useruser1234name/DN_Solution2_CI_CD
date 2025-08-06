@@ -12,7 +12,8 @@ const DashboardPage = () => {
 
     console.log('[DashboardPage] 컴포넌트 렌더링', { user: user?.username });
 
-    const fetchDashboardData = useCallback(async () => {
+    // fetchDashboardStats를 useCallback으로 감쌈
+    const fetchDashboardStats = useCallback(async () => {
         console.log('[DashboardPage] 대시보드 데이터 가져오기 시작');
         
         try {
@@ -166,12 +167,12 @@ const DashboardPage = () => {
             setLoading(false);
             console.log('[DashboardPage] 대시보드 데이터 로딩 완료');
         }
-    }, [user?.username]);
+    }, [user]);
 
     useEffect(() => {
-        console.log('[DashboardPage] useEffect 실행 - fetchDashboardData 호출');
-        fetchDashboardData();
-    }, [fetchDashboardData]);
+        if (!user || !user.token) return; // 로그인 안 했으면 API 호출 X
+        fetchDashboardStats();
+    }, [user, fetchDashboardStats]);
 
     if (loading) {
         console.log('[DashboardPage] 로딩 상태 렌더링');

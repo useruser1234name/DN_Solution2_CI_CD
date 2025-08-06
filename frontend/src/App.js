@@ -10,7 +10,7 @@ import CompanyCreatePage from './pages/CompanyCreatePage';
 import UserListPage from './pages/UserListPage';
 import UserCreatePage from './pages/UserCreatePage';
 import PolicyListPage from './pages/PolicyListPage';
-import { testConnection } from './services/api';
+// import { testConnection } from './services/api'; // 제거: 로그인 전 API 호출 방지
 import './App.css';
 
 console.log('[App] 애플리케이션 시작');
@@ -18,20 +18,19 @@ console.log('[App] 애플리케이션 시작');
 const App = () => {
   console.log('[App] 컴포넌트 렌더링');
 
-  useEffect(() => {
-    // API 연결 테스트
-    const testAPI = async () => {
-      console.log('[App] API 연결 테스트 시작');
-      const result = await testConnection();
-      if (result.success) {
-        console.log('[App] API 연결 성공');
-      } else {
-        console.error('[App] API 연결 실패:', result.error);
-      }
-    };
-
-    testAPI();
-  }, []);
+  // API 연결 테스트 제거 - 로그인하지 않은 상태에서 인증이 필요한 API를 호출하면 안됨
+  // useEffect(() => {
+  //   const testAPI = async () => {
+  //     console.log('[App] API 연결 테스트 시작');
+  //     const result = await testConnection();
+  //     if (result.success) {
+  //       console.log('[App] API 연결 성공');
+  //     } else {
+  //       console.error('[App] API 연결 실패:', result.error);
+  //     }
+  //   };
+  //   testAPI();
+  // }, []);
 
   return (
     <AuthProvider>

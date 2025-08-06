@@ -4,6 +4,7 @@
 # Django 프레임워크
 Django==4.2.7
 djangorestframework==3.14.0
+djangorestframework-simplejwt
 
 # 데이터베이스
 psycopg2-binary==2.9.10
