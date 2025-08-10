@@ -17,6 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from companies import views
+from dn_solution.cache_views import (
+    CacheStatusView, clear_cache, warm_up_cache, cache_performance_test,
+    cache_keys_list, health_check, cache_dashboard, invalidate_cache_pattern
+)
+from dn_solution.auth_views import (
+    EnhancedTokenObtainPairView, EnhancedTokenRefreshView, LogoutView,
+    TokenInfoView, generate_api_token, revoke_tokens
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,4 +36,22 @@ urlpatterns = [
     # Dashboard API 경로 직접 정의
     path('api/dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('api/dashboard/activities/', views.DashboardActivitiesView.as_view(), name='dashboard-activities'),
+    
+    # JWT 인증 API
+    path('api/auth/login/', EnhancedTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/refresh/', EnhancedTokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
+    path('api/auth/token-info/', TokenInfoView.as_view(), name='token-info'),
+    path('api/auth/generate-api-token/', generate_api_token, name='generate-api-token'),
+    path('api/auth/revoke-tokens/', revoke_tokens, name='revoke-tokens'),
+    
+    # 캐시 관리 API
+    path('api/admin/cache/status/', CacheStatusView.as_view(), name='cache-status'),
+    path('api/admin/cache/clear/', clear_cache, name='cache-clear'),
+    path('api/admin/cache/warm-up/', warm_up_cache, name='cache-warm-up'),
+    path('api/admin/cache/performance/', cache_performance_test, name='cache-performance'),
+    path('api/admin/cache/keys/', cache_keys_list, name='cache-keys-list'),
+    path('api/admin/cache/invalidate/', invalidate_cache_pattern, name='cache-invalidate'),
+    path('api/admin/cache/dashboard/', cache_dashboard, name='cache-dashboard'),
+    path('api/health/cache/', health_check, name='cache-health-check'),
 ]

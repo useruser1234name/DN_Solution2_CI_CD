@@ -1,0 +1,193 @@
+# Docker Compose - DN_SOLUTION2 Development Environment
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:15-alpine
+    container_name: dn_solution_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-dn_solution2_dev}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-dn_solution2_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis 캐시 및 세션 스토어
+  redis:
+    image: redis:7-alpine
+    container_name: dn_solution_redis
+    command: redis-server --appendonly yes --replica-read-only no
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # Django Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        INSTALL_DEV: "true"
+    container_name: dn_solution_backend
+    environment:
+      - DJANGO_SETTINGS_MODULE=dn_solution.settings.development
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-dn_solution2_dev}
+      - REDIS_URL=redis://redis:6379/0   # 인덱스 0 명시
+      - DEBUG=True
+      - DB_WAIT_ATTEMPTS=60
+      - DB_WAIT_DELAY=1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - backend_static:/app/staticfiles
+    command: >
+      sh -c "
+      python scripts/wait_for_db.py &&
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000
+      "
+    restart: unless-stopped    
+
+
+  # Celery Worker
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        INSTALL_DEV: "true"
+    container_name: dn_solution_celery
+    environment:
+      - DJANGO_SETTINGS_MODULE=dn_solution.settings.development
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-dn_solution2_dev}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+      - backend_media:/app/media
+    command: celery -A dn_solution worker -l info --concurrency=4
+    restart: unless-stopped
+
+  # Celery Beat (스케줄러)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        INSTALL_DEV: "true"
+    container_name: dn_solution_celery_beat
+    environment:
+      - DJANGO_SETTINGS_MODULE=dn_solution.settings.development
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-dn_solution2_dev}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+    command: celery -A dn_solution beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dn_solution_frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  # Nginx 리버스 프록시 (선택사항)
+  nginx:
+    image: nginx:alpine
+    container_name: dn_solution_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - backend_static:/var/www/static:ro
+      - backend_media:/var/www/media:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    profiles:
+      - nginx
+
+  # Redis Insight (Redis 모니터링 - 개발용)
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: dn_solution_redis_insight
+    ports:
+      - "8001:8001"
+    volumes:
+      - redis_insight_data:/db
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # pgAdmin (PostgreSQL 관리 도구 - 개발용)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: dn_solution_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@dn-solution.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+  redis_data:
+  redis_insight_data:
+  pgadmin_data:
+  backend_static:
+  backend_media:
+  backend_logs:
+
+networks:
+  default:
+    name: dn_solution_network

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(python manage.py check:*)",
+      "Bash(chmod:*)"
+    ],
+    "deny": []
+  }
+}

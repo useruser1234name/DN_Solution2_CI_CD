@@ -1,0 +1,59 @@
+# Django Backend Dockerfile - DN_SOLUTION2
+FROM python:3.11-slim
+
+# 환경 변수 설정
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 시스템 의존성 설치
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    libpq-dev \
+    curl \
+    gettext \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 의존성 설치
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 개발 환경에서는 dev 의존성도 설치
+ARG INSTALL_DEV=false
+RUN if [ "$INSTALL_DEV" = "true" ]; then pip install --no-cache-dir -r requirements-dev.txt; fi
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# 로그 디렉토리 생성
+RUN mkdir -p /app/logs
+
+# Static files 수집을 위한 디렉토리
+RUN mkdir -p /app/staticfiles
+
+# 스크립트에 실행 권한 부여
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Non-root 사용자 생성
+RUN groupadd -r django && useradd -r -g django django
+RUN chown -R django:django /app
+USER django
+
+# 포트 노출
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# 기본 명령어
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--worker-class", "gevent", "--worker-connections", "1000", "--timeout", "120", "dn_solution.wsgi:application"]
