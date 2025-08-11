@@ -290,8 +290,20 @@ def toggle_policy_expose(request, pk):
                 'message': '정책 노출 상태 변경에 실패했습니다.'
             })
     
-    except Exception as e:
-        logger.error(f"정책 노출 상태 토글 실패: {str(e)}")
+    except Policy.DoesNotExist:
+        logger.warning(f"정책을 찾을 수 없음: policy_id={policy_id}")
+        return JsonResponse({
+            'success': False,
+            'message': '정책을 찾을 수 없습니다.'
+        }, status=404)
+    except ValidationError as e:
+        logger.warning(f"정책 노출 상태 토글 유효성 오류: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=400)
+    except DatabaseError as e:
+        logger.error(f"정책 노출 상태 토글 DB 오류: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'message': '오류가 발생했습니다.'

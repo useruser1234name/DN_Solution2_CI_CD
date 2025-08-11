@@ -37,9 +37,8 @@ LOCAL_APPS = [
     'companies',
     'policies', 
     'orders',
-    'rebates',  # 새로운 리베이트 앱
-    'reports',  # 새로운 리포트 앱
-    'notifications',  # 새로운 알림 앱
+    'inventory',
+    'messaging',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -101,6 +100,18 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+# Database
+# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+
+import dj_database_url
+from decouple import config
+
+DATABASES = {
+    'default': dj_database_url.config(
+        default=config('DATABASE_URL', default='sqlite:///db.sqlite3')
+    )
+}
 
 # Internationalization
 LANGUAGE_CODE = 'ko-kr'
