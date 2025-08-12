@@ -100,10 +100,10 @@ class PerformanceMiddleware:
         # 요청 시작 시간
         start_time = time.time()
         
-        # 메모리 사용량 측정 (시작)
-        import psutil
-        process = psutil.Process()
-        start_memory = process.memory_info().rss / 1024 / 1024  # MB
+        # 메모리 사용량 측정 (시작) - psutil 필요시 주석 해제
+        # import psutil
+        # process = psutil.Process()
+        # start_memory = process.memory_info().rss / 1024 / 1024  # MB
         
         response = self.get_response(request)
         
@@ -111,9 +111,10 @@ class PerformanceMiddleware:
         end_time = time.time()
         duration = end_time - start_time
         
-        # 메모리 사용량 측정 (종료)
-        end_memory = process.memory_info().rss / 1024 / 1024  # MB
-        memory_diff = end_memory - start_memory
+        # 메모리 사용량 측정 (종료) - psutil 필요시 주석 해제
+        # end_memory = process.memory_info().rss / 1024 / 1024  # MB
+        # memory_diff = end_memory - start_memory
+        memory_diff = 0  # psutil 없을 때 기본값
         
         # 성능 지표 로깅
         if request.path.startswith('/api/'):
@@ -121,7 +122,7 @@ class PerformanceMiddleware:
         
         # 성능 헤더 추가
         response['X-Response-Time'] = f"{duration:.3f}s"
-        response['X-Memory-Usage'] = f"{end_memory:.2f}MB"
+        # response['X-Memory-Usage'] = f"{end_memory:.2f}MB"  # psutil 없을 때 주석
         
         return response
 

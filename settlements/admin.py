@@ -5,7 +5,7 @@ from .models import Settlement, SettlementBatch, SettlementBatchItem
 @admin.register(Settlement)
 class SettlementAdmin(admin.ModelAdmin):
     list_display = ['company', 'order', 'rebate_amount', 'status', 'created_at']
-    list_filter = ['status', 'created_at', 'company__company_type']
+    list_filter = ['status', 'created_at', 'company__type']
     search_fields = ['company__name', 'order__customer_name']
     readonly_fields = ['created_at', 'updated_at', 'approved_at', 'paid_at']
     

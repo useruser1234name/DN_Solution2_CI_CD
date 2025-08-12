@@ -16,7 +16,9 @@
       "Bash(python manage.py:*)",
       "Bash(venvScripts:*)",
       "Bash(touch:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(true)"
     ],
     "deny": []
   }

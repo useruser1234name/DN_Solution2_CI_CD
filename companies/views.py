@@ -10,6 +10,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from .models import Company, CompanyUser
 from .serializers import CompanySerializer, CompanyUserSerializer
+from core.filters import CompanyFilter, CompanyUserFilter
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
 from django.http import JsonResponse
@@ -25,19 +26,41 @@ class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
     permission_classes = [AllowAny]
+    filterset_class = CompanyFilter
+    search_fields = ['name', 'code']
+    ordering_fields = ['name', 'created_at', 'type']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         # 계층별 권한 필터링이 적용된 회사 목록 반환
-        return get_visible_companies(self.request.user)
+        queryset = get_visible_companies(self.request.user)
+        # N+1 쿼리 방지를 위한 select_related/prefetch_related 추가
+        queryset = queryset.select_related('parent_company').prefetch_related(
+            'child_companies',
+            'users',
+            'users__django_user'
+        )
+        return queryset
 
 class CompanyUserViewSet(viewsets.ModelViewSet):
     queryset = CompanyUser.objects.all()
     serializer_class = CompanyUserSerializer
     permission_classes = [IsAuthenticated]
+    filterset_class = CompanyUserFilter
+    search_fields = ['username', 'django_user__email']
+    ordering_fields = ['username', 'created_at', 'role']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         # 계층별 권한 필터링이 적용된 사용자 목록 반환
-        return get_visible_users(self.request.user)
+        queryset = get_visible_users(self.request.user)
+        # N+1 쿼리 방지를 위한 select_related/prefetch_related 추가
+        queryset = queryset.select_related(
+            'company',
+            'company__parent_company',
+            'django_user'
+        )
+        return queryset
 
 class UserApprovalView(APIView):
     permission_classes = [IsAuthenticated]
@@ -128,7 +151,6 @@ class DashboardStatsView(APIView):
             'total_companies': visible_companies.count(),
             'pending_approvals': visible_users.filter(status='pending').count(),
             'today_orders': 0,  # TODO: orders 앱에서 실제 주문 수 계산
-            'low_stock_items': 0  # TODO: inventory 앱에서 계산
         }
         return Response(stats)
 

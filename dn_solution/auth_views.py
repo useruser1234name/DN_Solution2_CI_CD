@@ -22,8 +22,8 @@ from dn_solution.jwt_auth import (
     EnhancedJWTAuthentication, CustomTokenGenerator, 
     TokenManager, TokenPermissionValidator
 )
-from dn_solution.cache_manager import cache_manager, CacheManager
-from dn_solution.cache_utils import cache_user_data
+# from dn_solution.cache_manager import cache_manager, CacheManager - removed
+from django.core.cache import cache
 
 logger = logging.getLogger('auth')
 

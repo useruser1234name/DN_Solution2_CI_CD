@@ -12,7 +12,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.views import APIView
 from companies.models import Company, CompanyUser
-from dn_solution.cache_manager import cache_manager, CacheManager
+from django.core.cache import cache
 from dn_solution.cache_utils import CacheUtils
 
 logger = logging.getLogger('permissions')

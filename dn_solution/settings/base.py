@@ -31,8 +31,6 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'django_redis',
     'django_extensions',
-    'django_celery_beat',
-    'django_celery_results',
 ]
 
 LOCAL_APPS = [
@@ -145,7 +143,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.CursorPagination',
+    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultSetPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
@@ -263,9 +261,9 @@ CACHE_MIDDLEWARE_ALIAS = 'api_cache'
 CACHE_MIDDLEWARE_SECONDS = 300
 CACHE_MIDDLEWARE_KEY_PREFIX = 'dn_middleware'
 
-# Session engine (Redis)
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'sessions'
+# Session engine (Redis가 없을 때는 DB 사용)
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+# SESSION_CACHE_ALIAS = 'sessions'
 SESSION_COOKIE_AGE = 3600  # 1 hour
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 

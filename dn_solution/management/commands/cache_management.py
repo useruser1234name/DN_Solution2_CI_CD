@@ -8,7 +8,7 @@ import json
 import time
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from dn_solution.cache_manager import cache_manager, CacheMonitor
+from django.core.cache import cache
 from dn_solution.cache_utils import CacheUtils
 
 

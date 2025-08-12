@@ -12,7 +12,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.http import JsonResponse
 from django.utils import timezone
-from dn_solution.cache_manager import cache_manager, CacheManager
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 

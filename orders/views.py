@@ -16,7 +16,8 @@ from django.utils import timezone
 from .models import Order, OrderMemo, Invoice, OrderRequest
 from .serializers import (
     OrderSerializer, OrderMemoSerializer, InvoiceSerializer,
-    OrderStatusUpdateSerializer, OrderBulkStatusUpdateSerializer
+    OrderStatusUpdateSerializer, OrderBulkStatusUpdateSerializer,
+    OrderBulkDeleteSerializer
 )
 
 logger = logging.getLogger('orders')
@@ -36,7 +37,23 @@ class OrderViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """사용자 권한에 따른 쿼리셋 필터링"""
-        return get_visible_orders(self.request.user)
+        queryset = get_visible_orders(self.request.user)
+        # N+1 쿼리 방지를 위한 select_related/prefetch_related 추가
+        queryset = queryset.select_related(
+            'policy',
+            'policy__created_by',
+            'company',
+            'company__parent_company',
+            'created_by'
+        ).prefetch_related(
+            'memos',
+            'memos__created_by',
+            'invoices',
+            'settlements',
+            'sensitive_data',
+            'requests'
+        )
+        return queryset
     
     def perform_create(self, serializer):
         """주문 생성 시 생성자 정보 추가"""

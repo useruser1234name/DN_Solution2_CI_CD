@@ -17,7 +17,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
-from dn_solution.cache_manager import cache_manager, CacheManager
+# from dn_solution.cache_manager import cache_manager, CacheManager - removed
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

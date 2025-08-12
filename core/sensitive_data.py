@@ -33,12 +33,9 @@ class SensitiveDataManager:
     def __init__(self):
         """Redis 연결 초기화"""
         try:
-            self.redis_client = redis.StrictRedis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                decode_responses=True
-            )
+            # Redis URL에서 연결 정보 파싱
+            from django_redis import get_redis_connection
+            self.redis_client = get_redis_connection("default")
             self.redis_client.ping()
             logger.info("Redis 연결 성공")
         except Exception as e:

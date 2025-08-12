@@ -1,0 +1,28 @@
+# Django Core
+Django==4.2.7
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.0
+
+# Database
+psycopg2-binary==2.9.10
+dj-database-url==2.1.0
+
+# Cache & Performance
+redis==5.0.1
+django-redis==5.4.0
+
+# Security & Auth
+django-cors-headers==4.3.1
+
+# Environment & Config
+python-decouple==3.8
+python-dotenv==1.0.0
+
+# API & Data Processing
+django-filter==23.4
+
+# Utilities
+django-extensions==3.2.3
+
+# Deployment
+gunicorn==21.2.0

@@ -13,7 +13,6 @@ from django.utils.cache import get_cache_key
 from django.utils.deprecation import MiddlewareMixin
 from django.conf import settings
 from django.core.cache import cache
-from dn_solution.cache_manager import cache_manager, CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,6 @@ class PerformanceCacheMiddleware(MiddlewareMixin):
     
     def __init__(self, get_response=None):
         super().__init__(get_response)
-        self.cache_manager = cache_manager
         
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         """요청 처리 전 캐시 확인"""

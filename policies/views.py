@@ -39,6 +39,8 @@ def simple_auth_required(view_func):
 
 
 from .utils import get_visible_policies
+from rest_framework import viewsets
+from core.filters import PolicyFilter
 
 class PolicyListView(ListView):
     """
@@ -53,7 +55,13 @@ class PolicyListView(ListView):
         """사용자 계층에 따라 필터링된 정책 목록을 반환합니다."""
         # 기본 쿼리셋을 계층 필터링된 결과로 설정
         queryset = get_visible_policies(self.request.user)
-        queryset = queryset.select_related('created_by').prefetch_related('notices')
+        # N+1 쿼리 방지를 위한 최적화
+        queryset = queryset.select_related('created_by').prefetch_related(
+            'notices',
+            'assignments',
+            'assignments__company',
+            'rebate_matrix'
+        )
         
         
         # 검색 필터

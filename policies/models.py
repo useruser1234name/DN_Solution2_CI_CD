@@ -47,6 +47,21 @@ class Policy(models.Model):
         ('all', '전체'),
     ]
     
+    # 정책 타입 선택지
+    TYPE_CHOICES = [
+        ('normal', '일반'),
+        ('special', '특별'),
+        ('event', '이벤트'),
+    ]
+    
+    # 정책 상태 선택지
+    STATUS_CHOICES = [
+        ('draft', '초안'),
+        ('active', '활성'),
+        ('inactive', '비활성'),
+        ('expired', '만료'),
+    ]
+    
     # 기본 키는 UUID 사용
     id = models.UUIDField(
         primary_key=True,
@@ -74,6 +89,23 @@ class Policy(models.Model):
         default='general',
         verbose_name="신청서 타입",
         help_text="사용할 신청서 양식을 선택하세요"
+    )
+    
+    # 정책 타입 및 상태
+    type = models.CharField(
+        max_length=20,
+        choices=TYPE_CHOICES,
+        default='normal',
+        verbose_name="정책 타입",
+        help_text="정책의 타입을 선택하세요"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        verbose_name="정책 상태",
+        help_text="정책의 상태를 선택하세요"
     )
     
     # 통신사 및 가입기간 필터링
