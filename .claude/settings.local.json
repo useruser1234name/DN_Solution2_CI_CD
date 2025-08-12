@@ -5,7 +5,18 @@
       "Bash(mkdir:*)",
       "Bash(cp:*)",
       "Bash(python manage.py check:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(npx:*)",
+      "Bash(where claude)",
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(powershell:*)",
+      "Bash(git checkout:*)",
+      "Bash(rm:*)",
+      "Bash(python manage.py:*)",
+      "Bash(venvScripts:*)",
+      "Bash(touch:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

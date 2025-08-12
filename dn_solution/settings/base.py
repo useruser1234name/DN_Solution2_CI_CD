@@ -36,11 +36,13 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    'core',  # 공통 기능 앱
     'companies',
     'policies', 
     'orders',
-    'inventory',
-    'messaging',
+    'settlements',  # 정산 관리
+    # 'inventory',  # 제거 - MVP에 불필요
+    # 'messaging',  # 제거 - MVP에 불필요
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

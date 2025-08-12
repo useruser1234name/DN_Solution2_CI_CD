@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from companies.models import Company
 from policies.models import Policy
+from core.sensitive_data import sensitive_data_manager
 
 logger = logging.getLogger('orders')
 
@@ -46,10 +47,25 @@ class Order(models.Model):
         on_delete=models.CASCADE,
         verbose_name='주문 업체'
     )
+    # 민감정보 필드들 - 승인 전까지 Redis에 임시 저장
     customer_name = models.CharField(max_length=100, verbose_name='고객명')
     customer_phone = models.CharField(max_length=20, verbose_name='고객 연락처')
     customer_email = models.EmailField(blank=True, verbose_name='고객 이메일')
     customer_address = models.TextField(verbose_name='배송 주소')
+    
+    # 민감정보 처리 관련 필드
+    sensitive_data_key = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        verbose_name='민감정보 키',
+        help_text='Redis에 저장된 민감정보의 키'
+    )
+    is_sensitive_data_processed = models.BooleanField(
+        default=False,
+        verbose_name='민감정보 처리 완료',
+        help_text='본사 승인 후 민감정보가 DB에 저장되었는지 여부'
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -120,10 +136,17 @@ class Order(models.Model):
         self.full_clean()
         is_new = self.pk is None
         
+        # 민감정보 처리
+        if is_new and self.status == 'pending' and not self.is_sensitive_data_processed:
+            # 민감정보를 Redis에 임시 저장
+            self._store_sensitive_data_temporarily()
+        
+        # 로깅 시 민감정보 마스킹
+        masked_name = sensitive_data_manager.mask_for_logging(self.customer_name)
         if is_new:
-            logger.info(f"[Order.save] 새 주문 생성 - 고객: {self.customer_name}, 금액: {self.total_amount}")
+            logger.info(f"[Order.save] 새 주문 생성 - 고객: {masked_name}, 금액: {self.total_amount}")
         else:
-            logger.info(f"[Order.save] 주문 수정 - 고객: {self.customer_name}")
+            logger.info(f"[Order.save] 주문 수정 - 고객: {masked_name}")
         
         super().save(*args, **kwargs)
     
@@ -185,6 +208,137 @@ class Order(models.Model):
         }
         
         return new_status in valid_transitions.get(self.status, [])
+    
+    def _store_sensitive_data_temporarily(self):
+        """민감정보를 Redis에 임시 저장"""
+        if not self.sensitive_data_key:
+            self.sensitive_data_key = f"order_{self.id}_sensitive"
+        
+        sensitive_data = {
+            'customer_name': self.customer_name,
+            'customer_phone': self.customer_phone,
+            'customer_email': self.customer_email,
+            'customer_address': self.customer_address,
+        }
+        
+        # Redis에 24시간 TTL로 저장
+        success = sensitive_data_manager.store_temporary(
+            data=sensitive_data,
+            key=self.sensitive_data_key,
+            ttl=86400  # 24시간
+        )
+        
+        if success:
+            # 민감정보 필드를 마스킹된 값으로 대체
+            self.customer_name = sensitive_data_manager.mask_for_logging(self.customer_name)
+            self.customer_phone = sensitive_data_manager.mask_for_logging(self.customer_phone)
+            self.customer_address = sensitive_data_manager.mask_for_logging(self.customer_address)
+            logger.info(f"민감정보가 Redis에 임시 저장되었습니다: {self.sensitive_data_key}")
+        else:
+            logger.error(f"민감정보 임시 저장 실패: {self.sensitive_data_key}")
+    
+    def process_sensitive_data(self):
+        """본사 승인 시 민감정보를 DB에 영구 저장"""
+        if self.is_sensitive_data_processed:
+            logger.warning(f"이미 처리된 민감정보입니다: {self.id}")
+            return True
+        
+        if not self.sensitive_data_key:
+            logger.error(f"민감정보 키가 없습니다: {self.id}")
+            return False
+        
+        # Redis에서 민감정보 조회
+        sensitive_data = sensitive_data_manager.retrieve_temporary(self.sensitive_data_key)
+        if not sensitive_data:
+            logger.error(f"민감정보를 찾을 수 없습니다: {self.sensitive_data_key}")
+            return False
+        
+        # 해시화하여 저장
+        hashed_data = sensitive_data_manager.hash_and_store(sensitive_data)
+        
+        # OrderSensitiveData 모델에 저장 (별도 테이블)
+        try:
+            OrderSensitiveData.objects.create(
+                order=self,
+                customer_name_hash=hashed_data.get('customer_name_hash'),
+                customer_phone_hash=hashed_data.get('customer_phone_hash'),
+                customer_email_hash=hashed_data.get('customer_email_hash', ''),
+                customer_address_hash=hashed_data.get('customer_address_hash'),
+                customer_name_masked=hashed_data.get('customer_name_masked'),
+                customer_phone_masked=hashed_data.get('customer_phone_masked'),
+                customer_address_masked=hashed_data.get('customer_address_masked')
+            )
+            
+            # 원본 데이터로 복원
+            self.customer_name = sensitive_data['customer_name']
+            self.customer_phone = sensitive_data['customer_phone']
+            self.customer_email = sensitive_data.get('customer_email', '')
+            self.customer_address = sensitive_data['customer_address']
+            self.is_sensitive_data_processed = True
+            self.save()
+            
+            # Redis에서 삭제
+            sensitive_data_manager.delete_temporary(self.sensitive_data_key)
+            
+            logger.info(f"민감정보가 처리되었습니다: {self.id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"민감정보 처리 중 오류: {str(e)}")
+            return False
+    
+    def approve(self, user=None):
+        """주문 승인 (본사만 가능)"""
+        if self.status != 'pending':
+            raise ValidationError("대기 중인 주문만 승인할 수 있습니다.")
+        
+        # 민감정보 처리
+        if not self.is_sensitive_data_processed:
+            if not self.process_sensitive_data():
+                raise ValidationError("민감정보 처리에 실패했습니다.")
+        
+        # 상태 변경
+        self.update_status('processing', user)
+
+
+class OrderSensitiveData(models.Model):
+    """
+    주문 민감정보 모델
+    
+    해시화된 민감정보를 별도로 관리합니다.
+    """
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='sensitive_data',
+        verbose_name='주문'
+    )
+    
+    # 해시화된 민감정보
+    customer_name_hash = models.CharField(max_length=64, verbose_name='고객명 해시')
+    customer_phone_hash = models.CharField(max_length=64, verbose_name='전화번호 해시')
+    customer_email_hash = models.CharField(max_length=64, blank=True, verbose_name='이메일 해시')
+    customer_address_hash = models.CharField(max_length=64, verbose_name='주소 해시')
+    
+    # 마스킹된 표시용 데이터
+    customer_name_masked = models.CharField(max_length=100, verbose_name='고객명 (마스킹)')
+    customer_phone_masked = models.CharField(max_length=20, verbose_name='전화번호 (마스킹)')
+    customer_address_masked = models.TextField(verbose_name='주소 (마스킹)')
+    
+    processed_at = models.DateTimeField(auto_now_add=True, verbose_name='처리일시')
+    
+    class Meta:
+        verbose_name = '주문 민감정보'
+        verbose_name_plural = '주문 민감정보'
+        indexes = [
+            models.Index(fields=['order']),
+            models.Index(fields=['processed_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.customer_name_masked} - 민감정보 (처리됨)"
 
 
 class OrderMemo(models.Model):

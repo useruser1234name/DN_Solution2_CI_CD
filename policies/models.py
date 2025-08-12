@@ -771,6 +771,210 @@ class AgencyRebate(models.Model):
             raise
 
 
+class RebateMatrix(models.Model):
+    """
+    리베이트 매트릭스 모델
+    요금제와 가입기간에 따른 리베이트 금액을 관리
+    """
+    
+    # 요금제 범위 선택지
+    PLAN_RANGE_CHOICES = [
+        (30000, '3만원대'),
+        (50000, '5만원대'),
+        (70000, '7만원대'),
+        (100000, '10만원대'),
+        (150000, '15만원대'),
+    ]
+    
+    # 가입기간 선택지 (개월)
+    CONTRACT_PERIOD_CHOICES = [
+        (3, '3개월'),
+        (6, '6개월'),
+        (9, '9개월'),
+        (12, '12개월'),
+        (24, '24개월'),
+        (36, '36개월'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="리베이트 매트릭스의 고유 식별자"
+    )
+    
+    policy = models.ForeignKey(
+        Policy,
+        on_delete=models.CASCADE,
+        related_name='rebate_matrix',
+        verbose_name="정책",
+        help_text="리베이트 매트릭스가 속한 정책"
+    )
+    
+    carrier = models.CharField(
+        max_length=10,
+        choices=Policy.CARRIER_CHOICES,
+        verbose_name="통신사",
+        help_text="리베이트가 적용될 통신사"
+    )
+    
+    plan_range = models.IntegerField(
+        choices=PLAN_RANGE_CHOICES,
+        verbose_name="요금제 범위",
+        help_text="리베이트가 적용될 요금제 범위"
+    )
+    
+    contract_period = models.IntegerField(
+        choices=CONTRACT_PERIOD_CHOICES,
+        verbose_name="가입기간",
+        help_text="리베이트가 적용될 가입기간 (개월)"
+    )
+    
+    rebate_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="리베이트 금액",
+        help_text="해당 조건의 리베이트 금액"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="생성일시"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="수정일시"
+    )
+    
+    class Meta:
+        verbose_name = "리베이트 매트릭스"
+        verbose_name_plural = "리베이트 매트릭스"
+        ordering = ['policy', 'carrier', 'plan_range', 'contract_period']
+        unique_together = ['policy', 'carrier', 'plan_range', 'contract_period']
+        indexes = [
+            models.Index(fields=['policy', 'carrier']),
+            models.Index(fields=['plan_range', 'contract_period']),
+        ]
+    
+    def __str__(self):
+        return f"{self.policy.title} - {self.get_carrier_display()} - {self.get_plan_range_display()} - {self.get_contract_period_display()}: {self.rebate_amount:,}원"
+    
+    def clean(self):
+        """모델 데이터 검증"""
+        if self.rebate_amount < 0:
+            raise ValidationError("리베이트 금액은 0 이상이어야 합니다.")
+        
+        # 정책의 통신사와 매트릭스의 통신사 일치 여부 확인
+        if self.policy and self.policy.carrier != 'all' and self.carrier != self.policy.carrier:
+            raise ValidationError(f"정책의 통신사({self.policy.get_carrier_display()})와 매트릭스의 통신사({self.get_carrier_display()})가 일치하지 않습니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"리베이트 매트릭스가 생성되었습니다: {self}")
+            else:
+                logger.info(f"리베이트 매트릭스가 수정되었습니다: {self}")
+        
+        except Exception as e:
+            logger.error(f"리베이트 매트릭스 저장 중 오류 발생: {str(e)}")
+            raise
+    
+    @classmethod
+    def get_rebate_amount(cls, policy, carrier, plan_amount, contract_period):
+        """
+        주어진 조건에 맞는 리베이트 금액 조회
+        
+        Args:
+            policy: Policy 객체
+            carrier: 통신사 코드
+            plan_amount: 요금제 금액
+            contract_period: 가입기간 (개월)
+            
+        Returns:
+            리베이트 금액 또는 None
+        """
+        # 요금제 금액에 맞는 범위 찾기
+        plan_range = None
+        for range_value, _ in cls.PLAN_RANGE_CHOICES:
+            if plan_amount <= range_value:
+                plan_range = range_value
+                break
+        
+        if not plan_range:
+            # 가장 높은 범위 사용
+            plan_range = cls.PLAN_RANGE_CHOICES[-1][0]
+        
+        try:
+            matrix = cls.objects.get(
+                policy=policy,
+                carrier=carrier,
+                plan_range=plan_range,
+                contract_period=contract_period
+            )
+            return matrix.rebate_amount
+        except cls.DoesNotExist:
+            # 전체 통신사로 다시 시도
+            try:
+                matrix = cls.objects.get(
+                    policy=policy,
+                    carrier='all',
+                    plan_range=plan_range,
+                    contract_period=contract_period
+                )
+                return matrix.rebate_amount
+            except cls.DoesNotExist:
+                return None
+    
+    @classmethod
+    def create_default_matrix(cls, policy):
+        """
+        정책에 대한 기본 리베이트 매트릭스 생성
+        
+        Args:
+            policy: Policy 객체
+        """
+        default_rebates = {
+            # (요금제 범위, 가입기간): 리베이트 금액
+            (30000, 3): 50000,
+            (30000, 6): 60000,
+            (30000, 9): 70000,
+            (30000, 12): 80000,
+            (50000, 3): 70000,
+            (50000, 6): 85000,
+            (50000, 9): 100000,
+            (50000, 12): 120000,
+            (70000, 3): 100000,
+            (70000, 6): 120000,
+            (70000, 9): 140000,
+            (70000, 12): 160000,
+            (100000, 3): 150000,
+            (100000, 6): 180000,
+            (100000, 9): 210000,
+            (100000, 12): 250000,
+        }
+        
+        carriers = ['all'] if policy.carrier == 'all' else [policy.carrier]
+        
+        for carrier in carriers:
+            for (plan_range, period), amount in default_rebates.items():
+                cls.objects.get_or_create(
+                    policy=policy,
+                    carrier=carrier,
+                    plan_range=plan_range,
+                    contract_period=period,
+                    defaults={'rebate_amount': amount}
+                )
+        
+        logger.info(f"정책 '{policy.title}'에 기본 리베이트 매트릭스가 생성되었습니다.")
+
+
 class OrderFormTemplate(models.Model):
     """
     주문서 양식 템플릿 모델

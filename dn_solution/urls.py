@@ -45,8 +45,9 @@ urlpatterns = [
     path('api/companies/', include('companies.urls')),
     path('api/policies/', include('policies.urls')),
     path('api/orders/', include('orders.urls')),
-    path('api/inventory/', include('inventory.urls')),
-    path('api/messaging/', include('messaging.urls')),
+    path('api/settlements/', include('settlements.urls')),
+    # path('api/inventory/', include('inventory.urls')),  # 제거 - MVP에 불필요
+    # path('api/messaging/', include('messaging.urls')),  # 제거 - MVP에 불필요
     # Dashboard API 경로 직접 정의
     path('api/dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('api/dashboard/activities/', views.DashboardActivitiesView.as_view(), name='dashboard-activities'),
