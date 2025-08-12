@@ -31,6 +31,8 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'django_redis',
     'django_extensions',
+    'django_celery_beat',
+    'django_celery_results',
 ]
 
 LOCAL_APPS = [

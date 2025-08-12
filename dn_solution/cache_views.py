@@ -248,9 +248,14 @@ def cache_keys_list(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+
 @api_view(['GET'])
+@permission_classes([IsAdminUser])
 def health_check(request):
-    """헬스체크 API (인증 불필요)"""
+    """상세 헬스체크 API (관리자 인증 필요)"""
     try:
         health_status = CacheMonitor.health_check()
         

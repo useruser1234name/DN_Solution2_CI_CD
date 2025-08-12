@@ -1,0 +1,55 @@
+.exposure-modal-content {
+  padding: 20px 0;
+}
+
+.exposure-description {
+  color: #666;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.agencies-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.no-agencies {
+  text-align: center;
+  color: #999;
+  padding: 40px 0;
+}
+
+.agency-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.agency-item:last-child {
+  border-bottom: none;
+}
+
+.agency-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agency-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.agency-code {
+  color: #999;
+  font-size: 12px;
+}

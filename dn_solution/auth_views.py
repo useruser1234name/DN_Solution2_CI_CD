@@ -62,7 +62,9 @@ class EnhancedTokenObtainPairView(TokenObtainPairView):
                 }, status=status.HTTP_403_FORBIDDEN)
             
             # JWT 토큰 생성
-            access_token, refresh_token = CustomTokenGenerator.generate_tokens(user)
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
             
             # 사용자 데이터 캐싱
             user_data = cache_user_data(user.id, data_type='profile')

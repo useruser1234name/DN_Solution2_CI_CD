@@ -26,6 +26,11 @@ urlpatterns = [
     path('<uuid:policy_pk>/notices/', views.policy_notice_list, name='policy_notices'),
     path('<uuid:policy_pk>/assignments/', views.policy_assignment_list, name='policy_assignments'),
     
+    # 정책 노출 및 리베이트 관리 (새로 추가)
+    path('<uuid:policy_id>/exposure/', views.PolicyExposureView.as_view(), name='policy_exposure'),
+    path('agency/rebate/', views.AgencyRebateView.as_view(), name='agency_rebate'),
+    path('<uuid:policy_id>/order-form/', views.OrderFormBuilderView.as_view(), name='order_form_builder'),
+    
     # API 엔드포인트
     path('api/list/', views.policy_api_list, name='api_list'),
     path('api/create/', views.PolicyApiCreateView.as_view(), name='api_create'),

@@ -83,3 +83,50 @@ class APILoggingMiddleware:
         if request.path.startswith('/api/'):
             logger.error(f"[API] 예외 발생 - {request.method} {request.path} - 오류: {str(exception)}", exc_info=True)
         return None 
+
+class PerformanceMiddleware:
+    """
+    성능 모니터링을 위한 미들웨어
+    - 요청 처리 시간 측정
+    - 메모리 사용량 모니터링
+    - 성능 지표 수집
+    """
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+        logger.info("[PerformanceMiddleware] 성능 모니터링 미들웨어 초기화 완료")
+
+    def __call__(self, request):
+        # 요청 시작 시간
+        start_time = time.time()
+        
+        # 메모리 사용량 측정 (시작)
+        import psutil
+        process = psutil.Process()
+        start_memory = process.memory_info().rss / 1024 / 1024  # MB
+        
+        response = self.get_response(request)
+        
+        # 요청 처리 시간
+        end_time = time.time()
+        duration = end_time - start_time
+        
+        # 메모리 사용량 측정 (종료)
+        end_memory = process.memory_info().rss / 1024 / 1024  # MB
+        memory_diff = end_memory - start_memory
+        
+        # 성능 지표 로깅
+        if request.path.startswith('/api/'):
+            logger.info(f"[Performance] {request.method} {request.path} - 처리시간: {duration:.3f}초, 메모리변화: {memory_diff:+.2f}MB")
+        
+        # 성능 헤더 추가
+        response['X-Response-Time'] = f"{duration:.3f}s"
+        response['X-Memory-Usage'] = f"{end_memory:.2f}MB"
+        
+        return response
+
+    def process_exception(self, request, exception):
+        """예외 발생 시 성능 정보 로깅"""
+        if request.path.startswith('/api/'):
+            logger.error(f"[Performance] 예외 발생 - {request.method} {request.path} - 오류: {str(exception)}")
+        return None 

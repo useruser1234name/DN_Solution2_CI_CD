@@ -25,9 +25,23 @@ from dn_solution.auth_views import (
     EnhancedTokenObtainPairView, EnhancedTokenRefreshView, LogoutView,
     TokenInfoView, generate_api_token, revoke_tokens
 )
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def simple_health_check(request):
+    """간단한 헬스체크 (Docker용, 인증 불필요)"""
+    return JsonResponse({
+        'status': 'healthy',
+        'service': 'DN_SOLUTION2',
+        'timestamp': '2025-08-12T11:58:00Z'
+    })
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', simple_health_check, name='simple-health-check'),  # Docker health check용
     path('api/companies/', include('companies.urls')),
     path('api/policies/', include('policies.urls')),
     path('api/orders/', include('orders.urls')),
@@ -53,5 +67,5 @@ urlpatterns = [
     path('api/admin/cache/keys/', cache_keys_list, name='cache-keys-list'),
     path('api/admin/cache/invalidate/', invalidate_cache_pattern, name='cache-invalidate'),
     path('api/admin/cache/dashboard/', cache_dashboard, name='cache-dashboard'),
-    path('api/health/cache/', health_check, name='cache-health-check'),
+    path('api/health/cache/', health_check, name='cache-health-check'),  # 인증 필요
 ]

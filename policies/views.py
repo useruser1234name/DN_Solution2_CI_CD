@@ -8,6 +8,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views import View
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
@@ -144,7 +145,7 @@ class PolicyDetailView(LoginRequiredMixin, DetailView):
 class PolicyCreateView(LoginRequiredMixin, CreateView):
     """
     정책 생성 View
-    본사와 협력사만 정책 생성 가능
+    본사만 정책 생성 가능
     """
     model = Policy
     template_name = 'policies/policy_form.html'
@@ -155,7 +156,7 @@ class PolicyCreateView(LoginRequiredMixin, CreateView):
     success_url = reverse_lazy('policies:policy_list')
     
     def dispatch(self, request, *args, **kwargs):
-        """권한 검증: 본사와 협력사만 정책 생성 가능"""
+        """권한 검증: 본사만 정책 생성 가능"""
         # 슈퍼유저는 모든 권한
         if request.user.is_superuser:
             return super().dispatch(request, *args, **kwargs)
@@ -166,9 +167,9 @@ class PolicyCreateView(LoginRequiredMixin, CreateView):
             company_user = CompanyUser.objects.get(django_user=request.user)
             company = company_user.company
             
-            # 본사(headquarters) 또는 협력사(agency)만 정책 생성 가능
-            if company.type not in ['headquarters', 'agency']:
-                messages.error(request, '정책 생성 권한이 없습니다. 본사와 협력사만 정책을 생성할 수 있습니다.')
+            # 본사(headquarters)만 정책 생성 가능
+            if company.type != 'headquarters':
+                messages.error(request, '정책 생성 권한이 없습니다. 본사 관리자만 정책을 생성할 수 있습니다.')
                 return redirect('policies:policy_list')
                 
         except CompanyUser.DoesNotExist:
@@ -609,13 +610,13 @@ class PolicyApiCreateView(APIView):
             if not title:
                 return Response({'success': False, 'message': '정책명은 필수입니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 본사와 협력사만 정책 생성 가능
+            # 본사만 정책 생성 가능
             from companies.models import CompanyUser, Company
             try:
                 company_user = CompanyUser.objects.get(django_user=request.user)
                 company = company_user.company
-                if company.type not in ['headquarters', 'agency']:
-                    return Response({'success': False, 'message': '정책 생성 권한이 없습니다. 본사와 협력사만 정책을 생성할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
+                if company.type != 'headquarters':
+                    return Response({'success': False, 'message': '정책 생성 권한이 없습니다. 본사 관리자만 정책을 생성할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
             except CompanyUser.DoesNotExist:
                 return Response({'success': False, 'message': '업체 정보를 찾을 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -855,3 +856,354 @@ def policy_statistics(request):
         logger.error(f"정책 통계 조회 실패: {str(e)}")
         messages.error(request, '통계 정보 조회에 실패했습니다.')
         return redirect('policies:policy_list')
+
+
+class PolicyExposureView(LoginRequiredMixin, View):
+    """
+    정책 노출 관리 뷰
+    본사가 협력사에 정책을 노출하는 것을 관리
+    """
+    
+    def dispatch(self, request, *args, **kwargs):
+        """권한 검증: 본사만 접근 가능"""
+        if not request.user.is_superuser:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                if company_user.company.type != 'headquarters':
+                    messages.error(request, '본사 관리자만 정책 노출을 관리할 수 있습니다.')
+                    return redirect('policies:policy_list')
+            except CompanyUser.DoesNotExist:
+                messages.error(request, '업체 정보를 찾을 수 없습니다.')
+                return redirect('policies:policy_list')
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get(self, request, policy_id):
+        """협력사 선택 화면 표시"""
+        from .models import Policy, PolicyExposure
+        from companies.models import Company
+        
+        policy = get_object_or_404(Policy, id=policy_id)
+        
+        # 협력사 목록 조회
+        agencies = Company.objects.filter(type='agency', status=True).order_by('name')
+        
+        # 이미 노출된 협력사 조회
+        exposed_agencies = PolicyExposure.objects.filter(
+            policy=policy, is_active=True
+        ).values_list('agency_id', flat=True)
+        
+        context = {
+            'policy': policy,
+            'agencies': agencies,
+            'exposed_agencies': list(exposed_agencies)
+        }
+        
+        # AJAX 요청인 경우 JSON 응답
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            agencies_data = [{
+                'id': str(agency.id),
+                'name': agency.name,
+                'code': agency.code,
+                'is_exposed': str(agency.id) in exposed_agencies
+            } for agency in agencies]
+            
+            return JsonResponse({
+                'policy': {
+                    'id': str(policy.id),
+                    'title': policy.title
+                },
+                'agencies': agencies_data
+            })
+        
+        return render(request, 'policies/policy_exposure.html', context)
+    
+    def post(self, request, policy_id):
+        """선택된 협력사에 정책 노출"""
+        from .models import Policy, PolicyExposure
+        from companies.models import Company
+        
+        policy = get_object_or_404(Policy, id=policy_id)
+        selected_agencies = request.POST.getlist('agencies')
+        
+        try:
+            # 기존 노출 비활성화
+            PolicyExposure.objects.filter(policy=policy).update(is_active=False)
+            
+            # 새로운 노출 생성
+            for agency_id in selected_agencies:
+                agency = Company.objects.get(id=agency_id, type='agency', status=True)
+                PolicyExposure.objects.update_or_create(
+                    policy=policy,
+                    agency=agency,
+                    defaults={
+                        'is_active': True,
+                        'exposed_by': request.user
+                    }
+                )
+            
+            messages.success(request, f'정책 "{policy.title}"이 선택된 협력사에 노출되었습니다.')
+            logger.info(f"정책 노출 설정 완료: {policy.title} - {len(selected_agencies)}개 협력사")
+            
+            # AJAX 요청인 경우 JSON 응답
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f'정책이 {len(selected_agencies)}개 협력사에 노출되었습니다.'
+                })
+            
+            return redirect('policies:policy_detail', pk=policy_id)
+            
+        except Exception as e:
+            logger.error(f"정책 노출 설정 실패: {str(e)}")
+            messages.error(request, '정책 노출 설정 중 오류가 발생했습니다.')
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': str(e)
+                }, status=500)
+            
+            return redirect('policies:policy_detail', pk=policy_id)
+
+
+class AgencyRebateView(LoginRequiredMixin, View):
+    """
+    협력사 리베이트 설정 뷰
+    협력사가 판매점에 제공할 리베이트를 설정
+    """
+    
+    def dispatch(self, request, *args, **kwargs):
+        """권한 검증: 협력사만 접근 가능"""
+        if not request.user.is_superuser:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                if company_user.company.type != 'agency':
+                    messages.error(request, '협력사 관리자만 리베이트를 설정할 수 있습니다.')
+                    return redirect('policies:policy_list')
+            except CompanyUser.DoesNotExist:
+                messages.error(request, '업체 정보를 찾을 수 없습니다.')
+                return redirect('policies:policy_list')
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get(self, request):
+        """리베이트 설정 화면 표시"""
+        from .models import PolicyExposure, AgencyRebate
+        from companies.models import Company, CompanyUser
+        
+        try:
+            company_user = CompanyUser.objects.get(django_user=request.user)
+            agency = company_user.company
+            
+            # 노출된 정책 조회
+            exposed_policies = PolicyExposure.objects.filter(
+                agency=agency,
+                is_active=True
+            ).select_related('policy')
+            
+            # 판매점 목록 조회 (협력사 하위)
+            retail_companies = Company.objects.filter(
+                parent_company=agency,
+                type='retail',
+                status=True
+            ).order_by('name')
+            
+            # 기존 리베이트 설정 조회
+            existing_rebates = AgencyRebate.objects.filter(
+                policy_exposure__agency=agency,
+                is_active=True
+            ).select_related('policy_exposure__policy', 'retail_company')
+            
+            context = {
+                'exposed_policies': exposed_policies,
+                'retail_companies': retail_companies,
+                'existing_rebates': existing_rebates
+            }
+            
+            return render(request, 'policies/agency_rebate.html', context)
+            
+        except CompanyUser.DoesNotExist:
+            messages.error(request, '업체 정보를 찾을 수 없습니다.')
+            return redirect('policies:policy_list')
+    
+    def post(self, request):
+        """리베이트 설정 저장"""
+        from .models import PolicyExposure, AgencyRebate
+        from companies.models import Company, CompanyUser
+        from decimal import Decimal
+        
+        try:
+            company_user = CompanyUser.objects.get(django_user=request.user)
+            agency = company_user.company
+            
+            policy_exposure_id = request.POST.get('policy_exposure')
+            retail_company_id = request.POST.get('retail_company')
+            rebate_amount = request.POST.get('rebate_amount')
+            
+            # 유효성 검증
+            policy_exposure = get_object_or_404(
+                PolicyExposure,
+                id=policy_exposure_id,
+                agency=agency,
+                is_active=True
+            )
+            
+            retail_company = get_object_or_404(
+                Company,
+                id=retail_company_id,
+                parent_company=agency,
+                type='retail',
+                status=True
+            )
+            
+            # 리베이트 설정 저장/수정
+            rebate, created = AgencyRebate.objects.update_or_create(
+                policy_exposure=policy_exposure,
+                retail_company=retail_company,
+                defaults={
+                    'rebate_amount': Decimal(rebate_amount),
+                    'is_active': True
+                }
+            )
+            
+            action = "설정" if created else "수정"
+            messages.success(
+                request,
+                f'리베이트가 {action}되었습니다: {policy_exposure.policy.title} → {retail_company.name}: {rebate_amount}원'
+            )
+            logger.info(f"리베이트 {action}: {policy_exposure.policy.title} → {retail_company.name}: {rebate_amount}원")
+            
+            # AJAX 요청인 경우 JSON 응답
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f'리베이트가 {action}되었습니다.',
+                    'rebate': {
+                        'id': str(rebate.id),
+                        'amount': float(rebate.rebate_amount),
+                        'policy': policy_exposure.policy.title,
+                        'retail': retail_company.name
+                    }
+                })
+            
+            return redirect('policies:agency_rebate')
+            
+        except Exception as e:
+            logger.error(f"리베이트 설정 실패: {str(e)}")
+            messages.error(request, '리베이트 설정 중 오류가 발생했습니다.')
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': str(e)
+                }, status=500)
+            
+            return redirect('policies:agency_rebate')
+
+
+class OrderFormBuilderView(LoginRequiredMixin, View):
+    """
+    주문서 양식 설계 뷰
+    본사가 정책별 주문서 양식을 설계
+    """
+    
+    def dispatch(self, request, *args, **kwargs):
+        """권한 검증: 본사만 접근 가능"""
+        if not request.user.is_superuser:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                if company_user.company.type != 'headquarters':
+                    messages.error(request, '본사 관리자만 주문서 양식을 설계할 수 있습니다.')
+                    return redirect('policies:policy_list')
+            except CompanyUser.DoesNotExist:
+                messages.error(request, '업체 정보를 찾을 수 없습니다.')
+                return redirect('policies:policy_list')
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get(self, request, policy_id):
+        """양식 설계 화면 표시"""
+        from .models import Policy, OrderFormTemplate, OrderFormField
+        
+        policy = get_object_or_404(Policy, id=policy_id)
+        
+        # 기존 양식 조회
+        try:
+            template = OrderFormTemplate.objects.get(policy=policy)
+            fields = template.fields.all().order_by('order')
+        except OrderFormTemplate.DoesNotExist:
+            template = None
+            fields = []
+        
+        context = {
+            'policy': policy,
+            'template': template,
+            'fields': fields,
+            'field_types': OrderFormField.FIELD_TYPE_CHOICES
+        }
+        
+        return render(request, 'policies/order_form_builder.html', context)
+    
+    def post(self, request, policy_id):
+        """양식 저장"""
+        from .models import Policy, OrderFormTemplate, OrderFormField
+        
+        policy = get_object_or_404(Policy, id=policy_id)
+        
+        try:
+            # 기존 양식 삭제
+            OrderFormTemplate.objects.filter(policy=policy).delete()
+            
+            # 새 양식 생성
+            template = OrderFormTemplate.objects.create(
+                policy=policy,
+                title=request.POST.get('title', f'{policy.title} 주문서'),
+                description=request.POST.get('description', ''),
+                created_by=request.user
+            )
+            
+            # 필드들 생성
+            fields_data = request.POST.get('fields', '[]')
+            fields = json.loads(fields_data)
+            
+            for i, field_data in enumerate(fields):
+                OrderFormField.objects.create(
+                    template=template,
+                    field_name=field_data.get('name'),
+                    field_label=field_data.get('label'),
+                    field_type=field_data.get('type'),
+                    is_required=field_data.get('required', False),
+                    field_options=field_data.get('options'),
+                    placeholder=field_data.get('placeholder', ''),
+                    help_text=field_data.get('help_text', ''),
+                    order=i
+                )
+            
+            messages.success(request, '주문서 양식이 생성되었습니다.')
+            logger.info(f"주문서 양식 생성: {policy.title}")
+            
+            # AJAX 요청인 경우 JSON 응답
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': '주문서 양식이 생성되었습니다.',
+                    'template_id': str(template.id)
+                })
+            
+            return redirect('policies:policy_detail', pk=policy_id)
+            
+        except Exception as e:
+            logger.error(f"주문서 양식 생성 실패: {str(e)}")
+            messages.error(request, '주문서 양식 생성 중 오류가 발생했습니다.')
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': str(e)
+                }, status=500)
+            
+            return redirect('policies:policy_detail', pk=policy_id)

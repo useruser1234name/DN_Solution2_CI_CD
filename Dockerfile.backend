@@ -37,8 +37,15 @@ RUN mkdir -p /app/logs
 RUN mkdir -p /app/staticfiles
 
 # 스크립트에 실행 권한 부여
+# entrypoint 복사
 COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+
+# CRLF→LF 변환 + 실행 권한 부여
+RUN apt-get update && apt-get install -y dos2unix \
+    && dos2unix /entrypoint.sh \
+    && chmod +x /entrypoint.sh \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 
 # Non-root 사용자 생성
 RUN groupadd -r django && useradd -r -g django django

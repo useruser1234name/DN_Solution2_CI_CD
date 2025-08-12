@@ -10,6 +10,7 @@ import CompanyCreatePage from './pages/CompanyCreatePage';
 import UserListPage from './pages/UserListPage';
 import UserCreatePage from './pages/UserCreatePage';
 import PolicyListPage from './pages/PolicyListPage';
+import PolicyCreatePage from './pages/PolicyCreatePage';
 // import { testConnection } from './services/api'; // 제거: 로그인 전 API 호출 방지
 import './App.css';
 
@@ -115,7 +116,7 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <MainLayout>
-                    <PolicyListPage />
+                    <PolicyCreatePage />
                   </MainLayout>
                 </ProtectedRoute>
               }

@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
         try {
             // JWT 토큰 발급 엔드포인트 호출
             console.log('[AuthContext] JWT 로그인 API 호출');
-            const response = await post('companies/auth/jwt/login/', {
+            const response = await post('auth/login/', {
                 username: username,
                 password: password
             });

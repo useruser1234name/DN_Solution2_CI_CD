@@ -285,78 +285,79 @@ class AdminSignupView(APIView):
 
 # CSRFTokenView 제거
 
-class StaffSignupView(APIView):
-    """직원 회원가입"""
-    permission_classes = [AllowAny]
-    
-    def get(self, request):
-        """직원 회원가입 페이지 렌더링"""
-        return render(request, 'companies/staff_signup.html')
-    
-    def post(self, request):
-        """직원 회원가입 처리"""
-        logger.info(f"[StaffSignupView] 직원 회원가입 요청 - IP: {request.META.get('REMOTE_ADDR')}")
-        
-        try:
-            # 필수 필드 검증
-            required_fields = ['username', 'password', 'company_code']
-            for field in required_fields:
-                if not request.data.get(field):
-                    return Response(
-                        {'error': f'{field}는 필수 입력 사항입니다.'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            
-            username = request.data.get('username')
-            password = request.data.get('password')
-            company_code = request.data.get('company_code')
-            
-            # 사용자명 중복 검사
-            if User.objects.filter(username=username).exists():
-                return Response(
-                    {'error': '이미 사용 중인 사용자명입니다.'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # 업체 코드 검증
-            try:
-                company = Company.objects.get(code=company_code, status=True)
-            except Company.DoesNotExist:
-                return Response(
-                    {'error': '유효하지 않은 업체 코드입니다.'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Django User 생성
-            django_user = User.objects.create_user(
-                username=username,
-                password=password
-            )
-            
-            # CompanyUser 생성 (승인 대기 상태)
-            company_user = CompanyUser.objects.create(
-                company=company,
-                django_user=django_user,
-                username=username,
-                role='staff',
-                status='pending',
-                is_approved=False
-            )
-            
-            logger.info(f"[StaffSignupView] 직원 회원가입 성공 - 사용자: {username}, 업체: {company.name}")
-            
-            return Response({
-                'success': True,
-                'message': '회원가입이 완료되었습니다. 해당 업체 관리자 승인 후 로그인할 수 있습니다.',
-                'company_name': company.name
-            }, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            logger.error(f"[StaffSignupView] 직원 회원가입 실패: {str(e)}")
-            return Response(
-                {'error': '회원가입 중 오류가 발생했습니다.'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+# 직원 회원가입 기능 비활성화 - 요구사항에 따라 제거
+# class StaffSignupView(APIView):
+#     """직원 회원가입"""
+#     permission_classes = [AllowAny]
+#     
+#     def get(self, request):
+#         """직원 회원가입 페이지 렌더링"""
+#         return render(request, 'companies/staff_signup.html')
+#     
+#     def post(self, request):
+#         """직원 회원가입 처리"""
+#         logger.info(f"[StaffSignupView] 직원 회원가입 요청 - IP: {request.META.get('REMOTE_ADDR')}")
+#         
+#         try:
+#             # 필수 필드 검증
+#             required_fields = ['username', 'password', 'company_code']
+#             for field in required_fields:
+#                 if not request.data.get(field):
+#                     return Response(
+#                         {'error': f'{field}는 필수 입력 사항입니다.'}, 
+#                         status=status.HTTP_400_BAD_REQUEST
+#                     )
+#             
+#             username = request.data.get('username')
+#             password = request.data.get('password')
+#             company_code = request.data.get('company_code')
+#             
+#             # 사용자명 중복 검사
+#             if User.objects.filter(username=username).exists():
+#                 return Response(
+#                     {'error': '이미 사용 중인 사용자명입니다.'}, 
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+#             
+#             # 업체 코드 검증
+#             try:
+#                 company = Company.objects.get(code=company_code, status=True)
+#             except Company.DoesNotExist:
+#                 return Response(
+#                     {'error': '유효하지 않은 업체 코드입니다.'}, 
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+#             
+#             # Django User 생성
+#             django_user = User.objects.create_user(
+#                 username=username,
+#                 password=password
+#             )
+#             
+#             # CompanyUser 생성 (승인 대기 상태)
+#             company_user = CompanyUser.objects.create(
+#                 company=company,
+#                 django_user=django_user,
+#                 username=username,
+#                 role='staff',
+#                 status='pending',
+#                 is_approved=False
+#             )
+#             
+#             logger.info(f"[StaffSignupView] 직원 회원가입 성공 - 사용자: {username}, 업체: {company.name}")
+#             
+#             return Response({
+#                 'success': True,
+#                 'message': '회원가입이 완료되었습니다. 해당 업체 관리자 승인 후 로그인할 수 있습니다.',
+#                 'company_name': company.name
+#             }, status=status.HTTP_201_CREATED)
+#             
+#         except Exception as e:
+#             logger.error(f"[StaffSignupView] 직원 회원가입 실패: {str(e)}")
+#             return Response(
+#                 {'error': '회원가입 중 오류가 발생했습니다.'}, 
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
 
 class ChildCompaniesView(APIView):
     permission_classes = [IsAuthenticated]

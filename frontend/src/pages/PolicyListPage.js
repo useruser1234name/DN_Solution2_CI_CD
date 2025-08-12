@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Button, Card, Table, Tag, Space, message, Spin, Alert } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { get, post } from '../services/api';
 import './PolicyListPage.css';
 
@@ -10,6 +12,7 @@ const PolicyListPage = () => {
     const [error, setError] = useState(null);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -155,6 +158,10 @@ const PolicyListPage = () => {
         }
     };
 
+    const handleCreatePolicy = () => {
+        navigate('/policies/create');
+    };
+
     if (loading) {
         return (
             <div className="policy-list-page">
@@ -169,13 +176,20 @@ const PolicyListPage = () => {
     return (
         <div className="policy-list-page">
             <div className="page-header">
-                <h1>📋 정책 목록</h1>
-                <button 
-                    className="btn btn-primary"
-                    onClick={() => setShowCreateForm(true)}
-                >
-                    ➕ 새 정책 등록
-                </button>
+                <div className="header-content">
+                    <h1>📋 정책 관리</h1>
+                    <p>생성된 정책들을 확인하고 관리할 수 있습니다.</p>
+                </div>
+                <div className="header-actions">
+                    <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />}
+                        onClick={handleCreatePolicy}
+                        size="large"
+                    >
+                        새 정책 생성
+                    </Button>
+                </div>
             </div>
 
             {error && (

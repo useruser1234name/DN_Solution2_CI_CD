@@ -12,6 +12,7 @@ dj-database-url==2.1.0
 redis==5.0.1
 django-redis==5.4.0
 django-cachalot==2.6.1
+psutil==5.9.6
 
 # Async Tasks
 celery==5.3.4

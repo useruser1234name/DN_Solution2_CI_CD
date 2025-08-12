@@ -666,3 +666,165 @@ class PolicyAssignment(models.Model):
         if self.custom_rebate is not None:
             return "커스텀"
         return "기본값"
+
+
+class PolicyExposure(models.Model):
+    """
+    정책 노출 관리 모델
+    본사가 협력사에 정책을 노출하는 것을 관리
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    policy = models.ForeignKey(Policy, on_delete=models.CASCADE, related_name='exposures', verbose_name='정책')
+    agency = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='exposed_policies', verbose_name='협력사')
+    is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
+    exposed_at = models.DateTimeField(auto_now_add=True, verbose_name='노출 시작일')
+    exposed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='노출 설정자')
+    
+    class Meta:
+        unique_together = ['policy', 'agency']
+        verbose_name = '정책 노출'
+        verbose_name_plural = '정책 노출 관리'
+        ordering = ['-exposed_at']
+    
+    def __str__(self):
+        return f"{self.policy.title} → {self.agency.name}"
+    
+    def clean(self):
+        """유효성 검증"""
+        # 협력사 타입 검증
+        if self.agency and self.agency.type != 'agency':
+            raise ValidationError("협력사에만 정책을 노출할 수 있습니다.")
+        
+        # 비활성 업체에 노출 방지
+        if self.agency and not self.agency.status:
+            raise ValidationError("운영 중단된 업체에는 정책을 노출할 수 없습니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"정책이 협력사에 노출되었습니다: {self.policy.title} → {self.agency.name}")
+            else:
+                logger.info(f"정책 노출이 수정되었습니다: {self.policy.title} → {self.agency.name}")
+        
+        except Exception as e:
+            logger.error(f"정책 노출 저장 중 오류 발생: {str(e)} - {self.policy.title} → {self.agency.name}")
+            raise
+
+
+class AgencyRebate(models.Model):
+    """
+    협력사 리베이트 설정 모델
+    협력사가 판매점에 제공할 리베이트를 설정
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    policy_exposure = models.ForeignKey(PolicyExposure, on_delete=models.CASCADE, related_name='rebates', verbose_name='노출된 정책')
+    retail_company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='agency_rebates', verbose_name='판매점')
+    rebate_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='리베이트 금액')
+    is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    
+    class Meta:
+        unique_together = ['policy_exposure', 'retail_company']
+        verbose_name = '협력사 리베이트'
+        verbose_name_plural = '협력사 리베이트 설정'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.policy_exposure.policy.title} → {self.retail_company.name}: {self.rebate_amount}원"
+    
+    def clean(self):
+        """유효성 검증"""
+        # 판매점 타입 검증
+        if self.retail_company and self.retail_company.type != 'retail':
+            raise ValidationError("판매점에만 리베이트를 설정할 수 있습니다.")
+        
+        # 리베이트 금액 검증
+        if self.rebate_amount < 0:
+            raise ValidationError("리베이트 금액은 0 이상이어야 합니다.")
+        
+        # 비활성 업체에 리베이트 설정 방지
+        if self.retail_company and not self.retail_company.status:
+            raise ValidationError("운영 중단된 업체에는 리베이트를 설정할 수 없습니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"협력사 리베이트가 설정되었습니다: {self.policy_exposure.policy.title} → {self.retail_company.name}: {self.rebate_amount}원")
+            else:
+                logger.info(f"협력사 리베이트가 수정되었습니다: {self.policy_exposure.policy.title} → {self.retail_company.name}: {self.rebate_amount}원")
+        
+        except Exception as e:
+            logger.error(f"협력사 리베이트 저장 중 오류 발생: {str(e)}")
+            raise
+
+
+class OrderFormTemplate(models.Model):
+    """
+    주문서 양식 템플릿 모델
+    정책별 주문서 양식을 관리
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    policy = models.OneToOneField(Policy, on_delete=models.CASCADE, related_name='order_form', verbose_name='정책')
+    title = models.CharField(max_length=200, verbose_name='양식 제목')
+    description = models.TextField(blank=True, verbose_name='양식 설명')
+    is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='생성자')
+    
+    class Meta:
+        verbose_name = '주문서 양식'
+        verbose_name_plural = '주문서 양식 관리'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.policy.title} - 주문서 양식"
+
+
+class OrderFormField(models.Model):
+    """
+    주문서 양식 필드 모델
+    주문서 양식의 개별 필드를 정의
+    """
+    FIELD_TYPE_CHOICES = [
+        ('text', '텍스트'),
+        ('number', '숫자'),
+        ('select', '선택'),
+        ('radio', '라디오'),
+        ('checkbox', '체크박스'),
+        ('textarea', '텍스트 영역'),
+        ('date', '날짜'),
+        ('rebate_table', '리베이트 테이블'),  # 요금제별 리베이트 입력용
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    template = models.ForeignKey(OrderFormTemplate, on_delete=models.CASCADE, related_name='fields', verbose_name='양식 템플릿')
+    field_name = models.CharField(max_length=100, verbose_name='필드 이름')
+    field_label = models.CharField(max_length=200, verbose_name='필드 라벨')
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPE_CHOICES, verbose_name='필드 타입')
+    is_required = models.BooleanField(default=False, verbose_name='필수 여부')
+    field_options = models.JSONField(blank=True, null=True, verbose_name='필드 옵션')  # 선택 옵션들
+    placeholder = models.CharField(max_length=200, blank=True, verbose_name='플레이스홀더')
+    help_text = models.CharField(max_length=500, blank=True, verbose_name='도움말')
+    order = models.IntegerField(default=0, verbose_name='순서')
+    
+    class Meta:
+        verbose_name = '주문서 필드'
+        verbose_name_plural = '주문서 필드 관리'
+        ordering = ['order', 'field_name']
+    
+    def __str__(self):
+        return f"{self.template.title} - {self.field_label}"
