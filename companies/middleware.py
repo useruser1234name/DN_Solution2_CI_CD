@@ -24,17 +24,15 @@ class APILoggingMiddleware:
             
             # 요청 헤더 로깅 (민감한 정보 제외)
             headers = dict(request.headers)
-            safe_headers = {k: v for k, v in headers.items() if k.lower() not in ['authorization', 'cookie']}
+            safe_headers = self._sanitize_headers(headers)
             logger.info(f"[{request_id}] 요청 헤더: {json.dumps(safe_headers, default=str, ensure_ascii=False)}")
             
             # POST/PUT/PATCH 요청의 경우 본문 로깅 (민감한 정보 제외)
             if request.method in ['POST', 'PUT', 'PATCH']:
                 try:
                     body = request.body.decode('utf-8')
-                    # 비밀번호 필드 제거
-                    if 'password' in body.lower():
-                        body = body.replace('"password":"', '"password":"***"')
-                    logger.info(f"[{request_id}] 요청 본문: {body}")
+                    sanitized_body = self._sanitize_request_body(body)
+                    logger.info(f"[{request_id}] 요청 본문: {sanitized_body}")
                 except Exception as e:
                     logger.warning(f"[{request_id}] 요청 본문 로깅 실패: {str(e)}")
 
@@ -77,6 +75,51 @@ class APILoggingMiddleware:
                         logger.warning(f"[{request_id}] 응답 본문 로깅 실패: {str(e)}")
 
         return response
+
+    def _sanitize_headers(self, headers):
+        """민감한 헤더 정보를 마스킹 처리"""
+        sensitive_headers = [
+            'authorization', 'cookie', 'x-csrf-token', 'x-api-key',
+            'x-auth-token', 'authentication', 'proxy-authorization'
+        ]
+        
+        safe_headers = {}
+        for key, value in headers.items():
+            if key.lower() in sensitive_headers:
+                safe_headers[key] = '***MASKED***'
+            else:
+                safe_headers[key] = value
+        
+        return safe_headers
+    
+    def _sanitize_request_body(self, body):
+        """요청 본문에서 민감한 정보를 마스킹 처리"""
+        import re
+        
+        # 민감한 필드들
+        sensitive_fields = [
+            'password', 'passwd', 'pwd', 'token', 'secret', 'key',
+            'api_key', 'access_token', 'refresh_token', 'csrf_token',
+            'credit_card', 'ssn', 'social_security'
+        ]
+        
+        sanitized_body = body
+        
+        # JSON 형태의 민감한 필드 마스킹
+        for field in sensitive_fields:
+            # "field": "value" 형태 매칭
+            pattern = rf'"{field}"\s*:\s*"[^"]*"'
+            sanitized_body = re.sub(pattern, f'"{field}": "***MASKED***"', sanitized_body, flags=re.IGNORECASE)
+            
+            # 'field': 'value' 형태 매칭
+            pattern = rf"'{field}'\s*:\s*'[^']*'"
+            sanitized_body = re.sub(pattern, f"'{field}': '***MASKED***'", sanitized_body, flags=re.IGNORECASE)
+            
+            # form data 형태 매칭
+            pattern = rf'{field}=[^&\s]*'
+            sanitized_body = re.sub(pattern, f'{field}=***MASKED***', sanitized_body, flags=re.IGNORECASE)
+        
+        return sanitized_body
 
     def process_exception(self, request, exception):
         """예외 처리 로깅"""

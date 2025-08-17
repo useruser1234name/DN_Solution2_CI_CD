@@ -25,7 +25,7 @@ const UserCreatePage = () => {
     const fetchCompanies = async () => {
         console.log('[UserCreatePage] 업체 목록 조회 시작');
         try {
-            const response = await get('companies/');
+            const response = await get('api/companies/');
             if (response.success) {
                 setCompanies(response.data.results || []);
                 console.log('[UserCreatePage] 업체 목록 설정 완료:', response.data.results?.length);
@@ -53,7 +53,7 @@ const UserCreatePage = () => {
         setError(null);
 
         try {
-            const response = await post('companies/users/', formData);
+            const response = await post('api/companies/users/', formData);
             console.log('[UserCreatePage] 사용자 등록 응답:', response);
 
             if (response.success) {
@@ -65,7 +65,7 @@ const UserCreatePage = () => {
                 console.error('[UserCreatePage] 사용자 등록 실패:', response.error);
             }
         } catch (error) {
-            setError('네트워크 오류가 발생했습니다.');
+            setError(error.message || '네트워크 오류가 발생했습니다.');
             console.error('[UserCreatePage] 사용자 등록 중 오류:', error);
         } finally {
             setLoading(false);

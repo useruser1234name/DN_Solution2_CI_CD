@@ -49,6 +49,14 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
     { value: 'select', label: '선택박스' },
     { value: 'textarea', label: '긴 텍스트' },
     { value: 'date', label: '날짜' },
+    { value: 'phone', label: '전화번호' },
+    { value: 'email', label: '이메일' },
+    { value: 'carrier_plan', label: '통신사 요금제' },
+    { value: 'device_model', label: '기기 모델' },
+    { value: 'device_color', label: '기기 색상' },
+    { value: 'sim_type', label: '유심 타입' },
+    { value: 'contract_period', label: '계약 기간' },
+    { value: 'payment_method', label: '결제 방법' },
     { value: 'rebate_table', label: '리베이트 테이블' }
   ];
 
@@ -133,6 +141,10 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
       case 'text':
       case 'number':
         return <Input placeholder={field.placeholder} disabled />;
+      case 'phone':
+        return <Input placeholder="010-1234-5678" disabled />;
+      case 'email':
+        return <Input placeholder="example@email.com" disabled />;
       case 'textarea':
         return <TextArea rows={3} placeholder={field.placeholder} disabled />;
       case 'select':
@@ -141,6 +153,52 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
             {field.field_options?.choices?.map(choice => (
               <Option key={choice} value={choice}>{choice}</Option>
             ))}
+          </Select>
+        );
+      case 'carrier_plan':
+        return (
+          <Select placeholder="통신사 요금제를 선택하세요" disabled style={{ width: '100%' }}>
+            <Option value="skt_basic">SKT - 초이스베이직 (30,000원)</Option>
+            <Option value="kt_premium">KT - 프리미엄 (50,000원)</Option>
+          </Select>
+        );
+      case 'device_model':
+        return (
+          <Select placeholder="기기 모델을 선택하세요" disabled style={{ width: '100%' }}>
+            <Option value="galaxy_s24">Samsung Galaxy S24</Option>
+            <Option value="iphone_15">Apple iPhone 15</Option>
+          </Select>
+        );
+      case 'device_color':
+        return (
+          <Select placeholder="기기 색상을 선택하세요" disabled style={{ width: '100%' }}>
+            <Option value="black">블랙</Option>
+            <Option value="white">화이트</Option>
+            <Option value="blue">블루</Option>
+          </Select>
+        );
+      case 'sim_type':
+        return (
+          <Select placeholder="유심 타입을 선택하세요" disabled style={{ width: '100%' }}>
+            <Option value="prepaid">선불 (본사 7,700원 지급)</Option>
+            <Option value="postpaid">후불 (본사 7,700원 차감)</Option>
+            <Option value="esim">eSIM</Option>
+            <Option value="reuse">재사용</Option>
+          </Select>
+        );
+      case 'contract_period':
+        return (
+          <Select placeholder="계약 기간을 선택하세요" disabled style={{ width: '100%' }}>
+            <Option value="12">12개월</Option>
+            <Option value="24">24개월</Option>
+            <Option value="36">36개월</Option>
+          </Select>
+        );
+      case 'payment_method':
+        return (
+          <Select placeholder="결제 방법을 선택하세요" disabled style={{ width: '100%' }}>
+            <Option value="cash">현금</Option>
+            <Option value="installment">할부</Option>
           </Select>
         );
       case 'date':

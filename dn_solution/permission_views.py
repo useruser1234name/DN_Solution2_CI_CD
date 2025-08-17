@@ -16,6 +16,7 @@ from dn_solution.permissions import (
     IsAdminUser, CanManageUsers, require_permission, require_company_access
 )
 from django.core.cache import cache
+from dn_solution.cache_manager import cache_manager, CacheManager
 from dn_solution.cache_utils import cache_user_data
 
 logger = logging.getLogger('permission_views')

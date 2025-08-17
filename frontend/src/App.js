@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
+import SignupChoicePage from './pages/SignupChoicePage';
+import AdminSignupPage from './pages/AdminSignupPage';
+import StaffSignupPage from './pages/StaffSignupPage';
 import MainLayout from './pages/MainLayout';
 import DashboardPage from './pages/DashboardPage';
 import CompanyListPage from './pages/CompanyListPage';
@@ -11,13 +14,24 @@ import UserListPage from './pages/UserListPage';
 import UserCreatePage from './pages/UserCreatePage';
 import PolicyListPage from './pages/PolicyListPage';
 import PolicyCreatePage from './pages/PolicyCreatePage';
+import PolicyDetailPage from './pages/PolicyDetailPage';
+import PolicyEditPage from './pages/PolicyEditPage';
+import OrderFormTemplateEditorPage from './pages/OrderFormTemplateEditorPage';
+import AgencyRebateAllocationPage from './pages/AgencyRebateAllocationPage';
+import OrderListPage from './pages/OrderListPage';
+import OrderCreatePage from './pages/OrderCreatePage';
+import OrderCreatePageNew from './pages/OrderCreatePageNew';
+import OrderDetailPage from './pages/OrderDetailPage';
+import SettlementListPage from './pages/SettlementListPage';
+import AdminSettingsPage from './pages/AdminSettingsPage';
+import CarrierPlanManagementPage from './pages/CarrierPlanManagementPage';
 // import { testConnection } from './services/api'; // 제거: 로그인 전 API 호출 방지
 import './App.css';
 
-console.log('[App] 애플리케이션 시작');
+
 
 const App = () => {
-  console.log('[App] 컴포넌트 렌더링');
+
 
   // API 연결 테스트 제거 - 로그인하지 않은 상태에서 인증이 필요한 API를 호출하면 안됨
   // useEffect(() => {
@@ -38,7 +52,11 @@ const App = () => {
       <Router>
         <div className="App">
           <Routes>
+            {/* 인증 관련 라우트 */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupChoicePage />} />
+            <Route path="/signup/admin" element={<AdminSignupPage />} />
+            <Route path="/signup/staff" element={<StaffSignupPage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             
             {/* 대시보드 */}
@@ -80,7 +98,7 @@ const App = () => {
             <Route
               path="/users"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermissions={['canViewUserHierarchy']}>
                   <MainLayout>
                     <UserListPage />
                   </MainLayout>
@@ -122,15 +140,126 @@ const App = () => {
               }
             />
             
+            <Route
+              path="/carrier-plans"
+              element={
+                <ProtectedRoute requiredPermissions={['canManagePolicies']}>
+                  <MainLayout>
+                    <CarrierPlanManagementPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/policies/:id"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <PolicyDetailPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/policies/:id/edit"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <PolicyEditPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/policies/:id/form-template/edit"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <OrderFormTemplateEditorPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/policies/:id/rebate-allocation"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <AgencyRebateAllocationPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
             {/* 주문 관리 */}
             <Route
               path="/orders"
               element={
                 <ProtectedRoute>
                   <MainLayout>
+                    <OrderListPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/orders/create"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <OrderCreatePageNew />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/orders/create-old"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <OrderCreatePage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/orders/:id"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <OrderDetailPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* 정산 관리 */}
+            <Route
+              path="/settlements"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <SettlementListPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/settlements/report"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
                     <div className="page-placeholder">
-                      <h1>📦 주문 목록</h1>
-                      <p>주문 목록 페이지가 준비 중입니다.</p>
+                      <h1>📊 정산 보고서</h1>
+                      <p>정산 보고서 페이지가 준비 중입니다.</p>
                     </div>
                   </MainLayout>
                 </ProtectedRoute>
@@ -173,10 +302,7 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <MainLayout>
-                    <div className="page-placeholder">
-                      <h1>⚙️ 시스템 설정</h1>
-                      <p>시스템 설정 페이지가 준비 중입니다.</p>
-                    </div>
+                    <AdminSettingsPage />
                   </MainLayout>
                 </ProtectedRoute>
               }

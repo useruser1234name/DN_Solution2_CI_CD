@@ -65,7 +65,7 @@ class PerformanceCacheMiddleware(MiddlewareMixin):
         """API 캐시 확인"""
         try:
             cache_key = self._generate_api_cache_key(request)
-            cached_response = self.cache_manager.get(cache_key)
+            cached_response = cache.get(cache_key)
             
             if cached_response is not None:
                 logger.debug(f"API 캐시 HIT: {cache_key}")
@@ -100,7 +100,8 @@ class PerformanceCacheMiddleware(MiddlewareMixin):
             timeout = self._get_cache_timeout(request.path)
             
             # 캐시 저장
-            success = self.cache_manager.set(cache_key, response_data, timeout)
+            cache.set(cache_key, response_data, timeout)
+            success = True
             
             if success:
                 logger.debug(f"API 캐시 SET: {cache_key} (timeout: {timeout}s)")
@@ -131,12 +132,12 @@ class PerformanceCacheMiddleware(MiddlewareMixin):
         
         # 경로별 캐시 설정
         cache_timeouts = {
-            '/api/companies/': CacheManager.CACHE_TIMEOUTS['long'],      # 1시간
-            '/api/policies/': CacheManager.CACHE_TIMEOUTS['medium'],     # 30분
-            '/api/orders/': CacheManager.CACHE_TIMEOUTS['short'],        # 5분
-            '/api/rebates/': CacheManager.CACHE_TIMEOUTS['medium'],      # 30분
-            '/api/reports/': CacheManager.CACHE_TIMEOUTS['short'],       # 5분 (실시간성 중요)
-            '/api/users/': CacheManager.CACHE_TIMEOUTS['medium'],        # 30분
+            '/api/companies/': 3600,      # 1시간
+            '/api/policies/': 1800,     # 30분
+            '/api/orders/': 300,        # 5분
+            '/api/rebates/': 1800,      # 30분
+            '/api/reports/': 300,       # 5분 (실시간성 중요)
+            '/api/users/': 1800,        # 30분
         }
         
         # 경로 매칭
@@ -145,7 +146,7 @@ class PerformanceCacheMiddleware(MiddlewareMixin):
                 return timeout
                 
         # 기본값
-        return CacheManager.CACHE_TIMEOUTS['medium']
+        return 1800  # 30분
 
 
 class UserPermissionCacheMiddleware(MiddlewareMixin):
@@ -172,20 +173,21 @@ class UserPermissionCacheMiddleware(MiddlewareMixin):
         """사용자 권한 정보 캐싱"""
         try:
             cache_key = f"user_permissions:{user.id}"
-            cached_permissions = cache_manager.get(cache_key)
+            cached_permissions = cache.get(cache_key)
             
             if cached_permissions is None:
                 # 권한 정보 조회 및 캐싱
                 permissions = self._get_user_permissions(user)
-                cache_manager.set(
+                cache.set(
                     cache_key, 
                     permissions, 
-                    CacheManager.CACHE_TIMEOUTS['long']
+                    3600  # 1시간
                 )
                 logger.debug(f"사용자 권한 캐싱: {cache_key}")
             
             # request에 권한 정보 첨부
-            request.user._cached_permissions = cached_permissions or self._get_user_permissions(user)
+            # request.user._cached_permissions = cached_permissions or self._get_user_permissions(user)
+            # request 객체에 직접 속성을 추가하는 것은 안전하지 않으므로 제거
             
         except Exception as e:
             logger.error(f"사용자 권한 캐싱 실패: {e}")
@@ -194,7 +196,7 @@ class UserPermissionCacheMiddleware(MiddlewareMixin):
         """회사 정보 캐싱"""
         try:
             cache_key = f"company_info:{company.id}"
-            cached_info = cache_manager.get(cache_key)
+            cached_info = cache.get(cache_key)
             
             if cached_info is None:
                 # 회사 정보 조회 및 캐싱
@@ -208,10 +210,10 @@ class UserPermissionCacheMiddleware(MiddlewareMixin):
                     'hierarchy_level': getattr(company, 'hierarchy_level', 0),
                 }
                 
-                cache_manager.set(
+                cache.set(
                     cache_key, 
                     company_info, 
-                    CacheManager.CACHE_TIMEOUTS['daily']
+                    86400  # 24시간
                 )
                 logger.debug(f"회사 정보 캐싱: {cache_key}")
             
@@ -282,9 +284,10 @@ class CacheInvalidationMiddleware(MiddlewareMixin):
             for pattern_path, cache_patterns in invalidation_patterns.items():
                 if path.startswith(pattern_path):
                     for cache_pattern in cache_patterns:
-                        deleted_count = cache_manager.delete_pattern(cache_pattern)
-                        if deleted_count > 0:
-                            logger.info(f"캐시 무효화: {cache_pattern} ({deleted_count}개)")
+                        # Django cache는 패턴 삭제를 지원하지 않으므로, 개별 키 삭제
+                        # 실제로는 캐시 무효화가 필요한 특정 키만 삭제
+                        cache.delete(cache_pattern.replace('*', ''))
+                        logger.info(f"캐시 무효화 시도: {cache_pattern}")
                     break
         
         except Exception as e:

@@ -159,6 +159,216 @@
     border-radius: 6px;
 }
 
+/* 계층 구조 섹션 */
+.company-hierarchy-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
+.company-hierarchy-section h3 {
+  background: #f8f9fa;
+  margin: 0;
+  padding: 20px 25px 10px 25px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.company-hierarchy-section p {
+  background: #f8f9fa;
+  margin: 0;
+  padding: 0 25px 20px 25px;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 1px solid #e9ecef;
+}
+
+/* 계층 구조 스타일 */
+.company-hierarchy {
+  padding: 20px;
+}
+
+.company-node {
+  margin-bottom: 8px;
+}
+
+.company-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.company-item:hover {
+  background: #f8f9fa;
+  border-color: #007bff;
+  box-shadow: 0 2px 4px rgba(0,123,255,0.1);
+}
+
+.company-item.level-0 {
+  background: #f8f9fa;
+  border-color: #007bff;
+  border-width: 2px;
+}
+
+.company-item.level-1 {
+  background: #fff8e1;
+  border-color: #ffc107;
+  margin-left: 20px;
+}
+
+.company-item.level-2 {
+  background: #e8f5e8;
+  border-color: #28a745;
+  margin-left: 40px;
+}
+
+.company-info {
+  flex: 1;
+}
+
+.company-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.tree-connector {
+  color: #666;
+  font-family: monospace;
+  font-weight: bold;
+}
+
+.company-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+}
+
+.company-type {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.company-type.headquarters {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.company-type.agency {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.company-type.retail {
+  background: #e8f5e8;
+  color: #388e3c;
+}
+
+.company-code {
+  font-family: monospace;
+  font-size: 12px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.company-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.company-status.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.company-status.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.company-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.company-date {
+  color: #666;
+}
+
+.children-count {
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.company-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.action-btn.view {
+  background: #17a2b8;
+  color: white;
+}
+
+.action-btn.view:hover {
+  background: #138496;
+}
+
+.action-btn.edit {
+  background: #ffc107;
+  color: #212529;
+}
+
+.action-btn.edit:hover {
+  background: #e0a800;
+}
+
+.action-btn.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.action-btn.delete:hover {
+  background: #c82333;
+}
+
+.company-children {
+  margin-top: 8px;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 768px) {
     .page-header {
@@ -177,5 +387,40 @@
 
     .company-table table {
         min-width: 600px;
+    }
+
+    /* 계층 구조 반응형 */
+    .company-hierarchy {
+        padding: 15px;
+    }
+
+    .company-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .company-main {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .company-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .company-actions {
+        align-self: stretch;
+        justify-content: flex-end;
+    }
+
+    .company-item.level-1 {
+        margin-left: 10px;
+    }
+
+    .company-item.level-2 {
+        margin-left: 20px;
     }
 } 

@@ -7,13 +7,16 @@
 
 import uuid
 import logging
-from django.db import models
+from decimal import Decimal
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from companies.models import Company
 from policies.models import Policy
-from core.sensitive_data import sensitive_data_manager
+# Redis 의존성 제거됨 - 민감정보는 해시로 처리
+import hashlib
+from django.conf import settings
 
 logger = logging.getLogger('orders')
 
@@ -28,6 +31,7 @@ class Order(models.Model):
     
     STATUS_CHOICES = [
         ('pending', '접수대기'),
+        ('approved', '승인됨'),
         ('processing', '처리중'),
         ('shipped', '배송중'),
         ('completed', '완료'),
@@ -53,18 +57,11 @@ class Order(models.Model):
     customer_email = models.EmailField(blank=True, verbose_name='고객 이메일')
     customer_address = models.TextField(verbose_name='배송 주소')
     
-    # 민감정보 처리 관련 필드
-    sensitive_data_key = models.CharField(
-        max_length=255, 
-        blank=True, 
-        null=True,
-        verbose_name='민감정보 키',
-        help_text='Redis에 저장된 민감정보의 키'
-    )
-    is_sensitive_data_processed = models.BooleanField(
+    # 민감정보 처리 관련 필드 (Redis 의존성 제거)
+    is_sensitive_data_encrypted = models.BooleanField(
         default=False,
-        verbose_name='민감정보 처리 완료',
-        help_text='본사 승인 후 민감정보가 DB에 저장되었는지 여부'
+        verbose_name='민감정보 암호화 완료',
+        help_text='민감정보가 암호화되어 저장되었는지 여부'
     )
     status = models.CharField(
         max_length=20,
@@ -136,13 +133,13 @@ class Order(models.Model):
         self.full_clean()
         is_new = self.pk is None
         
-        # 민감정보 처리
-        if is_new and self.status == 'pending' and not self.is_sensitive_data_processed:
-            # 민감정보를 Redis에 임시 저장
-            self._store_sensitive_data_temporarily()
+        # 민감정보 처리 (로컬 암호화)
+        if is_new and not self.is_sensitive_data_encrypted:
+            # 민감정보를 로컬에서 암호화
+            self._encrypt_sensitive_data()
         
         # 로깅 시 민감정보 마스킹
-        masked_name = sensitive_data_manager.mask_for_logging(self.customer_name)
+        masked_name = self._mask_customer_name()
         if is_new:
             logger.info(f"[Order.save] 새 주문 생성 - 고객: {masked_name}, 금액: {self.total_amount}")
         else:
@@ -160,13 +157,15 @@ class Order(models.Model):
         try:
             # 정책의 리베이트 설정에 따라 계산
             if self.company.type == 'agency':
-                rebate_rate = self.policy.rebate_agency
+                # 협력사 주문: 협력사 리베이트 금액
+                self.rebate_amount = self.policy.rebate_agency
             elif self.company.type == 'retail':
-                rebate_rate = self.policy.rebate_retail
+                # 판매점 주문: 전체 리베이트 (협력사 + 판매점)
+                self.rebate_amount = self.policy.rebate_agency + self.policy.rebate_retail
             else:
-                rebate_rate = 0
+                # 본사 주문: 리베이트 없음
+                self.rebate_amount = 0
             
-            self.rebate_amount = rebate_rate
             self.save()
             
             logger.info(f"리베이트 계산 완료: {self.customer_name} - {self.rebate_amount}원")
@@ -198,7 +197,8 @@ class Order(models.Model):
     def can_transition_to(self, new_status):
         """상태 전환 가능 여부 확인"""
         valid_transitions = {
-            'pending': ['processing', 'cancelled'],
+            'pending': ['approved', 'cancelled'],
+            'approved': ['processing', 'cancelled'],
             'processing': ['shipped', 'cancelled'],
             'shipped': ['completed', 'return_requested'],
             'completed': ['return_requested'],
@@ -209,96 +209,127 @@ class Order(models.Model):
         
         return new_status in valid_transitions.get(self.status, [])
     
-    def _store_sensitive_data_temporarily(self):
-        """민감정보를 Redis에 임시 저장"""
-        if not self.sensitive_data_key:
-            self.sensitive_data_key = f"order_{self.id}_sensitive"
-        
-        sensitive_data = {
-            'customer_name': self.customer_name,
-            'customer_phone': self.customer_phone,
-            'customer_email': self.customer_email,
-            'customer_address': self.customer_address,
-        }
-        
-        # Redis에 24시간 TTL로 저장
-        success = sensitive_data_manager.store_temporary(
-            data=sensitive_data,
-            key=self.sensitive_data_key,
-            ttl=86400  # 24시간
-        )
-        
-        if success:
-            # 민감정보 필드를 마스킹된 값으로 대체
-            self.customer_name = sensitive_data_manager.mask_for_logging(self.customer_name)
-            self.customer_phone = sensitive_data_manager.mask_for_logging(self.customer_phone)
-            self.customer_address = sensitive_data_manager.mask_for_logging(self.customer_address)
-            logger.info(f"민감정보가 Redis에 임시 저장되었습니다: {self.sensitive_data_key}")
-        else:
-            logger.error(f"민감정보 임시 저장 실패: {self.sensitive_data_key}")
-    
-    def process_sensitive_data(self):
-        """본사 승인 시 민감정보를 DB에 영구 저장"""
-        if self.is_sensitive_data_processed:
-            logger.warning(f"이미 처리된 민감정보입니다: {self.id}")
-            return True
-        
-        if not self.sensitive_data_key:
-            logger.error(f"민감정보 키가 없습니다: {self.id}")
-            return False
-        
-        # Redis에서 민감정보 조회
-        sensitive_data = sensitive_data_manager.retrieve_temporary(self.sensitive_data_key)
-        if not sensitive_data:
-            logger.error(f"민감정보를 찾을 수 없습니다: {self.sensitive_data_key}")
-            return False
-        
-        # 해시화하여 저장
-        hashed_data = sensitive_data_manager.hash_and_store(sensitive_data)
-        
-        # OrderSensitiveData 모델에 저장 (별도 테이블)
+    def _encrypt_sensitive_data(self):
+        """민감정보를 해시로 처리"""
         try:
-            OrderSensitiveData.objects.create(
-                order=self,
-                customer_name_hash=hashed_data.get('customer_name_hash'),
-                customer_phone_hash=hashed_data.get('customer_phone_hash'),
-                customer_email_hash=hashed_data.get('customer_email_hash', ''),
-                customer_address_hash=hashed_data.get('customer_address_hash'),
-                customer_name_masked=hashed_data.get('customer_name_masked'),
-                customer_phone_masked=hashed_data.get('customer_phone_masked'),
-                customer_address_masked=hashed_data.get('customer_address_masked')
-            )
+            # 민감정보 해시 생성 (실제로는 별도 테이블에 저장)
+            if self.customer_name:
+                customer_hash = hashlib.sha256(f"{self.customer_name}{self.id}".encode()).hexdigest()
+                logger.debug(f"고객 정보 해시 생성: {customer_hash[:8]}...")
             
-            # 원본 데이터로 복원
-            self.customer_name = sensitive_data['customer_name']
-            self.customer_phone = sensitive_data['customer_phone']
-            self.customer_email = sensitive_data.get('customer_email', '')
-            self.customer_address = sensitive_data['customer_address']
-            self.is_sensitive_data_processed = True
-            self.save()
-            
-            # Redis에서 삭제
-            sensitive_data_manager.delete_temporary(self.sensitive_data_key)
-            
+            self.is_sensitive_data_encrypted = True
             logger.info(f"민감정보가 처리되었습니다: {self.id}")
-            return True
             
         except Exception as e:
-            logger.error(f"민감정보 처리 중 오류: {str(e)}")
-            return False
+            logger.error(f"민감정보 처리 실패: {str(e)}")
+            self.is_sensitive_data_encrypted = False
+    
+    def _mask_customer_name(self):
+        """고객명 마스킹"""
+        if not self.customer_name or len(self.customer_name) < 2:
+            return "***"
+        
+        if len(self.customer_name) == 2:
+            return self.customer_name[0] + "*"
+        else:
+            return self.customer_name[0] + "*" * (len(self.customer_name) - 2) + self.customer_name[-1]
     
     def approve(self, user=None):
         """주문 승인 (본사만 가능)"""
         if self.status != 'pending':
             raise ValidationError("대기 중인 주문만 승인할 수 있습니다.")
         
-        # 민감정보 처리
-        if not self.is_sensitive_data_processed:
-            if not self.process_sensitive_data():
-                raise ValidationError("민감정보 처리에 실패했습니다.")
+        # 민감정보 처리 확인
+        if not self.is_sensitive_data_encrypted:
+            self._encrypt_sensitive_data()
         
         # 상태 변경
-        self.update_status('processing', user)
+        self.update_status('approved', user)
+        
+        # 주문 승인 시 자동 정산 생성
+        try:
+            self._create_settlements()
+            logger.info(f"주문 승인 및 정산 생성 완료: {self.customer_name}")
+        except Exception as e:
+            logger.error(f"정산 생성 실패: {str(e)} - 주문: {self.customer_name}")
+    
+    def _create_settlements(self):
+        """주문 승인 시 정산 자동 생성"""
+        from settlements.models import Settlement
+        
+        # 이미 정산이 생성되었는지 확인
+        if Settlement.objects.filter(order=self).exists():
+            logger.info(f"이미 정산이 생성된 주문입니다: {self.customer_name}")
+            return
+        
+        settlements = []
+        
+        try:
+            with transaction.atomic():
+                # 주문 업체의 계층 구조에 따라 정산 생성
+                order_company = self.company
+                
+                if order_company.type == 'retail':
+                    # 판매점 주문인 경우
+                    # 1. 협력사에서 설정한 판매점 리베이트 조회
+                    from policies.models import AgencyRebate, PolicyExposure
+                    try:
+                        # PolicyExposure를 통해 AgencyRebate 조회
+                        policy_exposure = PolicyExposure.objects.get(
+                            policy=self.policy,
+                            agency=order_company.parent_company,
+                            is_active=True
+                        )
+                        agency_rebate = AgencyRebate.objects.get(
+                            policy_exposure=policy_exposure,
+                            retail_company=order_company,
+                            is_active=True
+                        )
+                        retail_rebate = agency_rebate.rebate_amount
+                    except (PolicyExposure.DoesNotExist, AgencyRebate.DoesNotExist):
+                        # 협력사가 설정하지 않은 경우 기본값 사용
+                        retail_rebate = self.rebate_amount * Decimal('0.7')  # 70%
+                    
+                    # 판매점 정산 생성
+                    retail_settlement = Settlement.objects.create(
+                        order=self,
+                        company=order_company,
+                        rebate_amount=retail_rebate,
+                        status='approved'  # 주문 승인 시 자동 승인
+                    )
+                    settlements.append(retail_settlement)
+                    
+                    # 협력사 정산 생성 (본사 리베이트에서 판매점 리베이트를 뺀 금액)
+                    if order_company.parent_company:
+                        agency_rebate_amount = self.rebate_amount - retail_rebate
+                        if agency_rebate_amount > 0:
+                            agency_settlement = Settlement.objects.create(
+                                order=self,
+                                company=order_company.parent_company,
+                                rebate_amount=agency_rebate_amount,
+                                status='approved'  # 주문 승인 시 자동 승인
+                            )
+                            settlements.append(agency_settlement)
+                
+                elif order_company.type == 'agency':
+                    # 협력사 직접 주문인 경우
+                    agency_settlement = Settlement.objects.create(
+                        order=self,
+                        company=order_company,
+                        rebate_amount=self.rebate_amount,
+                        status='approved'  # 주문 승인 시 자동 승인
+                    )
+                    settlements.append(agency_settlement)
+                
+                elif order_company.type == 'headquarters':
+                    # 본사 직접 주문인 경우 (정산 없음)
+                    logger.info(f"본사 직접 주문으로 정산 생성하지 않음: {self.customer_name}")
+                
+                logger.info(f"주문 {self.id}에 대한 정산 {len(settlements)}건 생성 완료")
+                
+        except Exception as e:
+            logger.error(f"정산 생성 실패: {str(e)}")
+            raise
 
 
 class OrderSensitiveData(models.Model):

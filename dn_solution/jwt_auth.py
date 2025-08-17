@@ -18,6 +18,7 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 # from dn_solution.cache_manager import cache_manager, CacheManager - removed
+from dn_solution.cache_manager import cache_manager, CacheManager
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -175,7 +176,7 @@ class CustomTokenGenerator:
             refresh['user_type'] = 'company_user'
             if hasattr(user, 'companyuser'):
                 company_user = user.companyuser
-                refresh['company_id'] = company_user.company.id
+                refresh['company_id'] = str(company_user.company.id)  # UUID를 문자열로 변환
                 refresh['company_code'] = company_user.company.code
                 refresh['company_type'] = company_user.company.type
                 refresh['role'] = company_user.role
@@ -210,7 +211,7 @@ class CustomTokenGenerator:
             }
             
             if hasattr(user, 'companyuser'):
-                payload['company_id'] = user.companyuser.company.id
+                payload['company_id'] = str(user.companyuser.company.id)  # UUID를 문자열로 변환
                 payload['company_type'] = user.companyuser.company.type
             
             token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')

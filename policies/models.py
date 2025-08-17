@@ -39,6 +39,14 @@ class Policy(models.Model):
         ('all', '전체'),
     ]
     
+    # 가입유형 선택지
+    JOIN_TYPE_CHOICES = [
+        ('number_transfer', '번호이동'),
+        ('device_change', '기기변경'),
+        ('new_subscription', '신규가입'),
+        ('all', '전체'),
+    ]
+    
     # 가입기간 선택지
     CONTRACT_PERIOD_CHOICES = [
         ('12', '12개월'),
@@ -115,6 +123,14 @@ class Policy(models.Model):
         default='all',
         verbose_name="통신사",
         help_text="적용할 통신사를 선택하세요"
+    )
+    
+    join_type = models.CharField(
+        max_length=20,
+        choices=JOIN_TYPE_CHOICES,
+        default='all',
+        verbose_name="가입유형",
+        help_text="적용할 가입유형을 선택하세요"
     )
     
     contract_period = models.CharField(
@@ -703,11 +719,11 @@ class PolicyAssignment(models.Model):
 class PolicyExposure(models.Model):
     """
     정책 노출 관리 모델
-    본사가 협력사에 정책을 노출하는 것을 관리
+    본사가 협력사 및 하위 판매점에 정책을 노출하는 것을 관리
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     policy = models.ForeignKey(Policy, on_delete=models.CASCADE, related_name='exposures', verbose_name='정책')
-    agency = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='exposed_policies', verbose_name='협력사')
+    agency = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='exposed_policies', verbose_name='노출 업체')
     is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
     exposed_at = models.DateTimeField(auto_now_add=True, verbose_name='노출 시작일')
     exposed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='노출 설정자')
@@ -723,9 +739,9 @@ class PolicyExposure(models.Model):
     
     def clean(self):
         """유효성 검증"""
-        # 협력사 타입 검증
-        if self.agency and self.agency.type != 'agency':
-            raise ValidationError("협력사에만 정책을 노출할 수 있습니다.")
+        # 협력사 및 판매점 타입 검증 (본사는 제외)
+        if self.agency and self.agency.type not in ['agency', 'retail']:
+            raise ValidationError("협력사 또는 판매점에만 정책을 노출할 수 있습니다.")
         
         # 비활성 업체에 노출 방지
         if self.agency and not self.agency.status:
@@ -803,29 +819,187 @@ class AgencyRebate(models.Model):
             raise
 
 
-class RebateMatrix(models.Model):
+class AgencyRebateMatrix(models.Model):
     """
-    리베이트 매트릭스 모델
-    요금제와 가입기간에 따른 리베이트 금액을 관리
+    협력사 리베이트 매트릭스 모델
+    협력사가 판매점에게 제공할 리베이트 매트릭스를 관리
     """
     
-    # 요금제 범위 선택지
+    # 요금제 범위 선택지 (RebateMatrix와 동일)
     PLAN_RANGE_CHOICES = [
-        (30000, '3만원대'),
-        (50000, '5만원대'),
-        (70000, '7만원대'),
-        (100000, '10만원대'),
-        (150000, '15만원대'),
+        (11000, '11K'),
+        (22000, '22K'),
+        (33000, '33K'),
+        (44000, '44K'),
+        (55000, '55K'),
+        (66000, '66K'),
+        (77000, '77K'),
+        (88000, '88K'),
+        (99000, '99K'),
+        (110000, '110K'),
+        (121000, '121K'),
+        (132000, '132K'),
+        (143000, '143K'),
+        (154000, '154K'),
+        (165000, '165K'),
     ]
     
-    # 가입기간 선택지 (개월)
+    # 가입기간 선택지 (RebateMatrix와 동일)
     CONTRACT_PERIOD_CHOICES = [
-        (3, '3개월'),
-        (6, '6개월'),
-        (9, '9개월'),
         (12, '12개월'),
         (24, '24개월'),
         (36, '36개월'),
+        (48, '48개월'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="협력사 리베이트 매트릭스의 고유 식별자"
+    )
+    
+    policy = models.ForeignKey(
+        Policy,
+        on_delete=models.CASCADE,
+        related_name='agency_rebate_matrix',
+        verbose_name="정책",
+        help_text="리베이트 매트릭스가 속한 정책"
+    )
+    
+    agency = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='rebate_matrices',
+        verbose_name="협력사",
+        help_text="리베이트를 설정하는 협력사"
+    )
+    
+    # 통신사 선택지 (RebateMatrix와 동일)
+    CARRIER_CHOICES = [
+        ('skt', 'SKT'),
+        ('kt', 'KT'),
+        ('lg', 'LG U+'),
+        ('all', '전체'),
+    ]
+    
+    carrier = models.CharField(
+        max_length=10,
+        choices=CARRIER_CHOICES,
+        default='all',
+        verbose_name="통신사",
+        help_text="리베이트가 적용될 통신사"
+    )
+    
+    plan_range = models.IntegerField(
+        choices=PLAN_RANGE_CHOICES,
+        verbose_name="요금제 금액",
+        help_text="리베이트가 적용될 요금제 금액 (K 단위)"
+    )
+    
+    contract_period = models.IntegerField(
+        choices=CONTRACT_PERIOD_CHOICES,
+        verbose_name="계약기간",
+        help_text="리베이트가 적용될 계약기간 (개월)"
+    )
+    
+    rebate_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="리베이트 금액",
+        help_text="해당 조건의 리베이트 금액"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="생성일시"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="수정일시"
+    )
+    
+    class Meta:
+        verbose_name = "협력사 리베이트 매트릭스"
+        verbose_name_plural = "협력사 리베이트 매트릭스"
+        ordering = ['policy', 'agency', 'plan_range', 'contract_period']
+        unique_together = ['policy', 'agency', 'carrier', 'plan_range', 'contract_period']
+        indexes = [
+            models.Index(fields=['policy']),
+            models.Index(fields=['agency']),
+            models.Index(fields=['policy', 'agency']),
+        ]
+    
+    def __str__(self):
+        return f"{self.policy.title} - {self.agency.name} - {self.get_plan_range_display()} - {self.get_contract_period_display()}: {self.rebate_amount:,}원"
+    
+    def clean(self):
+        """모델 데이터 검증"""
+        if self.rebate_amount < 0:
+            raise ValidationError("리베이트 금액은 0 이상이어야 합니다.")
+        
+        # 협력사 타입 검증
+        if self.agency and self.agency.type != 'agency':
+            raise ValidationError("협력사만 리베이트 매트릭스를 설정할 수 있습니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"협력사 리베이트 매트릭스가 생성되었습니다: {self}")
+            else:
+                logger.info(f"협력사 리베이트 매트릭스가 수정되었습니다: {self}")
+        
+        except Exception as e:
+            logger.error(f"협력사 리베이트 매트릭스 저장 중 오류 발생: {str(e)}")
+            raise
+
+
+class RebateMatrix(models.Model):
+    """
+    리베이트 매트릭스 모델
+    통신사별 요금제와 가입기간에 따른 리베이트 금액을 관리
+    """
+    
+    # 통신사 선택지
+    CARRIER_CHOICES = [
+        ('skt', 'SKT'),
+        ('kt', 'KT'),
+        ('lg', 'LG U+'),
+        ('all', '전체'),
+    ]
+    
+    # 요금제 범위 선택지 (동적으로 확장 가능)
+    PLAN_RANGE_CHOICES = [
+        (11000, '11K'),
+        (22000, '22K'),
+        (33000, '33K'),
+        (44000, '44K'),
+        (55000, '55K'),
+        (66000, '66K'),
+        (77000, '77K'),
+        (88000, '88K'),
+        (99000, '99K'),
+        (110000, '110K'),  # 확장 가능
+        (121000, '121K'),
+        (132000, '132K'),
+        (143000, '143K'),
+        (154000, '154K'),
+        (165000, '165K'),
+    ]
+    
+    # 가입기간 선택지 (동적으로 확장 가능)
+    CONTRACT_PERIOD_CHOICES = [
+        (12, '12개월'),
+        (24, '24개월'),
+        (36, '36개월'),  # 확장 가능
+        (48, '48개월'),
     ]
     
     id = models.UUIDField(
@@ -845,21 +1019,22 @@ class RebateMatrix(models.Model):
     
     carrier = models.CharField(
         max_length=10,
-        choices=Policy.CARRIER_CHOICES,
+        choices=CARRIER_CHOICES,
+        default='all',
         verbose_name="통신사",
         help_text="리베이트가 적용될 통신사"
     )
     
     plan_range = models.IntegerField(
         choices=PLAN_RANGE_CHOICES,
-        verbose_name="요금제 범위",
-        help_text="리베이트가 적용될 요금제 범위"
+        verbose_name="요금제 금액",
+        help_text="리베이트가 적용될 요금제 금액 (K 단위)"
     )
     
     contract_period = models.IntegerField(
         choices=CONTRACT_PERIOD_CHOICES,
-        verbose_name="가입기간",
-        help_text="리베이트가 적용될 가입기간 (개월)"
+        verbose_name="계약기간",
+        help_text="리베이트가 적용될 계약기간 (개월)"
     )
     
     rebate_amount = models.DecimalField(
@@ -885,8 +1060,9 @@ class RebateMatrix(models.Model):
         ordering = ['policy', 'carrier', 'plan_range', 'contract_period']
         unique_together = ['policy', 'carrier', 'plan_range', 'contract_period']
         indexes = [
+            models.Index(fields=['policy']),
+            models.Index(fields=['carrier', 'plan_range', 'contract_period']),
             models.Index(fields=['policy', 'carrier']),
-            models.Index(fields=['plan_range', 'contract_period']),
         ]
     
     def __str__(self):
@@ -896,10 +1072,6 @@ class RebateMatrix(models.Model):
         """모델 데이터 검증"""
         if self.rebate_amount < 0:
             raise ValidationError("리베이트 금액은 0 이상이어야 합니다.")
-        
-        # 정책의 통신사와 매트릭스의 통신사 일치 여부 확인
-        if self.policy and self.policy.carrier != 'all' and self.carrier != self.policy.carrier:
-            raise ValidationError(f"정책의 통신사({self.policy.get_carrier_display()})와 매트릭스의 통신사({self.get_carrier_display()})가 일치하지 않습니다.")
     
     def save(self, *args, **kwargs):
         """저장 시 로깅 처리"""
@@ -944,6 +1116,7 @@ class RebateMatrix(models.Model):
             plan_range = cls.PLAN_RANGE_CHOICES[-1][0]
         
         try:
+            # 먼저 특정 통신사에 대한 매트릭스를 찾기
             matrix = cls.objects.get(
                 policy=policy,
                 carrier=carrier,
@@ -952,8 +1125,8 @@ class RebateMatrix(models.Model):
             )
             return matrix.rebate_amount
         except cls.DoesNotExist:
-            # 전체 통신사로 다시 시도
             try:
+                # 특정 통신사가 없으면 전체 통신사 매트릭스를 찾기
                 matrix = cls.objects.get(
                     policy=policy,
                     carrier='all',
@@ -973,38 +1146,313 @@ class RebateMatrix(models.Model):
             policy: Policy 객체
         """
         default_rebates = {
-            # (요금제 범위, 가입기간): 리베이트 금액
-            (30000, 3): 50000,
-            (30000, 6): 60000,
-            (30000, 9): 70000,
-            (30000, 12): 80000,
-            (50000, 3): 70000,
-            (50000, 6): 85000,
-            (50000, 9): 100000,
-            (50000, 12): 120000,
-            (70000, 3): 100000,
-            (70000, 6): 120000,
-            (70000, 9): 140000,
-            (70000, 12): 160000,
-            (100000, 3): 150000,
-            (100000, 6): 180000,
-            (100000, 9): 210000,
-            (100000, 12): 250000,
+            # (통신사, 요금제 범위, 가입기간): 리베이트 금액
+            ('all', 30000, 12): 50000,
+            ('all', 30000, 24): 80000,
+            ('all', 50000, 12): 70000,
+            ('all', 50000, 24): 120000,
+            ('all', 70000, 12): 100000,
+            ('all', 70000, 24): 160000,
+            ('all', 90000, 12): 150000,
+            ('all', 90000, 24): 250000,
         }
         
-        carriers = ['all'] if policy.carrier == 'all' else [policy.carrier]
-        
-        for carrier in carriers:
-            for (plan_range, period), amount in default_rebates.items():
-                cls.objects.get_or_create(
-                    policy=policy,
-                    carrier=carrier,
-                    plan_range=plan_range,
-                    contract_period=period,
-                    defaults={'rebate_amount': amount}
-                )
+        for (carrier, plan_range, period), amount in default_rebates.items():
+            cls.objects.get_or_create(
+                policy=policy,
+                carrier=carrier,
+                plan_range=plan_range,
+                contract_period=period,
+                defaults={'rebate_amount': amount}
+            )
         
         logger.info(f"정책 '{policy.title}'에 기본 리베이트 매트릭스가 생성되었습니다.")
+
+
+class CarrierPlan(models.Model):
+    """
+    통신사별 요금제 관리 모델
+    본사에서 통신사별 요금제를 관리
+    """
+    
+    # 통신사 선택지
+    CARRIER_CHOICES = [
+        ('skt', 'SKT'),
+        ('kt', 'KT'),
+        ('lg', 'LG U+'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="요금제의 고유 식별자"
+    )
+    
+    carrier = models.CharField(
+        max_length=10,
+        choices=CARRIER_CHOICES,
+        verbose_name="통신사",
+        help_text="요금제를 제공하는 통신사"
+    )
+    
+    plan_name = models.CharField(
+        max_length=200,
+        verbose_name="요금제명",
+        help_text="요금제의 이름"
+    )
+    
+    plan_price = models.IntegerField(
+        verbose_name="요금제 금액",
+        help_text="월 요금제 금액 (원)"
+    )
+    
+    description = models.TextField(
+        blank=True,
+        verbose_name="요금제 설명",
+        help_text="요금제에 대한 상세 설명"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="활성화 여부",
+        help_text="요금제 사용 가능 여부"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="생성일시"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="수정일시"
+    )
+    
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="생성자",
+        help_text="요금제를 생성한 관리자"
+    )
+    
+    class Meta:
+        verbose_name = "통신사 요금제"
+        verbose_name_plural = "통신사 요금제 관리"
+        ordering = ['carrier', 'plan_price', 'plan_name']
+        unique_together = ['carrier', 'plan_name']
+        indexes = [
+            models.Index(fields=['carrier', 'is_active']),
+            models.Index(fields=['plan_price']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_carrier_display()} - {self.plan_name} ({self.plan_price:,}원)"
+    
+    def clean(self):
+        """모델 데이터 검증"""
+        if not self.plan_name or not self.plan_name.strip():
+            raise ValidationError("요금제명은 필수 입력 사항입니다.")
+        
+        if self.plan_price <= 0:
+            raise ValidationError("요금제 금액은 0보다 커야 합니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"새로운 요금제가 생성되었습니다: {self}")
+            else:
+                logger.info(f"요금제가 수정되었습니다: {self}")
+        
+        except Exception as e:
+            logger.error(f"요금제 저장 중 오류 발생: {str(e)} - {self.plan_name}")
+            raise
+
+
+class DeviceModel(models.Model):
+    """
+    기기 모델 관리 모델
+    본사에서 판매 가능한 기기 모델을 관리
+    """
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="기기 모델의 고유 식별자"
+    )
+    
+    model_name = models.CharField(
+        max_length=200,
+        verbose_name="모델명",
+        help_text="기기의 모델명"
+    )
+    
+    manufacturer = models.CharField(
+        max_length=100,
+        verbose_name="제조사",
+        help_text="기기 제조사"
+    )
+    
+    description = models.TextField(
+        blank=True,
+        verbose_name="모델 설명",
+        help_text="기기 모델에 대한 상세 설명"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="활성화 여부",
+        help_text="모델 판매 가능 여부"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="생성일시"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="수정일시"
+    )
+    
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="생성자",
+        help_text="모델을 생성한 관리자"
+    )
+    
+    class Meta:
+        verbose_name = "기기 모델"
+        verbose_name_plural = "기기 모델 관리"
+        ordering = ['manufacturer', 'model_name']
+        unique_together = ['manufacturer', 'model_name']
+        indexes = [
+            models.Index(fields=['manufacturer', 'is_active']),
+            models.Index(fields=['model_name']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.manufacturer} {self.model_name}"
+    
+    def clean(self):
+        """모델 데이터 검증"""
+        if not self.model_name or not self.model_name.strip():
+            raise ValidationError("모델명은 필수 입력 사항입니다.")
+        
+        if not self.manufacturer or not self.manufacturer.strip():
+            raise ValidationError("제조사는 필수 입력 사항입니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"새로운 기기 모델이 생성되었습니다: {self}")
+            else:
+                logger.info(f"기기 모델이 수정되었습니다: {self}")
+        
+        except Exception as e:
+            logger.error(f"기기 모델 저장 중 오류 발생: {str(e)} - {self.model_name}")
+            raise
+
+
+class DeviceColor(models.Model):
+    """
+    기기 색상 관리 모델
+    기기 모델별 사용 가능한 색상을 관리
+    """
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="기기 색상의 고유 식별자"
+    )
+    
+    device_model = models.ForeignKey(
+        DeviceModel,
+        on_delete=models.CASCADE,
+        related_name='colors',
+        verbose_name="기기 모델",
+        help_text="색상이 적용될 기기 모델"
+    )
+    
+    color_name = models.CharField(
+        max_length=100,
+        verbose_name="색상명",
+        help_text="색상의 이름"
+    )
+    
+    color_code = models.CharField(
+        max_length=7,
+        blank=True,
+        verbose_name="색상 코드",
+        help_text="색상의 HEX 코드 (예: #FF0000)"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="활성화 여부",
+        help_text="색상 선택 가능 여부"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="생성일시"
+    )
+    
+    class Meta:
+        verbose_name = "기기 색상"
+        verbose_name_plural = "기기 색상 관리"
+        ordering = ['device_model', 'color_name']
+        unique_together = ['device_model', 'color_name']
+        indexes = [
+            models.Index(fields=['device_model', 'is_active']),
+            models.Index(fields=['color_name']),
+        ]
+    
+    def __str__(self):
+        return f"{self.device_model} - {self.color_name}"
+    
+    def clean(self):
+        """모델 데이터 검증"""
+        if not self.color_name or not self.color_name.strip():
+            raise ValidationError("색상명은 필수 입력 사항입니다.")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 로깅 처리"""
+        is_new = self.pk is None
+        
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            if is_new:
+                logger.info(f"새로운 기기 색상이 생성되었습니다: {self}")
+            else:
+                logger.info(f"기기 색상이 수정되었습니다: {self}")
+        
+        except Exception as e:
+            logger.error(f"기기 색상 저장 중 오류 발생: {str(e)} - {self.color_name}")
+            raise
 
 
 class OrderFormTemplate(models.Model):
@@ -1043,14 +1491,34 @@ class OrderFormField(models.Model):
         ('checkbox', '체크박스'),
         ('textarea', '텍스트 영역'),
         ('date', '날짜'),
+        ('phone', '전화번호'),
+        ('email', '이메일'),
+        ('carrier_plan', '통신사 요금제'),  # 통신사별 요금제 선택
+        ('device_model', '기기 모델'),  # 기기 모델 선택
+        ('device_color', '기기 색상'),  # 기기 색상 선택
+        ('sim_type', '유심 타입'),  # 유심 타입 선택
+        ('contract_period', '계약 기간'),  # 계약 기간 선택
+        ('payment_method', '결제 방법'),  # 결제 방법 선택
         ('rebate_table', '리베이트 테이블'),  # 요금제별 리베이트 입력용
+        ('course', '코스'),  # 심플/스탠다드/프리미엄
+        ('common_support', '공통지원금'),  # 숫자 입력
+        ('additional_support', '추가지원금'),  # 숫자 입력
+        ('free_amount', '프리금액'),  # 숫자 입력
+        ('installment_principal', '할부원금'),  # 숫자 입력
+        ('additional_fee', '부가'),  # 텍스트 입력
+        ('insurance', '보험'),  # 파손/도난/종합/없음
+        ('welfare', '복지'),  # 텍스트 입력
+        ('legal_info', '법대정보'),  # 텍스트 입력
+        ('foreigner_info', '외국인정보'),  # 국적/발급일자
+        ('installment_months', '할부개월수'),  # 12/24/36개월
+        ('join_type', '가입유형'),  # 기변/신규/번호이동
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template = models.ForeignKey(OrderFormTemplate, on_delete=models.CASCADE, related_name='fields', verbose_name='양식 템플릿')
     field_name = models.CharField(max_length=100, verbose_name='필드 이름')
     field_label = models.CharField(max_length=200, verbose_name='필드 라벨')
-    field_type = models.CharField(max_length=20, choices=FIELD_TYPE_CHOICES, verbose_name='필드 타입')
+    field_type = models.CharField(max_length=30, choices=FIELD_TYPE_CHOICES, verbose_name='필드 타입')
     is_required = models.BooleanField(default=False, verbose_name='필수 여부')
     field_options = models.JSONField(blank=True, null=True, verbose_name='필드 옵션')  # 선택 옵션들
     placeholder = models.CharField(max_length=200, blank=True, verbose_name='플레이스홀더')
@@ -1064,3 +1532,101 @@ class OrderFormField(models.Model):
     
     def __str__(self):
         return f"{self.template.title} - {self.field_label}"
+    
+    def get_default_options(self):
+        """필드 타입에 따른 기본 옵션 반환"""
+        default_options = {
+            'sim_type': {
+                'choices': [
+                    {'value': 'prepaid', 'label': '선불 (본사 7,700원 지급)'},
+                    {'value': 'postpaid', 'label': '후불 (본사 7,700원 차감)'},
+                    {'value': 'esim', 'label': 'eSIM'},
+                    {'value': 'reuse', 'label': '재사용'}
+                ]
+            },
+            'contract_period': {
+                'choices': [
+                    {'value': '12', 'label': '12개월'},
+                    {'value': '24', 'label': '24개월'},
+                    {'value': '36', 'label': '36개월'}
+                ]
+            },
+            'payment_method': {
+                'choices': [
+                    {'value': 'cash', 'label': '현금'},
+                    {'value': 'installment', 'label': '할부'}
+                ]
+            },
+            'carrier_plan': {
+                'dynamic': True,  # 동적으로 로드되는 옵션
+                'source': 'CarrierPlan'
+            },
+            'device_model': {
+                'dynamic': True,
+                'source': 'DeviceModel'
+            },
+            'device_color': {
+                'dynamic': True,
+                'source': 'DeviceColor',
+                'depends_on': 'device_model'  # 기기 모델에 따라 색상 옵션이 달라짐
+            },
+            'installment_months': {
+                'choices': [
+                    {'value': '12', 'label': '12개월'},
+                    {'value': '24', 'label': '24개월'},
+                    {'value': '36', 'label': '36개월'}
+                ]
+            },
+            'insurance': {
+                'choices': [
+                    {'value': 'damage', 'label': '파손'},
+                    {'value': 'theft', 'label': '도난'},
+                    {'value': 'comprehensive', 'label': '종합'},
+                    {'value': 'none', 'label': '없음'}
+                ]
+            },
+            'course': {
+                'choices': [
+                    {'value': 'simple', 'label': '심플'},
+                    {'value': 'standard', 'label': '스탠다드'},
+                    {'value': 'premium', 'label': '프리미엄'}
+                ]
+            },
+            'join_type': {
+                'choices': [
+                    {'value': 'device_change', 'label': '기변'},
+                    {'value': 'new_subscription', 'label': '신규'},
+                    {'value': 'number_transfer', 'label': '번호이동'}
+                ]
+            },
+            'payment_method': {
+                'choices': [
+                    {'value': 'cash', 'label': '현금'},
+                    {'value': 'installment', 'label': '할부'}
+                ]
+            },
+            'sim_type': {
+                'choices': [
+                    {'value': 'prepaid', 'label': '선불 (+7,700원)'},
+                    {'value': 'postpaid', 'label': '후불 (-7,700원)'},
+                    {'value': 'esim', 'label': '이심'},
+                    {'value': 'reuse', 'label': '재사용'}
+                ]
+            },
+            'contract_period': {
+                'choices': [
+                    {'value': '12', 'label': '12개월'},
+                    {'value': '24', 'label': '24개월'},
+                    {'value': '36', 'label': '36개월'}
+                ]
+            }
+        }
+        
+        return default_options.get(self.field_type, {})
+    
+    def save(self, *args, **kwargs):
+        """저장 시 기본 옵션 설정"""
+        if not self.field_options:
+            self.field_options = self.get_default_options()
+        
+        super().save(*args, **kwargs)

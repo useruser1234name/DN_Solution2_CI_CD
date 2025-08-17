@@ -98,12 +98,25 @@ class CompanyUserAdmin(admin.ModelAdmin):
         if not change:  # 새로 생성하는 경우
             # Django User 생성
             from django.contrib.auth.models import User
+            from django.contrib.auth.hashers import make_password
+            import secrets
+            import string
+            
             if not obj.django_user:
+                # 안전한 임시 비밀번호 생성
+                alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+                temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+                
                 django_user = User.objects.create_user(
                     username=obj.username,
-                    password='temp_password_123'  # 임시 비밀번호
+                    password=temp_password
                 )
                 obj.django_user = django_user
+                
+                # 관리자에게 임시 비밀번호 알림 (로그에 기록)
+                import logging
+                logger = logging.getLogger('companies')
+                logger.info(f"[CompanyUserAdmin] Django User 생성됨 - 사용자: {obj.username}, 임시 비밀번호는 별도 채널로 전달 필요")
         
         super().save_model(request, obj, form, change)
 

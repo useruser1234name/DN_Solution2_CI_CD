@@ -90,6 +90,14 @@ class Settlement(models.Model):
         verbose_name='지급일시'
     )
     
+    # 리베이트 지급 예정일 (협력사/판매점별로 다를 수 있음)
+    rebate_due_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='리베이트 지급 예정일',
+        help_text='협력사 또는 판매점별로 설정된 리베이트 지급 예정일'
+    )
+    
     # 메모
     notes = models.TextField(
         blank=True,

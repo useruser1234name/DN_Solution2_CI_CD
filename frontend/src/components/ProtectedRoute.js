@@ -1,18 +1,20 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { hasPermission } from '../utils/rolePermissions';
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, requiredPermissions = [] }) => {
     const { user, loading } = useAuth();
 
     console.log('[ProtectedRoute] 컴포넌트 렌더링', { 
         user: user?.username, 
         loading, 
-        isAuthenticated: !!user 
+        isAuthenticated: !!user,
+        requiredPermissions
     });
 
     if (loading) {
-        console.log('[ProtectedRoute] 로딩 중 - 로딩 화면 표시');
+
         return (
             <div style={{ 
                 display: 'flex', 
@@ -27,11 +29,50 @@ const ProtectedRoute = ({ children }) => {
     }
 
     if (!user) {
-        console.log('[ProtectedRoute] 인증되지 않은 사용자 - 로그인 페이지로 리다이렉트');
+
         return <Navigate to="/login" replace />;
     }
 
-    console.log('[ProtectedRoute] 인증된 사용자 - 보호된 페이지 표시');
+    // 특정 권한이 필요한 경우 권한 확인
+    if (requiredPermissions.length > 0) {
+        const hasRequiredPermissions = requiredPermissions.every(permission => 
+            hasPermission(user, permission)
+        );
+        
+        if (!hasRequiredPermissions) {
+            
+            return (
+                <div style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    height: '100vh',
+                    fontSize: '18px',
+                    color: '#dc3545'
+                }}>
+                    <h2>접근 권한이 없습니다</h2>
+                    <p>이 페이지에 접근할 권한이 없습니다.</p>
+                    <button 
+                        onClick={() => window.location.href = '/dashboard'}
+                        style={{
+                            padding: '10px 20px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginTop: '20px'
+                        }}
+                    >
+                        대시보드로 이동
+                    </button>
+                </div>
+            );
+        }
+    }
+
+
     return children;
 };
 

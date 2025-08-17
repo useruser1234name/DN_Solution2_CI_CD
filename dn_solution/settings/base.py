@@ -54,13 +54,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 캐시 미들웨어 추가 (순서 중요)
-    'dn_solution.middleware.cache_middleware.PerformanceCacheMiddleware',
-    'dn_solution.middleware.cache_middleware.UserPermissionCacheMiddleware', 
-    'dn_solution.middleware.cache_middleware.CacheInvalidationMiddleware',
-    'dn_solution.middleware.cache_middleware.CacheMetricsMiddleware',
-    'companies.middleware.APILoggingMiddleware',
-    'companies.middleware.PerformanceMiddleware',  # 성능 모니터링
+    # 통합 미들웨어 (성능 모니터링 + API 로깅 + 간소화된 캐시)
+    'dn_solution.middleware.unified_middleware.UnifiedAPIMiddleware',
+    # 사용자 권한 캐시만 별도 유지 (특화된 기능)
+    'dn_solution.middleware.cache_middleware.UserPermissionCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'dn_solution.urls'
@@ -199,67 +196,32 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-# Cache settings (Redis Multi-layer)
+# Cache settings (최적화된 Local Memory Cache)
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'dn_solution_main',
+        'TIMEOUT': 300,  # 5분 기본
         'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 50,
-                'retry_on_timeout': True,
-            },
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-            'IGNORE_EXCEPTIONS': True,
+            'MAX_ENTRIES': 2000,  # 증가: 통합 캐시로 더 많은 데이터 저장
+            'CULL_FREQUENCY': 4,  # 개선: 메모리 효율성 향상
         },
-        'KEY_PREFIX': 'dn_solution',
-        'VERSION': 1,
-        'TIMEOUT': 300,  # 5 minutes default
     },
-    'sessions': {
-        'BACKEND': 'django_redis.cache.RedisCache', 
-        'LOCATION': config('REDIS_SESSION_URL', default='redis://127.0.0.1:6379/2'),
+    'permissions': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'dn_solution_permissions',
+        'TIMEOUT': 1800,  # 30분: 권한은 자주 변경되지 않음
         'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 20,
-            },
+            'MAX_ENTRIES': 1000,
+            'CULL_FREQUENCY': 4,
         },
-        'KEY_PREFIX': 'dn_solution_session',
-        'TIMEOUT': 3600,  # 1 hour for sessions
-    },
-    'api_cache': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/3'), 
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 30,
-            },
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-        },
-        'KEY_PREFIX': 'dn_api',
-        'TIMEOUT': 1800,  # 30 minutes for API responses
-    },
-    'long_term': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/4'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient', 
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 10,
-            },
-        },
-        'KEY_PREFIX': 'dn_longterm',
-        'TIMEOUT': 86400,  # 24 hours for long-term data
     },
 }
 
-# 캐시 성능 최적화 설정
-CACHE_MIDDLEWARE_ALIAS = 'api_cache'
+# 캐시 성능 최적화 설정 (간소화)
+CACHE_MIDDLEWARE_ALIAS = 'default'
 CACHE_MIDDLEWARE_SECONDS = 300
-CACHE_MIDDLEWARE_KEY_PREFIX = 'dn_middleware'
+CACHE_MIDDLEWARE_KEY_PREFIX = 'dn_api'
 
 # Session engine (Redis가 없을 때는 DB 사용)
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
@@ -267,14 +229,14 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 3600  # 1 hour
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
-# Celery Configuration (Redis as broker)
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Asia/Seoul'
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+# Celery Configuration (Disabled - Using synchronous processing)
+# CELERY_BROKER_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
+# CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+# CELERY_TIMEZONE = 'Asia/Seoul'
+# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # File upload settings
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB

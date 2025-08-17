@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from .views import SettlementViewSet, SettlementBatchViewSet
 
 router = DefaultRouter()
-router.register(r'settlements', SettlementViewSet, basename='settlement')
+router.register(r'', SettlementViewSet, basename='settlement')
 router.register(r'batches', SettlementBatchViewSet, basename='settlementbatch')
 
 urlpatterns = [

@@ -1,0 +1,409 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.order-form-builder-modal {
+  background: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  position: relative;
+  padding: 20px 25px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+}
+
+.modal-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 8px 0;
+}
+
+.modal-header p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.close-btn {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 5px;
+  line-height: 1;
+}
+
+.close-btn:hover:not(:disabled) {
+  color: #333;
+}
+
+.close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 16px;
+}
+
+.form-section {
+  padding: 20px 25px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+}
+
+.form-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 15px 0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.section-header h3 {
+  margin: 0;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+
+.checkbox-group {
+  margin-bottom: 10px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #545b62;
+}
+
+.fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.field-item {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+  transition: all 0.2s ease;
+}
+
+.field-item:hover {
+  border-color: #dee2e6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.field-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-order {
+  background: #007bff;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.field-type {
+  background: #e9ecef;
+  color: #495057;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.field-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: #6c757d;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: #545b62;
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-icon.danger {
+  background: #dc3545;
+}
+
+.btn-icon.danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.field-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 15px;
+  align-items: end;
+}
+
+.config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.config-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.config-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin: 0;
+}
+
+.config-group input,
+.config-group select {
+  font-size: 13px;
+  padding: 6px 8px;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 15px 25px;
+  text-align: center;
+  border-top: 1px solid #f5c6cb;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 25px;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  border-radius: 0 0 8px 8px;
+}
+
+.modal-actions .btn {
+  padding: 10px 20px;
+  font-size: 14px;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 10px;
+  }
+  
+  .order-form-builder-modal {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+  
+  .modal-header,
+  .form-section,
+  .modal-actions {
+    padding: 15px 20px;
+  }
+  
+  .config-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .field-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .field-actions {
+    align-self: flex-end;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .modal-actions .btn {
+    padding: 12px 20px;
+  }
+}

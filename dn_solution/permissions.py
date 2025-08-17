@@ -13,6 +13,7 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 from companies.models import Company, CompanyUser
 from django.core.cache import cache
+from dn_solution.cache_manager import cache_manager, CacheManager
 from dn_solution.cache_utils import CacheUtils
 
 logger = logging.getLogger('permissions')
@@ -158,7 +159,7 @@ class HierarchicalPermissionManager:
             logger.error(f"사용자 권한 조회 실패: {e}")
         
         # 캐시에 저장
-        cache_manager.set(cache_key, permissions, CacheManager.CACHE_TIMEOUTS['long'])
+            cache_manager.set(cache_key, permissions, CacheManager.CACHE_TIMEOUTS['long'])
         
         return permissions
     
@@ -275,7 +276,7 @@ class HierarchicalPermissionManager:
         accessible_companies = list(set(accessible_companies))
         
         # 캐시에 저장
-        cache_manager.set(cache_key, accessible_companies, CacheManager.CACHE_TIMEOUTS['long'])
+            cache_manager.set(cache_key, accessible_companies, CacheManager.CACHE_TIMEOUTS['long'])
         
         return accessible_companies
     

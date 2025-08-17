@@ -20,7 +20,7 @@ class SettlementSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order', 'company', 'company_name', 'order_info',
             'rebate_amount', 'status', 'status_display',
-            'approved_by', 'approved_at', 'paid_at',
+            'approved_by', 'approved_at', 'paid_at', 'rebate_due_date',
             'notes', 'created_at', 'updated_at'
         ]
         read_only_fields = ['approved_at', 'paid_at', 'created_at', 'updated_at']

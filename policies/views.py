@@ -20,8 +20,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import Policy, PolicyNotice, PolicyAssignment
-from .serializers import PolicySerializer, PolicyNoticeSerializer
+from .models import (
+    Policy, PolicyNotice, PolicyAssignment, RebateMatrix,
+    CarrierPlan, DeviceModel, DeviceColor
+)
+from .serializers import (
+    PolicySerializer, PolicyNoticeSerializer, CarrierPlanSerializer,
+    DeviceModelSerializer, DeviceColorSerializer, RebateMatrixSerializer
+)
 from companies.models import Company
 
 logger = logging.getLogger('policies')
@@ -119,11 +125,14 @@ class PolicyListView(ListView):
         }
         
         # 사용자 업체 정보 (권한 제어용)
-        try:
-            from companies.models import CompanyUser
-            company_user = CompanyUser.objects.get(user=self.request.user)
-            context['user_company'] = company_user.company
-        except CompanyUser.DoesNotExist:
+        if self.request.user.is_authenticated:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=self.request.user)
+                context['user_company'] = company_user.company
+            except CompanyUser.DoesNotExist:
+                context['user_company'] = None
+        else:
             context['user_company'] = None
         
         return context
@@ -215,7 +224,7 @@ class PolicyCreateView(LoginRequiredMixin, CreateView):
         # 현재 사용자의 업체 정보
         try:
             from companies.models import CompanyUser
-            company_user = CompanyUser.objects.get(user=self.request.user)
+            company_user = CompanyUser.objects.get(django_user=self.request.user)
             context['user_company'] = company_user.company
         except CompanyUser.DoesNotExist:
             context['user_company'] = None
@@ -577,7 +586,7 @@ def get_available_companies(request):
             # 슈퍼유저: 모든 업체
             companies = Company.objects.filter(status=True).exclude(type='headquarters')
         else:
-            company_user = CompanyUser.objects.get(user=request.user)
+            company_user = CompanyUser.objects.get(django_user=request.user)
             user_company = company_user.company
             
             if user_company.type == 'headquarters':
@@ -610,6 +619,107 @@ def get_available_companies(request):
 
 class PolicyApiCreateView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def create_default_order_form(self, policy, user):
+        """정책 생성 시 기본 주문서 양식 자동 생성"""
+        try:
+            from .models import OrderFormTemplate, OrderFormField
+            
+            # 기본 템플릿 생성
+            template = OrderFormTemplate.objects.create(
+                policy=policy,
+                title=f"{policy.title} - 주문서",
+                description="기본 주문서 양식입니다.",
+                created_by=user
+            )
+            
+            # 기본 필드들 생성
+            default_fields = [
+                # 고객 정보
+                {
+                    'field_name': 'customer_name',
+                    'field_label': '고객명',
+                    'field_type': 'text',
+                    'is_required': True,
+                    'placeholder': '고객명을 입력하세요',
+                    'help_text': '고객의 이름을 입력하세요',
+                    'order': 1,
+                    'field_options': {}
+                },
+                {
+                    'field_name': 'birth_date',
+                    'field_label': '생년월일',
+                    'field_type': 'text',
+                    'is_required': True,
+                    'placeholder': '예: 901234',
+                    'help_text': '고객의 생년월일 6자리를 입력하세요',
+                    'order': 2,
+                    'field_options': {}
+                },
+                {
+                    'field_name': 'phone_number',
+                    'field_label': '개통번호',
+                    'field_type': 'phone',
+                    'is_required': True,
+                    'placeholder': '010-1234-5678',
+                    'help_text': '개통할 전화번호를 입력하세요',
+                    'order': 3,
+                    'field_options': {}
+                },
+                # 통신 정보
+                {
+                    'field_name': 'carrier_plan',
+                    'field_label': '요금제',
+                    'field_type': 'carrier_plan',
+                    'is_required': True,
+                    'placeholder': '요금제를 선택하세요',
+                    'help_text': '통신사 요금제를 선택하세요',
+                    'order': 4,
+                    'field_options': {'dynamic': True, 'source': 'CarrierPlan'}
+                },
+                {
+                    'field_name': 'sim_type',
+                    'field_label': '유심 타입',
+                    'field_type': 'sim_type',
+                    'is_required': True,
+                    'placeholder': '유심 타입을 선택하세요',
+                    'help_text': '유심 타입에 따라 리베이트가 달라질 수 있습니다',
+                    'order': 5,
+                    'field_options': {}
+                },
+                {
+                    'field_name': 'contract_period',
+                    'field_label': '계약기간',
+                    'field_type': 'contract_period',
+                    'is_required': True,
+                    'placeholder': '계약기간을 선택하세요',
+                    'help_text': '계약기간에 따라 리베이트가 달라질 수 있습니다',
+                    'order': 6,
+                    'field_options': {}
+                },
+                {
+                    'field_name': 'installment_months',
+                    'field_label': '할부개월',
+                    'field_type': 'installment_months',
+                    'is_required': True,
+                    'placeholder': '할부개월을 선택하세요',
+                    'help_text': '단말기 할부 개월 수를 선택하세요',
+                    'order': 7,
+                    'field_options': {}
+                }
+            ]
+            
+            # 필드들 생성
+            for field_data in default_fields:
+                OrderFormField.objects.create(
+                    template=template,
+                    **field_data
+                )
+            
+            logger.info(f"기본 주문서 양식 생성 완료: {policy.title} - {len(default_fields)}개 필드")
+            
+        except Exception as e:
+            logger.error(f"기본 주문서 양식 생성 실패: {policy.title} - {str(e)}")
 
     def post(self, request):
         try:
@@ -664,6 +774,9 @@ class PolicyApiCreateView(APIView):
                     logger.warning(f"존재하지 않는 회사에 정책 할당 시도: {assigned_to}")
 
             logger.info(f"새 정책 생성: {policy.title}")
+
+            # 기본 주문서 양식 자동 생성
+            self.create_default_order_form(policy, request.user)
 
             return Response({
                 'success': True,
@@ -984,16 +1097,27 @@ class AgencyRebateView(LoginRequiredMixin, View):
     
     def dispatch(self, request, *args, **kwargs):
         """권한 검증: 협력사만 접근 가능"""
+        # 인증 확인
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'error': '인증이 필요합니다.'
+            }, status=401)
+        
         if not request.user.is_superuser:
             try:
                 from companies.models import CompanyUser
                 company_user = CompanyUser.objects.get(django_user=request.user)
                 if company_user.company.type != 'agency':
-                    messages.error(request, '협력사 관리자만 리베이트를 설정할 수 있습니다.')
-                    return redirect('policies:policy_list')
+                    return JsonResponse({
+                        'success': False,
+                        'error': '협력사 관리자만 리베이트를 설정할 수 있습니다.'
+                    }, status=403)
             except CompanyUser.DoesNotExist:
-                messages.error(request, '업체 정보를 찾을 수 없습니다.')
-                return redirect('policies:policy_list')
+                return JsonResponse({
+                    'success': False,
+                    'error': '업체 정보를 찾을 수 없습니다.'
+                }, status=403)
         
         return super().dispatch(request, *args, **kwargs)
     
@@ -1215,3 +1339,1098 @@ class OrderFormBuilderView(LoginRequiredMixin, View):
                 }, status=500)
             
             return redirect('policies:policy_detail', pk=policy_id)
+
+
+# 구식 OrderFormTemplateView 제거됨 - PolicyFormTemplateView 사용
+
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def rebate_summary(request):
+    """리베이트 요약 정보 API"""
+    from .models import PolicyExposure, AgencyRebate
+    from companies.models import CompanyUser
+    
+    try:
+        # 사용자 회사 정보 확인
+        company_user = CompanyUser.objects.get(django_user=request.user)
+        user_company = company_user.company
+        
+        rebate_data = []
+        total_receivable = 0
+        total_payable = 0
+        participating_stores = 0
+        
+        if user_company.type == 'headquarters':
+            # 본사: 협력사에 지급할 리베이트 현황
+            exposures = PolicyExposure.objects.filter(
+                policy__created_by=request.user,
+                is_active=True
+            ).select_related('policy', 'agency')
+            
+            for exposure in exposures:
+                rebate_amount = exposure.policy.rebate_agency
+                total_payable += rebate_amount
+                rebate_data.append({
+                    'policy_id': str(exposure.policy.id),
+                    'policy_title': exposure.policy.title,
+                    'company_name': exposure.agency.name,
+                    'company_type': 'agency',
+                    'rebate_amount': rebate_amount,
+                    'rebate_type': '지급할 리베이트',
+                    'status': 'active'
+                })
+        
+        elif user_company.type == 'agency':
+            # 협력사: 본사에서 받을 리베이트 + 판매점에게 줄 리베이트
+            
+            # 1. 본사에서 받을 리베이트
+            exposures = PolicyExposure.objects.filter(
+                agency=user_company,
+                is_active=True
+            ).select_related('policy')
+            
+            for exposure in exposures:
+                rebate_amount = exposure.policy.rebate_agency
+                total_receivable += rebate_amount
+                rebate_data.append({
+                    'policy_id': str(exposure.policy.id),
+                    'policy_title': exposure.policy.title,
+                    'company_name': '본사',
+                    'company_type': 'headquarters',
+                    'rebate_amount': rebate_amount,
+                    'rebate_type': '받을 리베이트',
+                    'status': 'active'
+                })
+            
+            # 2. 판매점에게 줄 리베이트
+            agency_rebates = AgencyRebate.objects.filter(
+                policy_exposure__agency=user_company,
+                is_active=True
+            ).select_related('policy_exposure__policy', 'retail_company')
+            
+            for rebate in agency_rebates:
+                total_payable += rebate.rebate_amount
+                participating_stores += 1
+                rebate_data.append({
+                    'policy_id': str(rebate.policy_exposure.policy.id),
+                    'policy_title': rebate.policy_exposure.policy.title,
+                    'company_name': rebate.retail_company.name,
+                    'company_type': 'retail',
+                    'rebate_amount': rebate.rebate_amount,
+                    'rebate_type': '지급할 리베이트',
+                    'status': 'active'
+                })
+        
+        elif user_company.type == 'retail':
+            # 판매점: 협력사에서 받을 리베이트
+            agency_rebates = AgencyRebate.objects.filter(
+                retail_company=user_company,
+                is_active=True
+            ).select_related('policy_exposure__policy', 'policy_exposure__agency')
+            
+            for rebate in agency_rebates:
+                total_receivable += rebate.rebate_amount
+                rebate_data.append({
+                    'policy_id': str(rebate.policy_exposure.policy.id),
+                    'policy_title': rebate.policy_exposure.policy.title,
+                    'company_name': rebate.policy_exposure.agency.name,
+                    'company_type': 'agency',
+                    'rebate_amount': rebate.rebate_amount,
+                    'rebate_type': '받을 리베이트',
+                    'status': 'active'
+                })
+        
+        return Response({
+            'success': True,
+            'data': {
+                'rebates': rebate_data,
+                'summary': {
+                    'total_receivable': total_receivable,
+                    'total_payable': total_payable,
+                    'participating_stores': participating_stores,
+                    'total_policies': len(set(r['policy_id'] for r in rebate_data))
+                }
+            }
+        })
+        
+    except CompanyUser.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': '업체 정보를 찾을 수 없습니다.'
+        }, status=403)
+    
+    except Exception as e:
+        logger.error(f"리베이트 요약 조회 실패: {str(e)}")
+        return Response({
+            'success': False,
+            'message': '리베이트 정보를 불러오는 중 오류가 발생했습니다.'
+        }, status=500)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def agency_rebate_api(request):
+    """협력사 리베이트 관리 API"""
+    from .models import PolicyExposure, AgencyRebate
+    from companies.models import CompanyUser, Company
+    from decimal import Decimal
+    
+    try:
+        # 사용자 회사 정보 확인
+        company_user = CompanyUser.objects.get(django_user=request.user)
+        agency = company_user.company
+        
+        # 협력사만 접근 가능
+        if agency.type != 'agency':
+            return Response({
+                'success': False,
+                'message': '협력사만 접근할 수 있습니다.'
+            }, status=403)
+        
+        if request.method == 'GET':
+            # 협력사의 정책 노출 목록과 리베이트 설정 조회
+            exposures = PolicyExposure.objects.filter(
+                agency=agency,
+                is_active=True
+            ).select_related('policy').prefetch_related('rebates')
+            
+            data = []
+            for exposure in exposures:
+                # 해당 협력사의 하위 판매점 목록
+                retail_stores = Company.objects.filter(
+                    parent_company=agency,
+                    type='retail',
+                    status=True
+                )
+                
+                rebate_settings = []
+                for store in retail_stores:
+                    try:
+                        rebate = AgencyRebate.objects.get(
+                            policy_exposure=exposure,
+                            retail_company=store,
+                            is_active=True
+                        )
+                        rebate_amount = rebate.rebate_amount
+                    except AgencyRebate.DoesNotExist:
+                        rebate_amount = None
+                    
+                    rebate_settings.append({
+                        'store_id': str(store.id),
+                        'store_name': store.name,
+                        'rebate_amount': rebate_amount
+                    })
+                
+                data.append({
+                    'policy_id': str(exposure.policy.id),
+                    'policy_title': exposure.policy.title,
+                    'policy_exposure_id': str(exposure.id),
+                    'default_rebate': exposure.policy.rebate_retail,
+                    'retail_stores': rebate_settings
+                })
+            
+            return Response({
+                'success': True,
+                'data': data
+            })
+        
+        elif request.method == 'POST':
+            # 리베이트 설정 저장
+            import json
+            data = json.loads(request.body)
+            
+            policy_exposure_id = data.get('policy_exposure_id')
+            retail_company_id = data.get('retail_company_id')
+            rebate_amount = data.get('rebate_amount')
+            
+            # 유효성 검증
+            policy_exposure = get_object_or_404(
+                PolicyExposure,
+                id=policy_exposure_id,
+                agency=agency,
+                is_active=True
+            )
+            
+            retail_company = get_object_or_404(
+                Company,
+                id=retail_company_id,
+                parent_company=agency,
+                type='retail',
+                status=True
+            )
+            
+            # 리베이트 설정 저장/수정
+            rebate, created = AgencyRebate.objects.update_or_create(
+                policy_exposure=policy_exposure,
+                retail_company=retail_company,
+                defaults={
+                    'rebate_amount': Decimal(str(rebate_amount)),
+                    'is_active': True
+                }
+            )
+            
+            action = "설정" if created else "수정"
+            logger.info(f"리베이트 {action}: {policy_exposure.policy.title} → {retail_company.name}: {rebate_amount}원")
+            
+            return Response({
+                'success': True,
+                'message': f'리베이트가 {action}되었습니다.',
+                'data': {
+                    'rebate_id': str(rebate.id),
+                    'rebate_amount': float(rebate.rebate_amount)
+                }
+            })
+        
+        else:
+            return Response({
+                'success': False,
+                'message': '지원하지 않는 요청 방법입니다.'
+            }, status=405)
+        
+    except CompanyUser.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': '업체 정보를 찾을 수 없습니다.'
+        }, status=403)
+    
+    except Exception as e:
+        logger.error(f"협력사 리베이트 API 오류: {str(e)}")
+        return Response({
+            'success': False,
+            'message': '요청 처리 중 오류가 발생했습니다.'
+        }, status=500)
+
+
+class CarrierPlanAPIView(APIView):
+    """통신사 요금제 API"""
+    
+    def get(self, request):
+        """통신사 요금제 목록 조회"""
+        try:
+            carrier = request.GET.get('carrier')
+            is_active = request.GET.get('is_active', 'true').lower() == 'true'
+            
+            queryset = CarrierPlan.objects.all()
+            
+            if carrier:
+                queryset = queryset.filter(carrier=carrier)
+            
+            if is_active:
+                queryset = queryset.filter(is_active=True)
+            
+            queryset = queryset.order_by('carrier', 'plan_price', 'plan_name')
+            
+            serializer = CarrierPlanSerializer(queryset, many=True)
+            
+            return Response({
+                'success': True,
+                'data': serializer.data
+            })
+        
+        except Exception as e:
+            logger.error(f"통신사 요금제 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '요금제 정보를 불러오는 중 오류가 발생했습니다.'
+            }, status=500)
+    
+    def post(self, request):
+        """통신사 요금제 생성"""
+        try:
+            serializer = CarrierPlanSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=request.user)
+                return Response({
+                    'success': True,
+                    'message': '요금제가 성공적으로 생성되었습니다.',
+                    'data': serializer.data
+                }, status=201)
+            else:
+                return Response({
+                    'success': False,
+                    'message': '입력 데이터가 올바르지 않습니다.',
+                    'errors': serializer.errors
+                }, status=400)
+        
+        except Exception as e:
+            logger.error(f"통신사 요금제 생성 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '요금제 생성 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class DeviceModelAPIView(APIView):
+    """기기 모델 API"""
+    
+    def get(self, request):
+        """기기 모델 목록 조회"""
+        try:
+            is_active = request.GET.get('is_active', 'true').lower() == 'true'
+            manufacturer = request.GET.get('manufacturer')
+            
+            queryset = DeviceModel.objects.all()
+            
+            if is_active:
+                queryset = queryset.filter(is_active=True)
+            
+            if manufacturer:
+                queryset = queryset.filter(manufacturer__icontains=manufacturer)
+            
+            queryset = queryset.order_by('manufacturer', 'model_name')
+            
+            serializer = DeviceModelSerializer(queryset, many=True)
+            
+            return Response({
+                'success': True,
+                'data': serializer.data
+            })
+        
+        except Exception as e:
+            logger.error(f"기기 모델 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '기기 모델 정보를 불러오는 중 오류가 발생했습니다.'
+            }, status=500)
+    
+    def post(self, request):
+        """기기 모델 생성"""
+        try:
+            serializer = DeviceModelSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=request.user)
+                return Response({
+                    'success': True,
+                    'message': '기기 모델이 성공적으로 생성되었습니다.',
+                    'data': serializer.data
+                }, status=201)
+            else:
+                return Response({
+                    'success': False,
+                    'message': '입력 데이터가 올바르지 않습니다.',
+                    'errors': serializer.errors
+                }, status=400)
+        
+        except Exception as e:
+            logger.error(f"기기 모델 생성 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '기기 모델 생성 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class DeviceColorAPIView(APIView):
+    """기기 색상 API"""
+    
+    def get(self, request):
+        """기기 색상 목록 조회"""
+        try:
+            device_model = request.GET.get('device_model')
+            is_active = request.GET.get('is_active', 'true').lower() == 'true'
+            
+            queryset = DeviceColor.objects.all()
+            
+            if device_model:
+                queryset = queryset.filter(device_model_id=device_model)
+            
+            if is_active:
+                queryset = queryset.filter(is_active=True)
+            
+            queryset = queryset.order_by('device_model', 'color_name')
+            
+            serializer = DeviceColorSerializer(queryset, many=True)
+            
+            return Response({
+                'success': True,
+                'data': serializer.data
+            })
+        
+        except Exception as e:
+            logger.error(f"기기 색상 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '기기 색상 정보를 불러오는 중 오류가 발생했습니다.'
+            }, status=500)
+    
+    def post(self, request):
+        """기기 색상 생성"""
+        try:
+            serializer = DeviceColorSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'success': True,
+                    'message': '기기 색상이 성공적으로 생성되었습니다.',
+                    'data': serializer.data
+                }, status=201)
+            else:
+                return Response({
+                    'success': False,
+                    'message': '입력 데이터가 올바르지 않습니다.',
+                    'errors': serializer.errors
+                }, status=400)
+        
+        except Exception as e:
+            logger.error(f"기기 색상 생성 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '기기 색상 생성 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class RebateCalculationAPIView(APIView):
+    """리베이트 계산 API"""
+    
+    def get(self, request):
+        """리베이트 계산"""
+        try:
+            policy_id = request.GET.get('policy_id')
+            carrier = request.GET.get('carrier')
+            plan_id = request.GET.get('plan_id')
+            contract_period = request.GET.get('contract_period')
+            sim_type = request.GET.get('sim_type')
+            
+            if not all([policy_id, carrier, plan_id, contract_period]):
+                return Response({
+                    'success': False,
+                    'message': '필수 파라미터가 누락되었습니다.'
+                }, status=400)
+            
+            # 정책 조회
+            policy = get_object_or_404(Policy, id=policy_id)
+            
+            # 요금제 조회
+            plan = get_object_or_404(CarrierPlan, id=plan_id, carrier=carrier)
+            
+            # 리베이트 매트릭스에서 금액 조회
+            rebate_amount = RebateMatrix.get_rebate_amount(
+                policy=policy,
+                carrier=carrier,
+                plan_amount=plan.plan_price,
+                contract_period=int(contract_period)
+            )
+            
+            if rebate_amount is None:
+                return Response({
+                    'success': False,
+                    'message': '해당 조건에 대한 리베이트 정보가 설정되지 않았습니다.'
+                }, status=404)
+            
+            # 유심비 계산
+            sim_cost = 0
+            if sim_type == 'prepaid':
+                sim_cost = 7700  # 선불: 본사에서 지급
+            elif sim_type == 'postpaid':
+                sim_cost = -7700  # 후불: 본사에서 차감
+            
+            # 업체 타입에 따른 리베이트 계산
+            agency_rebate = float(rebate_amount) + sim_cost
+            retail_rebate = float(policy.rebate_retail)  # 판매점 리베이트는 정책에서
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'policy_id': policy_id,
+                    'policy_title': policy.title,
+                    'carrier': carrier,
+                    'plan_name': plan.plan_name,
+                    'plan_price': plan.plan_price,
+                    'contract_period': int(contract_period),
+                    'sim_type': sim_type,
+                    'sim_cost': sim_cost,
+                    'agency_rebate': agency_rebate,
+                    'retail_rebate': retail_rebate,
+                    'base_rebate_amount': float(rebate_amount)
+                }
+            })
+        
+        except Exception as e:
+            logger.error(f"리베이트 계산 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '리베이트 계산 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class PolicyFormTemplateView(APIView):
+    """정책별 주문서 템플릿 API"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, policy_id):
+        """정책의 주문서 템플릿 조회"""
+        try:
+            from .models import OrderFormTemplate
+            
+            policy = get_object_or_404(Policy, id=policy_id)
+            
+            # 주문서 템플릿 조회
+            try:
+                template = OrderFormTemplate.objects.get(policy=policy, is_active=True)
+                fields = template.fields.all().order_by('order')
+                
+                logger.info(f"주문서 템플릿 조회: {template.title}, 필드 개수: {fields.count()}")
+                
+                # 필드 데이터 직렬화
+                fields_data = []
+                for field in fields:
+                    field_data = {
+                        'id': str(field.id),
+                        'field_name': field.field_name,
+                        'field_label': field.field_label,
+                        'field_type': field.field_type,
+                        'is_required': field.is_required,
+                        'placeholder': field.placeholder,
+                        'help_text': field.help_text,
+                        'order': field.order,
+                        'field_options': field.field_options or field.get_default_options()
+                    }
+                    fields_data.append(field_data)
+                    logger.info(f"  필드: {field.field_label} ({field.field_type})")
+                
+                return Response({
+                    'success': True,
+                    'data': {
+                        'id': str(template.id),
+                        'title': template.title,
+                        'description': template.description,
+                        'fields': fields_data
+                    }
+                })
+                
+            except OrderFormTemplate.DoesNotExist:
+                logger.info(f"주문서 템플릿이 존재하지 않음: 정책 {policy.title}")
+                # 기본 템플릿 반환
+                default_fields = [
+                    # 고객 정보
+                    {
+                        'field_name': 'customer_name',
+                        'field_label': '고객명',
+                        'field_type': 'text',
+                        'is_required': True,
+                        'placeholder': '고객명을 입력하세요',
+                        'help_text': '고객의 이름을 입력하세요',
+                        'order': 1,
+                        'field_options': {}
+                    },
+                    {
+                        'field_name': 'birth_date',
+                        'field_label': '생년월일',
+                        'field_type': 'text',
+                        'is_required': True,
+                        'placeholder': '예: 901234',
+                        'help_text': '고객의 생년월일 6자리를 입력하세요',
+                        'order': 2,
+                        'field_options': {}
+                    },
+                    {
+                        'field_name': 'phone_number',
+                        'field_label': '개통번호',
+                        'field_type': 'phone',
+                        'is_required': True,
+                        'placeholder': '010-1234-5678',
+                        'help_text': '개통할 전화번호를 입력하세요',
+                        'order': 3,
+                        'field_options': {}
+                    },
+                    # 통신 정보
+                    {
+                        'field_name': 'carrier_plan',
+                        'field_label': '요금제',
+                        'field_type': 'carrier_plan',
+                        'is_required': True,
+                        'placeholder': '요금제를 선택하세요',
+                        'help_text': '통신사 요금제를 선택하세요',
+                        'order': 4,
+                        'field_options': {'dynamic': True, 'source': 'CarrierPlan'}
+                    },
+                    {
+                        'field_name': 'sim_type',
+                        'field_label': '유심 타입',
+                        'field_type': 'sim_type',
+                        'is_required': True,
+                        'placeholder': '유심 타입을 선택하세요',
+                        'help_text': '유심 타입에 따라 리베이트가 달라질 수 있습니다',
+                        'order': 5,
+                        'field_options': {}
+                    },
+                    {
+                        'field_name': 'contract_period',
+                        'field_label': '계약기간',
+                        'field_type': 'contract_period',
+                        'is_required': True,
+                        'placeholder': '계약기간을 선택하세요',
+                        'help_text': '계약기간에 따라 리베이트가 달라질 수 있습니다',
+                        'order': 6,
+                        'field_options': {}
+                    },
+                    {
+                        'field_name': 'installment_months',
+                        'field_label': '할부개월',
+                        'field_type': 'installment_months',
+                        'is_required': True,
+                        'placeholder': '할부개월을 선택하세요',
+                        'help_text': '단말기 할부 개월 수를 선택하세요',
+                        'order': 7,
+                        'field_options': {}
+                    }
+                ]
+                
+                return Response({
+                    'success': True,
+                    'data': {
+                        'id': None,
+                        'title': f'{policy.title} - 기본 주문서',
+                        'description': '기본 주문서 양식입니다.',
+                        'fields': default_fields
+                    }
+                })
+                
+        except Exception as e:
+            logger.error(f"주문서 템플릿 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '주문서 템플릿을 불러오는 중 오류가 발생했습니다.'
+            }, status=500)
+    
+    def post(self, request, policy_id):
+        """주문서 템플릿 생성/수정"""
+        try:
+            from .models import OrderFormTemplate, OrderFormField
+            
+            policy = get_object_or_404(Policy, id=policy_id)
+            data = request.data
+            
+            # 기존 템플릿 삭제 후 새로 생성
+            OrderFormTemplate.objects.filter(policy=policy).delete()
+            
+            # 새 템플릿 생성
+            template = OrderFormTemplate.objects.create(
+                policy=policy,
+                title=data.get('title', f'{policy.title} 주문서'),
+                description=data.get('description', ''),
+                created_by=request.user
+            )
+            
+            # 필드들 생성
+            fields_data = data.get('fields', [])
+            logger.info(f"주문서 템플릿 저장: {template.title}, 필드 개수: {len(fields_data)}")
+            
+            for field_data in fields_data:
+                field = OrderFormField.objects.create(
+                    template=template,
+                    field_name=field_data.get('field_name'),
+                    field_label=field_data.get('field_label'),
+                    field_type=field_data.get('field_type'),
+                    is_required=field_data.get('is_required', False),
+                    placeholder=field_data.get('placeholder', ''),
+                    help_text=field_data.get('help_text', ''),
+                    order=field_data.get('order', 0),
+                    field_options=field_data.get('field_options')
+                )
+                logger.info(f"  필드 생성: {field.field_label} ({field.field_type}) - ID: {field.id}")
+            
+            return Response({
+                'success': True,
+                'message': '주문서 템플릿이 저장되었습니다.',
+                'data': {
+                    'id': str(template.id),
+                    'title': template.title
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"주문서 템플릿 저장 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '주문서 템플릿 저장 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class PolicyRebateMatrixView(APIView):
+    """정책별 리베이트 매트릭스 API"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, policy_id):
+        """정책의 리베이트 매트릭스 조회"""
+        try:
+            from .models import RebateMatrix
+            
+            logger.info(f"리베이트 매트릭스 조회 요청 - 정책 ID: {policy_id}")
+            policy = get_object_or_404(Policy, id=policy_id)
+            logger.info(f"정책 찾음: {policy.title}")
+            
+            # 해당 정책의 리베이트 매트릭스 조회
+            matrix_queryset = RebateMatrix.objects.filter(policy=policy).order_by('plan_range', 'contract_period')
+            logger.info(f"리베이트 매트릭스 개수: {matrix_queryset.count()}")
+            
+            if not matrix_queryset.exists():
+                # 매트릭스가 없으면 빈 매트릭스 반환 (기본 9x2 구조)
+                logger.info("리베이트 매트릭스가 없음, 빈 매트릭스 반환")
+                return Response({
+                    'success': True,
+                    'data': {
+                        'policy_id': str(policy.id),
+                        'policy_title': policy.title,
+                        'matrix': []
+                    }
+                })
+            
+            # 매트릭스 데이터 직렬화
+            matrix_data = []
+            for matrix_item in matrix_queryset:
+                matrix_data.append({
+                    'id': str(matrix_item.id),
+                    'plan_range': matrix_item.plan_range,  # 숫자 값으로 전송
+                    'plan_range_display': matrix_item.get_plan_range_display(),  # 표시용
+                    'contract_period': matrix_item.contract_period,
+                    'rebate_amount': float(matrix_item.rebate_amount),
+                    'carrier': matrix_item.carrier,
+                    'row': list(dict(RebateMatrix.PLAN_RANGE_CHOICES).keys()).index(matrix_item.plan_range),
+                    'col': 0 if matrix_item.contract_period == 12 else 1  # 12개월=0, 24개월=1
+                })
+            
+            logger.info(f"리베이트 매트릭스 직렬화 완료: {len(matrix_data)}개 항목")
+            return Response({
+                'success': True,
+                'data': {
+                    'policy_id': str(policy.id),
+                    'policy_title': policy.title,
+                    'matrix': matrix_data
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"리베이트 매트릭스 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '리베이트 매트릭스를 불러오는 중 오류가 발생했습니다.'
+            }, status=500)
+    
+    def post(self, request, policy_id):
+        """리베이트 매트릭스 생성/수정"""
+        return self._save_matrix(request, policy_id)
+    
+    def put(self, request, policy_id):
+        """리베이트 매트릭스 수정 (POST와 동일)"""
+        return self._save_matrix(request, policy_id)
+    
+    def _save_matrix(self, request, policy_id):
+        """리베이트 매트릭스 저장 공통 로직"""
+        try:
+            from .models import RebateMatrix
+            
+            policy = get_object_or_404(Policy, id=policy_id)
+            data = request.data
+            
+            # 기존 매트릭스 삭제 후 새로 생성
+            RebateMatrix.objects.filter(policy=policy).delete()
+            
+            # 새 매트릭스 생성
+            matrix_data = data.get('matrix', [])
+            created_count = 0
+            
+            for item in matrix_data:
+                # plan_range 값 처리 (숫자 또는 문자열 모두 지원)
+                plan_range_raw = item.get('plan_range', 11000)
+                if isinstance(plan_range_raw, str):
+                    # 문자열인 경우 (예: "11K")
+                    plan_range_value = int(plan_range_raw.replace('K', '')) * 1000
+                else:
+                    # 숫자인 경우 (예: 11000)
+                    plan_range_value = int(plan_range_raw)
+                
+                rebate_amount = item.get('rebate_amount', 0)
+                contract_period = item.get('contract_period', 12)
+                
+                logger.info(f"매트릭스 항목 처리: plan_range={plan_range_value}, period={contract_period}, amount={rebate_amount}")
+                
+                # 0이 아닌 리베이트만 저장
+                if rebate_amount > 0:
+                    RebateMatrix.objects.create(
+                        policy=policy,
+                        carrier=policy.carrier,  # 정책의 통신사 사용
+                        plan_range=plan_range_value,
+                        contract_period=contract_period,
+                        rebate_amount=rebate_amount
+                    )
+                    created_count += 1
+            
+            logger.info(f"리베이트 매트릭스 저장 완료: 정책 {policy.title}, {created_count}개 항목")
+            
+            return Response({
+                'success': True,
+                'message': f'리베이트 매트릭스가 저장되었습니다. ({created_count}개 항목)',
+                'data': {
+                    'policy_id': str(policy.id),
+                    'matrix_count': created_count
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"리베이트 매트릭스 저장 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '리베이트 매트릭스 저장 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class AgencyRebateMatrixView(APIView):
+    """협력사 리베이트 설정 API"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, policy_id):
+        """협력사 리베이트 설정 조회 (본사 매트릭스 + 협력사 매트릭스)"""
+        try:
+            from .models import AgencyRebateMatrix, RebateMatrix
+            from companies.models import CompanyUser
+            
+            logger.info(f"협력사 리베이트 매트릭스 조회 요청 - 정책 ID: {policy_id}")
+            policy = get_object_or_404(Policy, id=policy_id)
+            logger.info(f"정책 찾음: {policy.title}")
+            
+            # 현재 사용자의 협력사 정보 확인
+            try:
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                agency = company_user.company
+                logger.info(f"협력사 정보: {agency.name} ({agency.type})")
+                
+                if agency.type != 'agency':
+                    return Response({
+                        'success': False,
+                        'message': '협력사만 접근 가능합니다.'
+                    }, status=403)
+            except CompanyUser.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': '업체 정보를 찾을 수 없습니다.'
+                }, status=400)
+            
+            # 1. 본사 리베이트 매트릭스 조회 (참고용)
+            hq_rebates = RebateMatrix.objects.filter(policy=policy).order_by('plan_range', 'contract_period')
+            logger.info(f"본사 리베이트 매트릭스 개수: {hq_rebates.count()}")
+            
+            hq_matrix_data = []
+            for rebate in hq_rebates:
+                hq_matrix_data.append({
+                    'id': f"hq-{rebate.id}",
+                    'plan_range': rebate.plan_range,  # 숫자 값
+                    'plan_range_display': rebate.get_plan_range_display(),  # 표시용
+                    'contract_period': rebate.contract_period,
+                    'rebate_amount': float(rebate.rebate_amount),
+                    'carrier': rebate.carrier,
+                    'row': list(dict(RebateMatrix.PLAN_RANGE_CHOICES).keys()).index(rebate.plan_range),
+                    'col': list(dict(RebateMatrix.CONTRACT_PERIOD_CHOICES).keys()).index(rebate.contract_period)
+                })
+            
+            # 2. 협력사 리베이트 매트릭스 조회 (편집용)
+            agency_rebates = AgencyRebateMatrix.objects.filter(
+                policy=policy,
+                agency=agency
+            ).order_by('plan_range', 'contract_period')
+            logger.info(f"협력사 리베이트 매트릭스 개수: {agency_rebates.count()}")
+            
+            agency_matrix_data = []
+            for rebate in agency_rebates:
+                agency_matrix_data.append({
+                    'id': f"agency-{rebate.id}",
+                    'plan_range': rebate.plan_range,  # 숫자 값
+                    'plan_range_display': rebate.get_plan_range_display(),  # 표시용
+                    'contract_period': rebate.contract_period,
+                    'rebate_amount': float(rebate.rebate_amount),
+                    'carrier': rebate.carrier,
+                    'row': list(dict(AgencyRebateMatrix.PLAN_RANGE_CHOICES).keys()).index(rebate.plan_range),
+                    'col': list(dict(AgencyRebateMatrix.CONTRACT_PERIOD_CHOICES).keys()).index(rebate.contract_period)
+                })
+            
+            logger.info(f"응답 데이터 준비 완료 - 본사: {len(hq_matrix_data)}개, 협력사: {len(agency_matrix_data)}개")
+            return Response({
+                'success': True,
+                'data': {
+                    'policy_id': str(policy.id),
+                    'policy_title': policy.title,
+                    'agency_id': str(agency.id),
+                    'agency_name': agency.name,
+                    'hq_matrix': hq_matrix_data,  # 본사 매트릭스 (참고용)
+                    'agency_matrix': agency_matrix_data  # 협력사 매트릭스 (편집용)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"협력사 리베이트 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '협력사 리베이트를 불러오는 중 오류가 발생했습니다.'
+            }, status=500)
+    
+    def post(self, request, policy_id):
+        """협력사 리베이트 설정 저장"""
+        try:
+            from .models import AgencyRebateMatrix
+            from companies.models import CompanyUser
+            
+            policy = get_object_or_404(Policy, id=policy_id)
+            data = request.data
+            
+            # 현재 사용자의 협력사 정보 확인
+            try:
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                agency = company_user.company
+                
+                if agency.type != 'agency':
+                    return Response({
+                        'success': False,
+                        'message': '협력사만 접근 가능합니다.'
+                    }, status=403)
+            except CompanyUser.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': '업체 정보를 찾을 수 없습니다.'
+                }, status=400)
+            
+            # 기존 협력사 리베이트 매트릭스 삭제 후 새로 생성
+            AgencyRebateMatrix.objects.filter(policy=policy, agency=agency).delete()
+            
+            # 새 협력사 리베이트 매트릭스 생성
+            matrix_data = data.get('matrix', [])
+            for item in matrix_data:
+                # plan_range 값 처리 (숫자 또는 문자열)
+                plan_range_raw = item.get('plan_range', 11000)
+                
+                if isinstance(plan_range_raw, str):
+                    # 문자열인 경우 (예: "11K")
+                    plan_range_value = int(plan_range_raw.replace('K', '')) * 1000
+                else:
+                    # 이미 숫자인 경우 (예: 11000)
+                    plan_range_value = int(plan_range_raw)
+                
+                AgencyRebateMatrix.objects.create(
+                    policy=policy,
+                    agency=agency,
+                    carrier=policy.carrier,
+                    plan_range=plan_range_value,
+                    contract_period=item.get('contract_period', 12),
+                    rebate_amount=item.get('rebate_amount', 0)
+                )
+            
+            return Response({
+                'success': True,
+                'message': '협력사 리베이트가 저장되었습니다.',
+                'data': {
+                    'policy_id': str(policy.id),
+                    'agency_id': str(agency.id),
+                    'matrix_count': len(matrix_data)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"협력사 리베이트 저장 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '협력사 리베이트 저장 중 오류가 발생했습니다.'
+            }, status=500)
+
+
+class RetailRebateView(APIView):
+    """판매점 리베이트 조회 API"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, policy_id):
+        """판매점이 협력사로부터 받을 수 있는 리베이트 조회"""
+        try:
+            from .models import AgencyRebateMatrix
+            from companies.models import CompanyUser
+            
+            logger.info(f"판매점 리베이트 조회 요청 - 정책 ID: {policy_id}")
+            policy = get_object_or_404(Policy, id=policy_id)
+            logger.info(f"정책 찾음: {policy.title}")
+            
+            # 현재 사용자의 판매점 정보 확인
+            try:
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                retail = company_user.company
+                logger.info(f"판매점 정보: {retail.name} ({retail.type})")
+                
+                if retail.type != 'retail':
+                    return Response({
+                        'success': False,
+                        'message': '판매점만 접근 가능합니다.'
+                    }, status=403)
+                
+                # 상위 협력사 확인
+                agency = retail.parent_company
+                if not agency or agency.type != 'agency':
+                    return Response({
+                        'success': False,
+                        'message': '상위 협력사 정보를 찾을 수 없습니다.'
+                    }, status=400)
+                
+                logger.info(f"상위 협력사: {agency.name}")
+                
+            except CompanyUser.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': '업체 정보를 찾을 수 없습니다.'
+                }, status=400)
+            
+            # 협력사가 설정한 리베이트 매트릭스 조회
+            agency_rebates = AgencyRebateMatrix.objects.filter(
+                policy=policy,
+                agency=agency
+            ).order_by('plan_range', 'contract_period')
+            
+            logger.info(f"협력사 리베이트 매트릭스 개수: {agency_rebates.count()}")
+            
+            if agency_rebates.count() == 0:
+                return Response({
+                    'success': True,
+                    'message': '협력사에서 설정한 리베이트가 없습니다.',
+                    'data': {
+                        'policy_id': str(policy.id),
+                        'policy_title': policy.title,
+                        'retail_id': str(retail.id),
+                        'retail_name': retail.name,
+                        'agency_id': str(agency.id),
+                        'agency_name': agency.name,
+                        'rebate_matrix': []
+                    }
+                })
+            
+            # 리베이트 매트릭스 데이터 구성
+            rebate_matrix_data = []
+            for rebate in agency_rebates:
+                rebate_matrix_data.append({
+                    'id': f"retail-{rebate.id}",
+                    'plan_range': rebate.plan_range,  # 숫자 값
+                    'plan_range_display': rebate.get_plan_range_display(),  # 표시용
+                    'contract_period': rebate.contract_period,
+                    'rebate_amount': float(rebate.rebate_amount),
+                    'carrier': rebate.carrier,
+                    'row': list(dict(AgencyRebateMatrix.PLAN_RANGE_CHOICES).keys()).index(rebate.plan_range),
+                    'col': list(dict(AgencyRebateMatrix.CONTRACT_PERIOD_CHOICES).keys()).index(rebate.contract_period)
+                })
+            
+            logger.info(f"응답 데이터 준비 완료 - 리베이트: {len(rebate_matrix_data)}개")
+            return Response({
+                'success': True,
+                'data': {
+                    'policy_id': str(policy.id),
+                    'policy_title': policy.title,
+                    'retail_id': str(retail.id),
+                    'retail_name': retail.name,
+                    'agency_id': str(agency.id),
+                    'agency_name': agency.name,
+                    'rebate_matrix': rebate_matrix_data
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"판매점 리베이트 조회 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '리베이트 정보를 불러오는 중 오류가 발생했습니다.'
+            }, status=500)

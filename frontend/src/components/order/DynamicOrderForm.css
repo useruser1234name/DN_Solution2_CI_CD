@@ -1,0 +1,290 @@
+/* 동적 주문서 폼 스타일 */
+.dynamic-order-form {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.dynamic-order-form.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.form-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.form-header .ant-card-body {
+  padding: 24px;
+}
+
+.form-header h3 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+}
+
+.order-form {
+  margin-bottom: 24px;
+}
+
+.form-section {
+  margin-bottom: 24px;
+  height: fit-content;
+}
+
+.form-section .ant-card-head {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px 8px 0 0;
+}
+
+.form-section .ant-card-head-title {
+  color: white;
+  font-weight: 600;
+}
+
+.form-section .ant-card-body {
+  padding: 20px;
+}
+
+/* 필드별 스타일 */
+.ant-form-item {
+  margin-bottom: 16px;
+}
+
+.ant-form-item-label > label {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.ant-form-item-label > label.ant-form-item-required::before {
+  color: #e74c3c;
+}
+
+/* 숫자 입력 필드 스타일 */
+.ant-input-number {
+  width: 100%;
+}
+
+/* 선택 필드 스타일 */
+.ant-select {
+  width: 100%;
+}
+
+.ant-select-selector {
+  border-radius: 6px;
+}
+
+/* 리베이트 섹션 */
+.rebate-section {
+  margin: 24px 0;
+  border: 2px solid #e8f5e9;
+  border-radius: 12px;
+}
+
+.rebate-section .ant-card-head {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  border-radius: 10px 10px 0 0;
+}
+
+.rebate-section .ant-card-head-title {
+  color: white;
+  font-weight: 600;
+}
+
+.rebate-item {
+  text-align: center;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.rebate-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 8px;
+  color: #2c3e50;
+}
+
+.rebate-amount.positive {
+  color: #27ae60;
+}
+
+.rebate-amount.negative {
+  color: #e74c3c;
+}
+
+.rebate-amount.final {
+  color: #2980b9;
+  font-size: 1.8rem;
+}
+
+/* 폼 액션 버튼 */
+.form-actions {
+  text-align: center;
+  padding: 24px 0;
+  border-top: 1px solid #e9ecef;
+}
+
+.form-actions .ant-btn {
+  min-width: 120px;
+  height: 40px;
+  font-weight: 500;
+}
+
+.form-actions .ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.form-actions .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+/* 필드 타입별 특별 스타일 */
+.ant-form-item-extra {
+  color: #7f8c8d;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* 필수 필드 강조 */
+.ant-form-item-required .ant-form-item-label > label::after {
+  content: ' *';
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+/* 에러 상태 스타일 */
+.ant-form-item-has-error .ant-input,
+.ant-form-item-has-error .ant-select-selector,
+.ant-form-item-has-error .ant-input-number {
+  border-color: #e74c3c;
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1);
+}
+
+/* 성공 상태 스타일 */
+.ant-form-item-has-success .ant-input,
+.ant-form-item-has-success .ant-select-selector,
+.ant-form-item-has-success .ant-input-number {
+  border-color: #27ae60;
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.1);
+}
+
+/* 로딩 상태 */
+.ant-select-loading .ant-select-arrow {
+  color: #3498db;
+}
+
+/* 비활성화 상태 */
+.ant-select-disabled .ant-select-selector {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .dynamic-order-form {
+    padding: 16px;
+  }
+  
+  .form-section {
+    margin-bottom: 16px;
+  }
+  
+  .form-section .ant-card-body {
+    padding: 16px;
+  }
+  
+  .rebate-item {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .rebate-amount {
+    font-size: 1.3rem;
+  }
+  
+  .rebate-amount.final {
+    font-size: 1.5rem;
+  }
+  
+  .form-actions .ant-btn {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dynamic-order-form {
+    padding: 12px;
+  }
+  
+  .form-header .ant-card-body {
+    padding: 16px;
+  }
+  
+  .form-header h3 {
+    font-size: 1.3rem;
+  }
+  
+  .rebate-amount {
+    font-size: 1.2rem;
+  }
+  
+  .rebate-amount.final {
+    font-size: 1.4rem;
+  }
+}
+
+/* 애니메이션 효과 */
+.form-section {
+  transition: all 0.3s ease;
+}
+
+.form-section:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.rebate-section {
+  animation: slideInUp 0.5s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 필드 그룹 구분선 */
+.ant-divider {
+  margin: 32px 0;
+  border-color: #e9ecef;
+}
+
+/* 도움말 텍스트 스타일 */
+.ant-form-item-explain {
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-top: 4px;
+}
+
+/* 플레이스홀더 스타일 */
+.ant-input::placeholder,
+.ant-select-selection-placeholder {
+  color: #adb5bd;
+  font-style: italic;
+}

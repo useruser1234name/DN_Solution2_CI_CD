@@ -1,0 +1,278 @@
+/* 협력사 리베이트 할당 페이지 스타일 */
+.agency-rebate-allocation {
+    padding: 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+    background-color: white !important;
+    color: black !important;
+}
+
+.agency-rebate-allocation * {
+    background-color: inherit !important;
+    color: inherit !important;
+}
+
+.agency-rebate-allocation .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.agency-rebate-allocation .header-content h1 {
+    margin: 0 0 10px 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: #2c3e50 !important;
+}
+
+.agency-rebate-allocation .header-content p {
+    margin: 0;
+    color: #6c757d !important;
+    font-size: 16px;
+}
+
+.agency-rebate-allocation .back-btn {
+    background: #6c757d !important;
+    color: white !important;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 20px;
+    transition: background-color 0.2s;
+}
+
+.agency-rebate-allocation .back-btn:hover {
+    background: #5a6268 !important;
+}
+
+.agency-rebate-allocation .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.agency-rebate-allocation .btn-primary {
+    background: #007bff !important;
+    color: white !important;
+}
+
+.agency-rebate-allocation .btn-primary:hover {
+    background: #0056b3 !important;
+}
+
+.agency-rebate-allocation .btn-primary:disabled {
+    background: #6c757d !important;
+    cursor: not-allowed;
+}
+
+/* 매트릭스 컨테이너 - 좌우 2개 카드 */
+.agency-rebate-allocation .matrix-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+/* 좌측 패널 - 본사 리베이트 */
+.agency-rebate-allocation .left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 우측 패널 - 협력사 리베이트 */
+.agency-rebate-allocation .right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 리베이트 매트릭스 카드 */
+.agency-rebate-allocation .rebate-matrix-card {
+    background: #f8f9fa !important;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.agency-rebate-allocation .rebate-matrix-card h3 {
+    margin: 0 0 20px 0;
+    color: #495057 !important;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* 매트릭스 테이블 */
+.agency-rebate-allocation .matrix-table {
+    overflow-x: auto;
+}
+
+.agency-rebate-allocation .matrix-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white !important;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.agency-rebate-allocation .matrix-table th,
+.agency-rebate-allocation .matrix-table td {
+    padding: 12px;
+    text-align: center;
+    border: 1px solid #dee2e6;
+    background: white !important;
+    color: black !important;
+}
+
+.agency-rebate-allocation .matrix-table th {
+    background: #007bff !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.agency-rebate-allocation .matrix-table .plan-range {
+    background: #f8f9fa !important;
+    font-weight: 600;
+    color: #495057 !important;
+}
+
+/* 읽기전용 금액 */
+.agency-rebate-allocation .readonly-amount {
+    font-weight: 600;
+    color: #28a745 !important;
+    font-size: 14px;
+}
+
+/* 입력 컨테이너 */
+.agency-rebate-allocation .input-container {
+    position: relative;
+}
+
+.agency-rebate-allocation .input-container input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+    background: white !important;
+    color: black !important;
+}
+
+.agency-rebate-allocation .input-container input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.agency-rebate-allocation .input-container input.error {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+}
+
+.agency-rebate-allocation .error-message {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #dc3545 !important;
+    color: white !important;
+    font-size: 11px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    z-index: 10;
+    margin-top: 2px;
+    text-align: left;
+}
+
+.agency-rebate-allocation .general-error {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+/* 정보 박스 */
+.agency-rebate-allocation .info-box {
+    background: #d1ecf1 !important;
+    border: 1px solid #bee5eb;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.agency-rebate-allocation .info-box p {
+    margin: 5px 0;
+    font-size: 13px;
+    color: #0c5460 !important;
+}
+
+.agency-rebate-allocation .info-box strong {
+    color: #0c5460 !important;
+}
+
+/* 수익 정보 박스 */
+.agency-rebate-allocation .profit-info {
+    background: #d4edda !important;
+    border: 1px solid #c3e6cb;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.agency-rebate-allocation .profit-info p {
+    margin: 5px 0;
+    font-size: 13px;
+    color: #155724 !important;
+}
+
+.agency-rebate-allocation .profit-info strong {
+    color: #155724 !important;
+}
+
+/* 로딩 상태 */
+.agency-rebate-allocation .loading {
+    text-align: center;
+    padding: 50px;
+    font-size: 16px;
+    color: #6c757d !important;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
+    .agency-rebate-allocation .matrix-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .agency-rebate-allocation .page-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .agency-rebate-allocation .matrix-table {
+        font-size: 12px;
+    }
+    
+    .agency-rebate-allocation .matrix-table th,
+    .agency-rebate-allocation .matrix-table td {
+        padding: 8px 4px;
+    }
+}

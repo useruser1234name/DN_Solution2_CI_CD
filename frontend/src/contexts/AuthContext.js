@@ -1,88 +1,252 @@
+/**
+ * 인증 컨텍스트
+ * 사용자 정보, 권한, 로그인/로그아웃 관리
+ */
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { post } from '../services/api';
+import { message } from 'antd';
+import { authAPI, handleAPIError } from '../services/api';
+import { getUserPermissions, getUserCompanyType } from '../utils/rolePermissions';
 
 const AuthContext = createContext();
 
 export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (!context) {
-        console.error('[AuthContext] useAuth must be used within an AuthProvider');
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth는 AuthProvider 내에서 사용되어야 합니다.');
+  }
+  return context;
 };
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
-    useEffect(() => {
-        console.log('[AuthContext] 초기화 시작');
-        const savedUser = localStorage.getItem('user');
-        if (savedUser) {
-            try {
-                const userData = JSON.parse(savedUser);
-                console.log('[AuthContext] 저장된 사용자 정보 로드:', userData);
-                setUser(userData);
-            } catch (error) {
-                console.error('[AuthContext] 저장된 사용자 정보 파싱 오류:', error);
-                localStorage.removeItem('user');
-            }
+  // 권한 매트릭스 (백엔드의 권한 시스템과 연동)
+  const PERMISSIONS = {
+    // 정책 관리 권한
+    'policy.create': ['headquarters_admin'],
+    'policy.edit': ['headquarters_admin'],
+    'policy.delete': ['headquarters_admin'],
+    'policy.view': ['headquarters_admin', 'agency_admin', 'retail_admin', 'agency_staff', 'retail_staff'],
+    'policy.assign': ['headquarters_admin'],
+    
+    // 업체 관리 권한
+    'company.create': ['headquarters_admin'],
+    'company.edit': ['headquarters_admin'],
+    'company.delete': ['headquarters_admin'],
+    'company.view': ['headquarters_admin', 'agency_admin', 'retail_admin'],
+    'company.approve_user': ['headquarters_admin', 'agency_admin'],
+    
+    // 주문 관리 권한
+    'order.create': ['agency_admin', 'retail_admin', 'agency_staff', 'retail_staff'],
+    'order.edit': ['agency_admin', 'retail_admin', 'agency_staff', 'retail_staff'],
+    'order.view': ['headquarters_admin', 'agency_admin', 'retail_admin', 'agency_staff', 'retail_staff'],
+    'order.approve': ['headquarters_admin', 'agency_admin'],
+    
+    // 정산 관리 권한
+    'settlement.view': ['headquarters_admin', 'agency_admin', 'retail_admin'],
+    'settlement.process': ['headquarters_admin'],
+    
+    // 대시보드 권한
+    'dashboard.view': ['headquarters_admin', 'agency_admin', 'retail_admin'],
+    'dashboard.stats': ['headquarters_admin'],
+    
+    // 리베이트 관리 권한
+    'rebate.view': ['headquarters_admin', 'agency_admin', 'retail_admin'],
+    'rebate.edit_base': ['headquarters_admin'],
+    'rebate.edit_custom': ['agency_admin'],
+  };
+
+  // 초기화
+  useEffect(() => {
+    initializeAuth();
+  }, []);
+
+  const initializeAuth = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const tokenInfo = await authAPI.getUserInfo();
+        
+        // 토큰 정보에서 사용자 정보 구성
+        if (tokenInfo.user && tokenInfo.is_valid) {
+          const userInfo = {
+            id: tokenInfo.user.id,
+            username: tokenInfo.user.username,
+            email: tokenInfo.user.email,
+            company: tokenInfo.company,
+            role: tokenInfo.role,
+            permissions: tokenInfo.permissions || []
+          };
+          
+          // rolePermissions.js와 일치시키기 위해 권한 재계산
+          const companyType = getUserCompanyType(userInfo);
+          const calculatedPermissions = getUserPermissions(companyType, userInfo.role);
+          userInfo.calculatedPermissions = calculatedPermissions;
+          userInfo.companyType = companyType;
+          
+          console.log('사용자 권한 정보:', {
+            username: userInfo.username,
+            company: userInfo.company,
+            companyType: companyType,
+            role: userInfo.role,
+            calculatedPermissions: calculatedPermissions
+          });
+          
+          setUser(userInfo);
         } else {
-            console.log('[AuthContext] 저장된 사용자 정보 없음');
+          throw new Error('유효하지 않은 토큰');
         }
-        setLoading(false);
-        console.log('[AuthContext] 초기화 완료');
-    }, []);
+      }
+    } catch (error) {
+      console.error('인증 초기화 오류:', error);
+      // 토큰이 유효하지 않은 경우 제거
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    } finally {
+      setLoading(false);
+      setInitialized(true);
+    }
+  };
 
-    const login = async (username, password) => {
-        console.log('[AuthContext] 로그인 시도:', { username, password: '***' });
-        try {
-            // JWT 토큰 발급 엔드포인트 호출
-            console.log('[AuthContext] JWT 로그인 API 호출');
-            const response = await post('auth/login/', {
-                username: username,
-                password: password
-            });
-            console.log('[AuthContext] JWT 응답:', response);
-            if (response.success && response.data.access) {
-                const userData = {
-                    username: username,
-                    token: response.data.access,
-                };
-                setUser(userData);
-                localStorage.setItem('user', JSON.stringify(userData));
-                localStorage.setItem('authToken', response.data.access);
-                return { success: true, message: '로그인 성공' };
-            } else {
-                return { success: false, message: '아이디 또는 비밀번호가 올바르지 않습니다.' };
-            }
-        } catch (error) {
-            console.error('[AuthContext] 로그인 중 오류:', error);
-            return { success: false, message: '로그인 중 오류가 발생했습니다.' };
-        }
-    };
+  // 로그인
+  const login = async (username, password) => {
+    try {
+      setLoading(true);
+      const response = await authAPI.login(username, password);
+      
+      // 토큰 저장
+      localStorage.setItem('access_token', response.access);
+      localStorage.setItem('refresh_token', response.refresh);
+      
+      // 사용자 정보 구성
+      const userInfo = {
+        id: response.user_id,
+        username: username,
+        company: response.company,
+        role: response.role,
+        permissions: getUserPermissions(response.company.type, response.role),
+      };
+      
+      // rolePermissions.js와 일치시키기 위해 권한 재계산
+      const companyType = getUserCompanyType(userInfo);
+      const calculatedPermissions = getUserPermissions(companyType, userInfo.role);
+      userInfo.calculatedPermissions = calculatedPermissions;
+      userInfo.companyType = companyType;
+      
+      console.log('로그인 후 사용자 권한 정보:', {
+        username: userInfo.username,
+        company: userInfo.company,
+        companyType: companyType,
+        role: userInfo.role,
+        calculatedPermissions: calculatedPermissions
+      });
+      
+      setUser(userInfo);
+      message.success('로그인되었습니다.');
+      
+      return { success: true, user: userInfo };
+      
+    } catch (error) {
+      console.error('로그인 오류:', error);
+      const errorMessage = handleAPIError(error);
+      message.error(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const logout = () => {
-        console.log('[AuthContext] 로그아웃 실행');
-        setUser(null);
-        localStorage.removeItem('user');
-        localStorage.removeItem('authToken');
-        console.log('[AuthContext] 로그아웃 완료');
-    };
+  // 로그아웃
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      console.error('로그아웃 API 오류:', error);
+    } finally {
+      setUser(null);
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      message.info('로그아웃되었습니다.');
+    }
+  };
 
-    const value = {
-        user,
-        login,
-        logout,
-        loading
-    };
+  // 사용자 권한 계산
+  const getUserPermissions = (companyType, userRole) => {
+    const roleKey = `${companyType}_${userRole}`;
+    const permissions = {};
+    
+    Object.keys(PERMISSIONS).forEach(permission => {
+      permissions[permission] = PERMISSIONS[permission].includes(roleKey);
+    });
+    
+    return permissions;
+  };
 
-    console.log('[AuthContext] 현재 상태:', { user: user?.username, loading });
+  // 권한 확인 함수 (rolePermissions.js와 동일한 로직 사용)
+  const hasPermission = (permission) => {
+    if (!user || !user.calculatedPermissions) {
+      return false;
+    }
+    return user.calculatedPermissions[permission] === true;
+  };
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
-}; 
+  // 업체 타입별 권한 확인 (rolePermissions.js와 동일한 로직 사용)
+  const isHeadquarters = () => user?.companyType === 'headquarters';
+  const isAgency = () => user?.companyType === 'agency';
+  const isRetail = () => user?.companyType === 'retail';
+
+  // 역할별 권한 확인
+  const isAdmin = () => user?.role === 'admin';
+  const isStaff = () => user?.role === 'staff';
+
+  // 복합 권한 확인 (rolePermissions.js와 일치)
+  const canManagePolicies = () => hasPermission('canManagePolicies');
+  const canManageCompanies = () => hasPermission('canManageAgencies') || hasPermission('canManageDealers');
+  const canViewDashboard = () => true; // 모든 사용자가 대시보드 접근 가능
+
+  // 사용자 정보 업데이트
+  const updateUser = (updates) => {
+    setUser(prev => ({ ...prev, ...updates }));
+  };
+
+  // 인증 상태 확인
+  const isAuthenticated = () => !!user;
+
+  const value = {
+    // 상태
+    user,
+    loading,
+    initialized,
+    
+    // 액션
+    login,
+    logout,
+    updateUser,
+    
+    // 권한 확인
+    hasPermission,
+    isHeadquarters,
+    isAgency,
+    isRetail,
+    isAdmin,
+    isStaff,
+    canManagePolicies,
+    canManageCompanies,
+    canViewDashboard,
+    isAuthenticated,
+    
+    // 유틸리티
+    getUserPermissions,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export default AuthContext;

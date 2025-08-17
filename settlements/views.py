@@ -5,6 +5,9 @@
 import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
+import io
+import xlsxwriter
+from django.http import HttpResponse
 
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
@@ -46,10 +49,10 @@ class SettlementViewSet(viewsets.ModelViewSet):
         company = user.companyuser.company
         
         # 회사 타입에 따른 필터링
-        if company.company_type == 'headquarters':
+        if company.type == 'headquarters':
             # 본사는 모든 정산 조회 가능
             return queryset
-        elif company.company_type == 'agency':
+        elif company.type == 'agency':
             # 협력사는 자신과 하위 판매점의 정산만 조회
             return queryset.filter(
                 Q(company=company) |
@@ -158,6 +161,123 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+    
+    @action(detail=False, methods=['get'])
+    def export_excel(self, request):
+        """정산 내역 엑셀 출력 (최대 3개월)"""
+        try:
+            # 날짜 파라미터 가져오기
+            start_date_str = request.query_params.get('start_date')
+            end_date_str = request.query_params.get('end_date')
+            
+            if not start_date_str or not end_date_str:
+                return Response(
+                    {'error': '시작일과 종료일을 입력해주세요.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {'error': '날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 최대 3개월 제한
+            if (end_date - start_date).days > 90:
+                return Response(
+                    {'error': '최대 3개월까지만 조회 가능합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 권한에 따른 정산 데이터 필터링
+            queryset = self.get_queryset().filter(
+                created_at__date__gte=start_date,
+                created_at__date__lte=end_date
+            ).select_related('order', 'company', 'order__policy')
+            
+            # 엑셀 파일 생성
+            output = io.BytesIO()
+            workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+            worksheet = workbook.add_worksheet('정산내역')
+            
+            # 스타일 정의
+            header_format = workbook.add_format({
+                'bold': True,
+                'bg_color': '#D7E4BC',
+                'border': 1,
+                'align': 'center'
+            })
+            
+            cell_format = workbook.add_format({
+                'border': 1,
+                'align': 'center'
+            })
+            
+            amount_format = workbook.add_format({
+                'border': 1,
+                'align': 'right',
+                'num_format': '#,##0'
+            })
+            
+            # 헤더 작성
+            headers = [
+                '정산일', '주문일', '업체명', '업체타입', '고객명', 
+                '정책명', '리베이트금액', '정산상태', '지급예정일', '메모'
+            ]
+            
+            for col, header in enumerate(headers):
+                worksheet.write(0, col, header, header_format)
+            
+            # 데이터 작성
+            for row, settlement in enumerate(queryset, start=1):
+                worksheet.write(row, 0, settlement.created_at.strftime('%Y-%m-%d'), cell_format)
+                worksheet.write(row, 1, settlement.order.created_at.strftime('%Y-%m-%d'), cell_format)
+                worksheet.write(row, 2, settlement.company.name, cell_format)
+                worksheet.write(row, 3, settlement.company.get_company_type_display(), cell_format)
+                worksheet.write(row, 4, settlement.order.customer_name, cell_format)
+                worksheet.write(row, 5, settlement.order.policy.title, cell_format)
+                worksheet.write(row, 6, float(settlement.rebate_amount), amount_format)
+                worksheet.write(row, 7, settlement.get_status_display(), cell_format)
+                worksheet.write(row, 8, settlement.rebate_due_date.strftime('%Y-%m-%d') if settlement.rebate_due_date else '', cell_format)
+                worksheet.write(row, 9, settlement.notes, cell_format)
+            
+            # 컬럼 너비 조정
+            worksheet.set_column('A:A', 12)  # 정산일
+            worksheet.set_column('B:B', 12)  # 주문일
+            worksheet.set_column('C:C', 20)  # 업체명
+            worksheet.set_column('D:D', 12)  # 업체타입
+            worksheet.set_column('E:E', 15)  # 고객명
+            worksheet.set_column('F:F', 25)  # 정책명
+            worksheet.set_column('G:G', 15)  # 리베이트금액
+            worksheet.set_column('H:H', 12)  # 정산상태
+            worksheet.set_column('I:I', 12)  # 지급예정일
+            worksheet.set_column('J:J', 30)  # 메모
+            
+            workbook.close()
+            output.seek(0)
+            
+            # HTTP 응답 생성
+            response = HttpResponse(
+                output.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            
+            filename = f'정산내역_{start_date_str}_{end_date_str}.xlsx'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            logger.info(f"정산 엑셀 출력: {request.user.username} - {start_date} ~ {end_date}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"정산 엑셀 출력 실패: {str(e)}")
+            return Response(
+                {'error': '엑셀 파일 생성 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SettlementBatchViewSet(viewsets.ModelViewSet):
@@ -190,7 +310,7 @@ class SettlementBatchViewSet(viewsets.ModelViewSet):
         
         if not user.is_superuser and hasattr(user, 'companyuser'):
             company = user.companyuser.company
-            if company.company_type != 'headquarters':
+            if company.type != 'headquarters':
                 return Response(
                     {'error': '본사만 배치를 관리할 수 있습니다.'},
                     status=status.HTTP_403_FORBIDDEN

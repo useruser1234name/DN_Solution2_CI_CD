@@ -11,16 +11,14 @@ const LoginPage = () => {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    console.log('[LoginPage] 컴포넌트 렌더링');
+
 
     // CSRF 토큰 관련 useEffect 제거
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log('[LoginPage] 로그인 폼 제출:', { username, password: '***' });
         
         if (!username || !password) {
-            console.log('[LoginPage] 입력값 검증 실패: 빈 필드');
             setError('아이디와 비밀번호를 모두 입력해주세요.');
             return;
         }
@@ -29,14 +27,11 @@ const LoginPage = () => {
         setError('');
 
         try {
-            console.log('[LoginPage] 로그인 함수 호출');
             const result = await login(username, password);
             
             if (result.success) {
-                console.log('[LoginPage] 로그인 성공, 대시보드로 이동');
                 navigate('/dashboard');
             } else {
-                console.log('[LoginPage] 로그인 실패:', result.message);
                 setError(result.message);
             }
         } catch (error) {
@@ -44,27 +39,25 @@ const LoginPage = () => {
             setError('로그인 중 오류가 발생했습니다.');
         } finally {
             setLoading(false);
-            console.log('[LoginPage] 로그인 처리 완료');
         }
     };
 
     const handleUsernameChange = (e) => {
-        const value = e.target.value;
-        console.log('[LoginPage] 사용자명 입력:', value);
-        setUsername(value);
+        setUsername(e.target.value);
     };
 
     const handlePasswordChange = (e) => {
-        const value = e.target.value;
-        console.log('[LoginPage] 비밀번호 입력:', value.length + '자');
-        setPassword(value);
+        setPassword(e.target.value);
     };
 
     return (
         <div className="login-container">
-            <div className="login-box">
-                <h1>DN_Solution</h1>
-                <form onSubmit={handleSubmit}>
+            <div className="login-card">
+                <div className="login-header">
+                    <h1>🏢 DN_Solution</h1>
+                    <p>통신업계 종합 관리 솔루션</p>
+                </div>
+                <form className="login-form" onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label htmlFor="username">아이디</label>
                         <input
@@ -89,17 +82,20 @@ const LoginPage = () => {
                     </div>
                     {error && (
                         <div className="error-message">
-                            {error}
+                            ❌ {error}
                         </div>
                     )}
-                    <button type="submit" disabled={loading}>
-                        {loading ? '로그인 중...' : '로그인'}
+                    <button 
+                        type="submit" 
+                        className="login-button"
+                        disabled={loading}
+                    >
+                        {loading ? '🔄 로그인 중...' : '🚀 로그인'}
                     </button>
                 </form>
-                <div className="login-info">
-                    <p>테스트 계정: admin / admin1234</p>
+                <div className="login-footer">
                     <div className="signup-link">
-                        <p>계정이 없으신가요? <a href="http://localhost:8001/api/companies/signup/" target="_blank" rel="noopener noreferrer">회원가입하기</a></p>
+                        <p>계정이 없으신가요? <a href="/signup">회원가입하기</a></p>
                     </div>
                 </div>
             </div>

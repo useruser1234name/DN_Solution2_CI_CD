@@ -151,6 +151,12 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+*_test.py
+*_test_data.py
+setup_*.py
+create_*.py
+debug_*.py
+test_*.py
 
 # Logs
 logs/

@@ -1,39 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { get, post } from '../services/api';
+import { getCompanyTypeLabel } from '../utils/companyUtils';
 import './UserListPage.css';
 
 const UserListPage = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    // 계층구조만 사용하므로 viewMode 제거
     const navigate = useNavigate();
 
-    console.log('[UserListPage] 컴포넌트 렌더링');
+
 
     useEffect(() => {
         fetchUsers();
     }, []);
 
     const fetchUsers = async () => {
-        console.log('[UserListPage] 사용자 목록 조회 시작');
+
         setLoading(true);
         setError(null);
 
         try {
-            const response = await get('companies/users/');
-            console.log('[UserListPage] 사용자 목록 응답:', response);
-
+            const response = await get('api/companies/users/');
             if (response.success) {
                 setUsers(response.data.results || []);
-                console.log('[UserListPage] 사용자 목록 설정 완료:', response.data.results?.length);
             } else {
                 setError(response.error || '사용자 목록을 불러오는데 실패했습니다.');
-                console.error('[UserListPage] 사용자 목록 조회 실패:', response.error);
+
             }
         } catch (error) {
             setError('네트워크 오류가 발생했습니다.');
-            console.error('[UserListPage] 사용자 목록 조회 중 오류:', error);
+
         } finally {
             setLoading(false);
         }
@@ -58,11 +57,10 @@ const UserListPage = () => {
     };
 
     const handleApproveUser = async (userId) => {
-        console.log('[UserListPage] 사용자 승인:', userId);
         
         try {
             const response = await post(`companies/users/${userId}/approval/`, { action: 'approve' });
-            console.log('[UserListPage] 사용자 승인 응답:', response);
+
 
             if (response.success) {
                 alert('사용자가 승인되었습니다.');
@@ -78,7 +76,6 @@ const UserListPage = () => {
     };
 
     const handleRejectUser = async (userId) => {
-        console.log('[UserListPage] 사용자 거부:', userId);
         
         if (!window.confirm('정말로 이 사용자를 거부하시겠습니까?')) {
             return;
@@ -86,7 +83,7 @@ const UserListPage = () => {
         
         try {
             const response = await post(`companies/users/${userId}/approval/`, { action: 'reject' });
-            console.log('[UserListPage] 사용자 거부 응답:', response);
+
 
             if (response.success) {
                 alert('사용자가 거부되었습니다.');
@@ -102,9 +99,38 @@ const UserListPage = () => {
     };
 
     const handleAddUser = () => {
-        console.log('[UserListPage] 새 사용자 등록 버튼 클릭');
         navigate('/users/create');
     };
+
+    const handleEditUser = (userId) => {
+
+        navigate(`/users/${userId}/edit`);
+    };
+
+    const handleDeleteUser = async (userId) => {
+        
+        if (!window.confirm('정말로 이 사용자를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+            return;
+        }
+        
+        try {
+            const response = await post(`companies/users/${userId}/delete/`);
+
+
+            if (response.success) {
+                alert('사용자가 삭제되었습니다.');
+                fetchUsers(); // 목록 새로고침
+            } else {
+                alert(response.error || '사용자 삭제에 실패했습니다.');
+                console.error('[UserListPage] 사용자 삭제 실패:', response.error);
+            }
+        } catch (error) {
+            alert('네트워크 오류가 발생했습니다.');
+
+        }
+    };
+
+    // getCompanyTypeLabel은 utils에서 import
 
     if (loading) {
         return (
@@ -131,7 +157,10 @@ const UserListPage = () => {
     return (
         <div className="user-list-page">
             <div className="page-header">
-                <h1>👥 사용자 목록</h1>
+                <div className="header-content">
+                    <h1>👥 사용자 목록</h1>
+                    <p>조직별 계층 구조로 사용자를 관리합니다.</p>
+                </div>
                 <button className="add-btn" onClick={handleAddUser}>
                     ➕ 새 사용자 등록
                 </button>
@@ -158,6 +187,7 @@ const UserListPage = () => {
                         <tr>
                             <th>사용자명</th>
                             <th>회사</th>
+                            <th>회사타입</th>
                             <th>역할</th>
                             <th>상태</th>
                             <th>마지막 로그인</th>
@@ -169,7 +199,16 @@ const UserListPage = () => {
                             <tr key={user.id}>
                                 <td>{user.username}</td>
                                 <td>{user.company_name}</td>
-                                <td>{getRoleDisplay(user.role)}</td>
+                                <td>
+                                    <span className={`company-type-badge ${user.company_type}`}>
+                                        {getCompanyTypeLabel(user.company_type)}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span className={`role-badge ${user.role}`}>
+                                        {getRoleDisplay(user.role)}
+                                    </span>
+                                </td>
                                 <td>
                                     <span className={`status-badge ${user.status}`}>
                                         {getStatusDisplay(user.status)}
@@ -177,24 +216,36 @@ const UserListPage = () => {
                                 </td>
                                 <td>{user.last_login ? new Date(user.last_login).toLocaleDateString() : '-'}</td>
                                 <td>
-                                    {user.status === 'pending' && (
-                                        <>
-                                            <button 
-                                                className="action-btn approve"
-                                                onClick={() => handleApproveUser(user.id)}
-                                            >
-                                                승인
-                                            </button>
-                                            <button 
-                                                className="action-btn reject"
-                                                onClick={() => handleRejectUser(user.id)}
-                                            >
-                                                거부
-                                            </button>
-                                        </>
-                                    )}
-                                    <button className="action-btn edit">수정</button>
-                                    <button className="action-btn delete">삭제</button>
+                                    <div className="user-actions">
+                                        {user.status === 'pending' && (
+                                            <>
+                                                <button 
+                                                    className="action-btn approve"
+                                                    onClick={() => handleApproveUser(user.id)}
+                                                >
+                                                    승인
+                                                </button>
+                                                <button 
+                                                    className="action-btn reject"
+                                                    onClick={() => handleRejectUser(user.id)}
+                                                >
+                                                    거부
+                                                </button>
+                                            </>
+                                        )}
+                                        <button 
+                                            className="action-btn edit"
+                                            onClick={() => handleEditUser(user.id)}
+                                        >
+                                            수정
+                                        </button>
+                                        <button 
+                                            className="action-btn delete"
+                                            onClick={() => handleDeleteUser(user.id)}
+                                        >
+                                            삭제
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}

@@ -34,7 +34,7 @@ const CompanyCreatePage = () => {
         setError(null);
 
         try {
-            const response = await post('companies/', formData);
+            const response = await post('api/companies/', formData);
             console.log('[CompanyCreatePage] 업체 등록 응답:', response);
 
             if (response.success) {

@@ -13,6 +13,7 @@ from django.db import models
 from django.http import JsonResponse
 from django.utils import timezone
 from django.core.cache import cache
+from dn_solution.cache_manager import cache_manager, CacheManager
 
 logger = logging.getLogger(__name__)
 
