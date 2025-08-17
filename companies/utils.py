@@ -41,14 +41,28 @@ def get_accessible_company_ids(user):
     company = company_user.company
 
     if company.is_headquarters:
-        # 본사는 모든 하위 업체 접근 가능 (자기 자신 + 1, 2단계 하위)
-        return Company.objects.filter(
-            models.Q(id=company.id) |
-            models.Q(parent_company=company) |
-            models.Q(parent_company__parent_company=company)
-        ).values_list('id', flat=True)
+        # 본사는 자기 자신 + 직접 하위 협력사들 + 그 하위 판매점들만 접근 가능
+        def get_all_descendants(parent_company):
+            """재귀적으로 모든 하위 업체 ID를 가져오는 함수"""
+            descendants = []
+            direct_children = Company.objects.filter(parent_company=parent_company)
+            for child in direct_children:
+                descendants.append(child.id)
+                descendants.extend(get_all_descendants(child))
+            return descendants
+        
+        # 자기 자신 + 모든 하위 업체들
+        accessible_ids = [company.id]
+        accessible_ids.extend(get_all_descendants(company))
+        return accessible_ids
     elif company.is_agency:
-        # 협력사는 자기 자신 + 하위(판매점)만
+        # 협력사는 자기 자신 + 하위 판매점들만 접근 가능
+        return Company.objects.filter(
+            models.Q(id=company.id) |                    # 자기 자신
+            models.Q(parent_company=company)             # 하위 판매점들만
+        ).values_list('id', flat=True)
+    elif company.is_dealer:
+        # 대리점은 자기 자신 + 하위(판매점) 접근 가능
         return Company.objects.filter(
             models.Q(id=company.id) |
             models.Q(parent_company=company)

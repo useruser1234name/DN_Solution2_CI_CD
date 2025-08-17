@@ -1,0 +1,244 @@
+/* 정책 관리 페이지 스타일 */
+
+.policy-management-page {
+  padding: 24px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.policy-management-page .searchable-table {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* 액션 버튼 스타일 */
+.policy-management-page .action-buttons {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.policy-management-page .action-buttons .ant-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.policy-management-page .action-buttons .ant-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.policy-management-page .action-buttons .ant-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 상태 태그 스타일 */
+.policy-management-page .ant-tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* 배지 스타일 */
+.policy-management-page .ant-badge {
+  font-size: 12px;
+}
+
+.policy-management-page .ant-badge .ant-badge-count {
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+/* 정책 제목 스타일 */
+.policy-management-page .policy-title {
+  font-weight: 500;
+  color: #262626;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.policy-management-page .policy-description {
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 1.3;
+}
+
+/* 테이블 행 호버 효과 */
+.policy-management-page .ant-table-tbody > tr:hover > td {
+  background: #f8f9fa !important;
+}
+
+.policy-management-page .ant-table-tbody > tr:hover .action-buttons .ant-btn {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+/* 권한별 버튼 색상 */
+.policy-management-page .action-buttons .ant-btn.view-btn {
+  color: #1890ff;
+}
+
+.policy-management-page .action-buttons .ant-btn.view-btn:hover {
+  background: rgba(24, 144, 255, 0.1);
+  border-color: #1890ff;
+}
+
+.policy-management-page .action-buttons .ant-btn.edit-btn {
+  color: #52c41a;
+}
+
+.policy-management-page .action-buttons .ant-btn.edit-btn:hover {
+  background: rgba(82, 196, 26, 0.1);
+  border-color: #52c41a;
+}
+
+.policy-management-page .action-buttons .ant-btn.assign-btn {
+  color: #722ed1;
+}
+
+.policy-management-page .action-buttons .ant-btn.assign-btn:hover {
+  background: rgba(114, 46, 209, 0.1);
+  border-color: #722ed1;
+}
+
+.policy-management-page .action-buttons .ant-btn.form-btn {
+  color: #fa8c16;
+}
+
+.policy-management-page .action-buttons .ant-btn.form-btn:hover {
+  background: rgba(250, 140, 22, 0.1);
+  border-color: #fa8c16;
+}
+
+.policy-management-page .action-buttons .ant-btn.rebate-btn {
+  color: #13c2c2;
+}
+
+.policy-management-page .action-buttons .ant-btn.rebate-btn:hover {
+  background: rgba(19, 194, 194, 0.1);
+  border-color: #13c2c2;
+}
+
+.policy-management-page .action-buttons .ant-btn.delete-btn {
+  color: #ff4d4f;
+}
+
+.policy-management-page .action-buttons .ant-btn.delete-btn:hover {
+  background: rgba(255, 77, 79, 0.1);
+  border-color: #ff4d4f;
+}
+
+/* 빈 상태 스타일 */
+.policy-management-page .ant-empty {
+  padding: 60px 20px;
+}
+
+.policy-management-page .ant-empty-description {
+  color: #8c8c8c;
+  font-size: 14px;
+}
+
+/* 로딩 상태 */
+.policy-management-page .ant-table-tbody > tr.ant-table-placeholder > td {
+  border-bottom: none;
+}
+
+.policy-management-page .ant-spin-container {
+  min-height: 400px;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 1200px) {
+  .policy-management-page {
+    padding: 16px;
+  }
+  
+  .policy-management-page .action-buttons {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .policy-management-page .action-buttons .ant-btn {
+    width: 100%;
+    height: 32px;
+    justify-content: flex-start;
+    padding: 0 8px;
+  }
+  
+  .policy-management-page .action-buttons .ant-btn .anticon {
+    margin-right: 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  .policy-management-page {
+    padding: 12px;
+  }
+  
+  .policy-management-page .searchable-table .ant-table {
+    font-size: 12px;
+  }
+  
+  .policy-management-page .policy-title {
+    font-size: 13px;
+  }
+  
+  .policy-management-page .policy-description {
+    font-size: 11px;
+  }
+  
+  .policy-management-page .ant-tag {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+}
+
+/* 다크 모드 지원 (선택사항) */
+@media (prefers-color-scheme: dark) {
+  .policy-management-page {
+    background: #141414;
+  }
+  
+  .policy-management-page .searchable-table {
+    background: #1f1f1f;
+    border: 1px solid #303030;
+  }
+  
+  .policy-management-page .policy-description {
+    color: #a6a6a6;
+  }
+}
+
+/* 인쇄 스타일 */
+@media print {
+  .policy-management-page {
+    background: white;
+    padding: 0;
+  }
+  
+  .policy-management-page .action-buttons {
+    display: none;
+  }
+  
+  .policy-management-page .table-header {
+    display: none;
+  }
+  
+  .policy-management-page .ant-pagination {
+    display: none;
+  }
+}
+

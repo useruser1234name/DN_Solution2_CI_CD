@@ -16,7 +16,8 @@ from django.utils import timezone
 from .models import Order, OrderMemo, Invoice, OrderRequest
 from .serializers import (
     OrderSerializer, OrderMemoSerializer, InvoiceSerializer,
-    OrderStatusUpdateSerializer, OrderBulkStatusUpdateSerializer
+    OrderStatusUpdateSerializer, OrderBulkStatusUpdateSerializer,
+    OrderBulkDeleteSerializer
 )
 
 logger = logging.getLogger('orders')
@@ -36,7 +37,20 @@ class OrderViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """사용자 권한에 따른 쿼리셋 필터링"""
-        return get_visible_orders(self.request.user)
+        queryset = get_visible_orders(self.request.user)
+        # N+1 쿼리 방지를 위한 select_related/prefetch_related 추가
+        queryset = queryset.select_related(
+            'policy',
+            'policy__created_by',
+            'company',
+            'company__parent_company',
+            'created_by'
+        ).prefetch_related(
+            'memos',
+            'memos__created_by',
+            'sensitive_data'
+        )
+        return queryset
     
     def perform_create(self, serializer):
         """주문 생성 시 생성자 정보 추가"""
@@ -134,6 +148,131 @@ class OrderViewSet(viewsets.ModelViewSet):
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """주문 승인 (본사만 가능)"""
+        order = self.get_object()
+        
+        try:
+            # 권한 확인 - 본사만 승인 가능
+            if not request.user.is_superuser:
+                try:
+                    from companies.models import CompanyUser
+                    company_user = CompanyUser.objects.get(django_user=request.user)
+                    if company_user.company.type != 'headquarters':
+                        return Response({
+                            'success': False,
+                            'message': '본사 관리자만 주문을 승인할 수 있습니다.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except CompanyUser.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'message': '업체 정보를 찾을 수 없습니다.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            
+            # 주문 승인
+            order.approve(request.user)
+            
+            # 승인 메모 추가
+            memo_text = request.data.get('memo', '주문이 승인되었습니다.')
+            OrderMemo.objects.create(
+                order=order,
+                memo=f"[승인] {memo_text}",
+                created_by=request.user
+            )
+            
+            return Response({
+                'success': True,
+                'message': '주문이 승인되었습니다.',
+                'status': order.status
+            })
+            
+        except Exception as e:
+            logger.error(f"주문 승인 실패: {str(e)} - 주문: {order.customer_name}")
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """주문 반려 (본사만 가능)"""
+        order = self.get_object()
+        
+        try:
+            # 권한 확인 - 본사만 반려 가능
+            if not request.user.is_superuser:
+                try:
+                    from companies.models import CompanyUser
+                    company_user = CompanyUser.objects.get(django_user=request.user)
+                    if company_user.company.type != 'headquarters':
+                        return Response({
+                            'success': False,
+                            'message': '본사 관리자만 주문을 반려할 수 있습니다.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except CompanyUser.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'message': '업체 정보를 찾을 수 없습니다.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            
+            # 대기 중인 주문만 반려 가능
+            if order.status != 'pending':
+                return Response({
+                    'success': False,
+                    'message': '대기 중인 주문만 반려할 수 있습니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 주문 반려 (취소 상태로 변경)
+            order.update_status('cancelled', request.user)
+            
+            # 반려 메모 추가
+            memo_text = request.data.get('memo', '주문이 반려되었습니다.')
+            OrderMemo.objects.create(
+                order=order,
+                memo=f"[반려] {memo_text}",
+                created_by=request.user
+            )
+            
+            return Response({
+                'success': True,
+                'message': '주문이 반려되었습니다.',
+                'status': order.status
+            })
+            
+        except Exception as e:
+            logger.error(f"주문 반려 실패: {str(e)} - 주문: {order.customer_name}")
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """주문 통계 조회"""
+        from django.db.models import Count, Q
+        
+        queryset = self.get_queryset()
+        
+        # 상태별 통계
+        stats = queryset.aggregate(
+            total=Count('id'),
+            pending=Count('id', filter=Q(status='pending')),
+            approved=Count('id', filter=Q(status='approved')),
+            processing=Count('id', filter=Q(status='processing')),
+            shipped=Count('id', filter=Q(status='shipped')),
+            completed=Count('id', filter=Q(status='completed')),
+            cancelled=Count('id', filter=Q(status='cancelled')),
+        )
+        
+        # 반려는 취소된 것으로 간주
+        stats['rejected'] = stats['cancelled']
+        
+        return Response({
+            'success': True,
+            'data': stats
+        })
 
 
 class OrderMemoViewSet(viewsets.ModelViewSet):

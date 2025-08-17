@@ -1,0 +1,79 @@
+.admin-settings-page {
+  padding: 24px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  margin-bottom: 24px;
+  padding: 24px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.page-header h2 {
+  margin-bottom: 8px;
+  color: #1890ff;
+}
+
+.settings-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.settings-card {
+  border: none;
+  box-shadow: none;
+}
+
+.settings-card .ant-card-head {
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.settings-card .ant-card-head-title {
+  color: #1890ff;
+  font-weight: 600;
+}
+
+.card-description {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ant-tabs-card > .ant-tabs-content {
+  padding: 0;
+}
+
+.ant-tabs-card .ant-tabs-tab {
+  background: #fafafa;
+  border-color: #d9d9d9;
+  color: #666;
+  font-weight: 500;
+}
+
+.ant-tabs-card .ant-tabs-tab-active {
+  background: white;
+  color: #1890ff;
+  border-bottom-color: white;
+}
+
+.ant-tabs-card .ant-tabs-content-holder {
+  background: white;
+  padding: 24px;
+}
+
+.ant-tabs-large .ant-tabs-tab {
+  padding: 16px 24px;
+  font-size: 16px;
+}
+
+.ant-tabs-large .ant-tabs-tab .anticon {
+  margin-right: 8px;
+}
+

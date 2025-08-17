@@ -1,0 +1,432 @@
+/* 주문 승인 모달 스타일 */
+
+.order-approval-modal .ant-modal-body {
+  padding: 0;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.order-approval-modal .modal-title {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+}
+
+/* 승인 콘텐츠 */
+.approval-content {
+  padding: 20px;
+}
+
+/* 상태 카드 */
+.status-card .ant-card-body {
+  padding: 20px;
+}
+
+.status-card .ant-steps {
+  margin: 0;
+}
+
+.status-card .ant-steps-item-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-card .ant-steps-item-description {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.status-card .ant-steps-item-icon {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  font-size: 14px;
+}
+
+/* 주문 정보 카드 */
+.approval-content .ant-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.approval-content .ant-card-head {
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 16px;
+}
+
+.approval-content .ant-card-head-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.approval-content .ant-card-body {
+  padding: 16px;
+}
+
+/* 설명 목록 */
+.approval-content .ant-descriptions {
+  margin-bottom: 0;
+}
+
+.approval-content .ant-descriptions-item-label {
+  font-weight: 500;
+  color: #262626;
+  font-size: 13px;
+  width: 100px;
+}
+
+.approval-content .ant-descriptions-item-content {
+  color: #595959;
+  font-size: 13px;
+}
+
+.approval-content .ant-descriptions-item-content code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+/* 태그 스타일 */
+.approval-content .ant-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* 타임라인 */
+.approval-content .ant-timeline {
+  margin-top: 8px;
+}
+
+.approval-content .ant-timeline-item {
+  padding-bottom: 16px;
+}
+
+.approval-content .ant-timeline-item-content {
+  margin-left: 20px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.approval-content .ant-timeline-item-content .ant-typography {
+  font-size: 13px;
+}
+
+/* 알림 */
+.approval-content .ant-alert {
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.approval-content .ant-alert-info {
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  border-left: 4px solid #1890ff;
+}
+
+/* 텍스트 영역 */
+.approval-content .ant-input {
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.approval-content .ant-input:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+/* 메모 영역 */
+.approval-content .ant-typography-paragraph {
+  margin-bottom: 8px;
+}
+
+/* 푸터 버튼 */
+.order-approval-modal .ant-modal-footer {
+  padding: 12px 20px;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+.order-approval-modal .ant-modal-footer .ant-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-weight: 500;
+  border-radius: 6px;
+  margin-left: 8px;
+}
+
+.order-approval-modal .ant-modal-footer .ant-btn:first-child {
+  margin-left: 0;
+}
+
+.order-approval-modal .ant-modal-footer .ant-btn-primary {
+  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+  border: none;
+}
+
+.order-approval-modal .ant-modal-footer .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #389e0d 0%, #237804 100%);
+  box-shadow: 0 2px 4px rgba(82, 196, 26, 0.3);
+}
+
+.order-approval-modal .ant-modal-footer .ant-btn-dangerous {
+  border-color: #ff4d4f;
+  color: #ff4d4f;
+}
+
+.order-approval-modal .ant-modal-footer .ant-btn-dangerous:hover {
+  background: #ff4d4f;
+  color: white;
+  box-shadow: 0 2px 4px rgba(255, 77, 79, 0.3);
+}
+
+/* Popconfirm 내부 스타일 */
+.ant-popconfirm .ant-popconfirm-inner-content {
+  padding: 12px;
+}
+
+.ant-popconfirm .ant-input {
+  margin-top: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.ant-popconfirm .ant-popconfirm-buttons {
+  margin-top: 8px;
+}
+
+.ant-popconfirm .ant-btn {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 1200px) {
+  .order-approval-modal .ant-modal-content {
+    margin: 16px;
+    max-width: calc(100vw - 32px);
+  }
+  
+  .approval-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .order-approval-modal .ant-modal-content {
+    margin: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  
+  .approval-content {
+    padding: 12px;
+  }
+  
+  .approval-content .ant-card-body {
+    padding: 12px;
+  }
+  
+  .approval-content .ant-descriptions-item-label {
+    width: 80px;
+    font-size: 12px;
+  }
+  
+  .approval-content .ant-descriptions-item-content {
+    font-size: 12px;
+  }
+  
+  .status-card .ant-steps {
+    flex-direction: column;
+  }
+  
+  .status-card .ant-steps-item {
+    padding-left: 0;
+    margin-bottom: 8px;
+  }
+  
+  .status-card .ant-steps-item-title {
+    font-size: 12px;
+  }
+  
+  .status-card .ant-steps-item-description {
+    font-size: 11px;
+  }
+  
+  .approval-content .ant-timeline-item-content {
+    margin-left: 16px;
+    font-size: 12px;
+  }
+  
+  .order-approval-modal .ant-modal-footer {
+    padding: 8px 12px;
+  }
+  
+  .order-approval-modal .ant-modal-footer .ant-btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 576px) {
+  .approval-content .ant-col {
+    margin-bottom: 12px;
+  }
+  
+  .status-card .ant-steps-item-icon {
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    font-size: 12px;
+  }
+  
+  .order-approval-modal .ant-modal-footer {
+    text-align: center;
+  }
+  
+  .order-approval-modal .ant-modal-footer .ant-btn {
+    width: 100%;
+    margin: 4px 0;
+  }
+  
+  .order-approval-modal .ant-modal-footer .ant-btn:first-child {
+    margin-top: 0;
+  }
+  
+  .order-approval-modal .ant-modal-footer .ant-btn:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* 스크롤바 스타일 */
+.order-approval-modal .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.order-approval-modal .ant-modal-body::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 3px;
+}
+
+.order-approval-modal .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+.order-approval-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 애니메이션 */
+@keyframes approvalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.approval-content .ant-card {
+  animation: approvalSlideIn 0.3s ease-out;
+}
+
+.approval-content .ant-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.approval-content .ant-card:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+/* 로딩 상태 */
+.order-approval-modal.loading .approval-content {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* 접근성 개선 */
+.order-approval-modal .ant-btn:focus {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.order-approval-modal .ant-input:focus {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+/* 다크 모드 준비 */
+@media (prefers-color-scheme: dark) {
+  .approval-content .ant-card {
+    background: #1f1f1f;
+    border-color: #434343;
+  }
+  
+  .approval-content .ant-card-head {
+    background: #262626;
+    border-bottom-color: #434343;
+  }
+  
+  .approval-content .ant-card-head-title {
+    color: #ffffff;
+  }
+  
+  .approval-content .ant-descriptions-item-label {
+    color: #ffffff;
+  }
+  
+  .approval-content .ant-descriptions-item-content {
+    color: #d9d9d9;
+  }
+  
+  .approval-content .ant-descriptions-item-content code {
+    background: #262626;
+    color: #ffffff;
+  }
+  
+  .order-approval-modal .ant-modal-footer {
+    background: #262626;
+    border-top-color: #434343;
+  }
+}
+
+/* 인쇄 스타일 */
+@media print {
+  .order-approval-modal .ant-modal-footer,
+  .approval-content .ant-card:last-child {
+    display: none !important;
+  }
+  
+  .approval-content {
+    padding: 0 !important;
+  }
+  
+  .approval-content .ant-card {
+    box-shadow: none !important;
+    border: 1px solid #e8e8e8 !important;
+    page-break-inside: avoid;
+    margin-bottom: 16px !important;
+  }
+  
+  .status-card .ant-steps {
+    page-break-inside: avoid;
+  }
+  
+  .order-approval-modal .ant-modal-body {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+

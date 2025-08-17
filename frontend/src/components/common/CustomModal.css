@@ -1,0 +1,88 @@
+/* 커스텀 모달 스타일 */
+
+.custom-modal .ant-modal-content {
+  border-radius: 8px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 
+              0 3px 6px -4px rgba(0, 0, 0, 0.12), 
+              0 9px 28px 8px rgba(0, 0, 0, 0.05);
+}
+
+.custom-modal .ant-modal-header {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 24px;
+  background: #fafafa;
+  border-radius: 8px 8px 0 0;
+}
+
+.custom-modal .ant-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.custom-modal .ant-modal-body {
+  padding: 24px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.custom-modal .ant-modal-footer {
+  border-top: 1px solid #f0f0f0;
+  padding: 12px 24px;
+  text-align: right;
+  background: #fafafa;
+  border-radius: 0 0 8px 8px;
+}
+
+.custom-modal .ant-modal-footer .ant-btn {
+  margin-left: 8px;
+}
+
+.custom-modal .ant-modal-footer .ant-btn:first-child {
+  margin-left: 0;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .custom-modal .ant-modal-content {
+    margin: 16px;
+    max-width: calc(100vw - 32px);
+  }
+  
+  .custom-modal .ant-modal-body {
+    padding: 16px;
+    max-height: 60vh;
+  }
+  
+  .custom-modal .ant-modal-header,
+  .custom-modal .ant-modal-footer {
+    padding: 12px 16px;
+  }
+}
+
+/* 로딩 상태 */
+.custom-modal.loading .ant-modal-body {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* 에러 상태 */
+.custom-modal .error-message {
+  color: #ff4d4f;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+/* 성공 상태 */
+.custom-modal .success-message {
+  color: #52c41a;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+

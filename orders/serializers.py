@@ -34,43 +34,54 @@ class OrderSerializer(serializers.ModelSerializer):
     has_invoice = serializers.SerializerMethodField()
     invoice_info = serializers.SerializerMethodField()
     
+    # 프론트엔드에서 전송하는 form_data 처리
+    form_data = serializers.DictField(write_only=True, required=False)
+    
     class Meta:
         model = Order
         fields = [
             'id', 'customer_name', 'customer_phone', 'customer_email',
             'customer_address', 'status', 'status_display', 'policy', 'policy_title', 
             'company', 'company_name', 'created_by', 'created_by_username',
-            'total_amount', 'rebate_amount', 'notes',
+            'total_amount', 'rebate_amount', 'notes', 'form_data',
             'memo_count', 'has_invoice', 'invoice_info',
             'created_at', 'updated_at'
         ]
         extra_kwargs = {
             'customer_name': {
-                'required': True,
+                'required': False,  # form_data에서 추출하므로 선택적
                 'allow_blank': False,
                 'max_length': 100,
                 'help_text': '신청 고객의 성명을 입력하세요'
             },
             'customer_phone': {
-                'required': True,
+                'required': False,  # form_data에서 추출하므로 선택적
                 'allow_blank': False,
                 'help_text': '휴대폰 번호를 입력하세요 (예: 010-1234-5678)'
             },
             'customer_address': {
-                'required': True,
+                'required': False,  # form_data에서 추출하므로 선택적
                 'allow_blank': False,
                 'help_text': '배송 주소를 입력하세요'
             },
             'company': {
-                'required': True,
+                'required': False,  # 현재 사용자의 회사에서 자동 설정
                 'help_text': '주문을 처리할 업체를 선택하세요'
+            },
+            'total_amount': {
+                'required': False,  # 자동 계산
+                'help_text': '총 금액 (자동 계산)'
+            },
+            'rebate_amount': {
+                'required': False,  # 자동 계산
+                'help_text': '리베이트 금액 (자동 계산)'
             }
         }
     
     def get_memo_count(self, obj):
         """연관된 메모 수 반환"""
         try:
-            return obj.order_memos.count()
+            return obj.memos.count()
         except Exception as e:
             logger.warning(f"주문 메모 수 조회 중 오류: {str(e)} - 주문: {obj.customer_name}")
             return 0
@@ -158,6 +169,36 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """전체 데이터 검증"""
+        # form_data에서 고객 정보 추출
+        form_data = data.pop('form_data', {})
+        
+        if form_data:
+            # form_data에서 고객 정보 추출
+            data['customer_name'] = form_data.get('customer_name', '')
+            data['customer_phone'] = form_data.get('customer_phone', '')
+            data['customer_email'] = form_data.get('customer_email', '')
+            data['customer_address'] = form_data.get('customer_address', '')
+            data['notes'] = form_data.get('memo', '')  # memo -> notes로 매핑
+            
+            # plan_type에서 금액 추출 (예: "30000" -> 30000)
+            plan_type = form_data.get('plan_type', '0')
+            try:
+                total_amount = float(plan_type)
+                data['total_amount'] = total_amount
+                # 리베이트는 일단 0으로 설정 (나중에 정책에 따라 계산)
+                data['rebate_amount'] = 0
+            except (ValueError, TypeError):
+                data['total_amount'] = 0
+                data['rebate_amount'] = 0
+        
+        # 필수 필드 검증
+        if not data.get('customer_name'):
+            raise serializers.ValidationError({'customer_name': '고객명은 필수 입력 사항입니다.'})
+        if not data.get('customer_phone'):
+            raise serializers.ValidationError({'customer_phone': '연락처는 필수 입력 사항입니다.'})
+        if not data.get('customer_address'):
+            raise serializers.ValidationError({'customer_address': '배송 주소는 필수 입력 사항입니다.'})
+        
         # 정책과 업체 매칭 확인
         policy = data.get('policy')
         company = data.get('company')
@@ -173,8 +214,23 @@ class OrderSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """주문서 생성"""
         try:
+            # 현재 사용자의 회사 정보 설정
+            request = self.context.get('request')
+            if request and request.user:
+                # company가 없으면 현재 사용자의 회사로 설정
+                if not validated_data.get('company'):
+                    try:
+                        from companies.models import CompanyUser
+                        company_user = CompanyUser.objects.get(django_user=request.user)
+                        validated_data['company'] = company_user.company
+                    except CompanyUser.DoesNotExist:
+                        logger.warning(f"사용자 {request.user.username}의 회사 정보를 찾을 수 없습니다.")
+                
+                # created_by 설정
+                validated_data['created_by'] = request.user
+            
             order = Order.objects.create(**validated_data)
-            logger.info(f"주문서 생성 성공: {order.customer_name} - {order.model_name}")
+            logger.info(f"주문서 생성 성공: {order.customer_name} - 정책: {order.policy.title}")
             return order
         except Exception as e:
             logger.error(f"주문서 생성 실패: {str(e)} - 데이터: {validated_data}")

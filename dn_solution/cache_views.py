@@ -18,7 +18,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
-from dn_solution.cache_manager import cache_manager, CacheMonitor, CacheManager
+from django.core.cache import cache
+from dn_solution.cache_manager import cache_manager, CacheManager
 from dn_solution.cache_utils import CacheUtils
 
 logger = logging.getLogger(__name__)

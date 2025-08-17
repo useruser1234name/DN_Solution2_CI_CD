@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .viewsets_exposure import PolicyExposureViewSet
 
 app_name = 'policies'
 
@@ -29,7 +30,9 @@ urlpatterns = [
     # 정책 노출 및 리베이트 관리 (새로 추가)
     path('<uuid:policy_id>/exposure/', views.PolicyExposureView.as_view(), name='policy_exposure'),
     path('agency/rebate/', views.AgencyRebateView.as_view(), name='agency_rebate'),
+    path('agency/rebate/api/', views.agency_rebate_api, name='agency_rebate_api'),
     path('<uuid:policy_id>/order-form/', views.OrderFormBuilderView.as_view(), name='order_form_builder'),
+    # 구식 OrderFormTemplateView 제거됨
     
     # API 엔드포인트
     path('api/list/', views.policy_api_list, name='api_list'),
@@ -38,4 +41,18 @@ urlpatterns = [
     
     # 통계 및 대시보드
     path('statistics/', views.policy_statistics, name='statistics'),
+    path('rebate/summary/', views.rebate_summary, name='rebate_summary'),
+    
+    # Policy API endpoints (일관된 UUID 파라미터명 사용)
+    path('<uuid:policy_id>/exposures/', PolicyExposureViewSet.as_view({'get': 'list', 'post': 'create'}), name='policy-exposures'),
+    path('<uuid:policy_id>/form-template/', views.PolicyFormTemplateView.as_view(), name='policy-form-template'),
+    path('<uuid:policy_id>/rebate-matrix/', views.PolicyRebateMatrixView.as_view(), name='policy-rebate-matrix'),
+    path('<uuid:policy_id>/agency-rebate/', views.AgencyRebateMatrixView.as_view(), name='agency-rebate-matrix'),
+    path('<uuid:policy_id>/retail-rebate/', views.RetailRebateView.as_view(), name='retail-rebate'),
+    
+    # 새로운 API 엔드포인트들
+    path('carrier-plans/', views.CarrierPlanAPIView.as_view(), name='carrier_plans_api'),
+    path('device-models/', views.DeviceModelAPIView.as_view(), name='device_models_api'),
+    path('device-colors/', views.DeviceColorAPIView.as_view(), name='device_colors_api'),
+    path('calculate-rebate/', views.RebateCalculationAPIView.as_view(), name='calculate_rebate_api'),
 ] 

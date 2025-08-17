@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Input, Select, Button, message, Card, Row, Col } from 'antd';
+import { Form, Input, Select, Button, message, Card, Row, Col, Alert } from 'antd';
 import { post } from '../services/api';
 import PolicyExposureModal from './PolicyExposureModal';
 import OrderFormBuilder from './OrderFormBuilder';
@@ -37,7 +37,7 @@ const PolicyCreateForm = ({ onSuccess, onCancel }) => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      const response = await post('policies/api/create/', values);
+      const response = await post('api/policies/api/create/', values);
       
       if (response.success) {
         message.success('정책이 성공적으로 생성되었습니다.');
@@ -154,6 +154,18 @@ const PolicyCreateForm = ({ onSuccess, onCancel }) => {
           </Form.Item>
 
           <Row gutter={16}>
+            <Col span={24}>
+              <Alert
+                message="리베이트 설정 안내"
+                description="본사는 협력사에게 줄 리베이트만 설정합니다. 판매점 리베이트는 각 협력사가 마진을 고려하여 개별 설정합니다."
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="rebate_agency"
@@ -161,23 +173,21 @@ const PolicyCreateForm = ({ onSuccess, onCancel }) => {
                 rules={[{ required: true, message: '협력사 리베이트를 입력하세요' }]}
               >
                 <Input 
-                  placeholder="협력사 리베이트" 
+                  placeholder="협력사에게 지급할 리베이트" 
                   suffix="원"
                   type="number"
                 />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                name="rebate_retail"
-                label="판매점 리베이트"
-              >
-                <Input 
-                  placeholder="판매점 리베이트" 
-                  suffix="원"
-                  type="number"
-                />
-              </Form.Item>
+              <div style={{ padding: '32px 0', textAlign: 'center', color: '#666' }}>
+                <div style={{ fontSize: '14px', marginBottom: '8px' }}>
+                  📊 <strong>판매점 리베이트</strong>
+                </div>
+                <div style={{ fontSize: '12px' }}>
+                  협력사가 개별 설정
+                </div>
+              </div>
             </Col>
           </Row>
 

@@ -22,8 +22,8 @@ from dn_solution.jwt_auth import (
     EnhancedJWTAuthentication, CustomTokenGenerator, 
     TokenManager, TokenPermissionValidator
 )
-from dn_solution.cache_manager import cache_manager, CacheManager
-from dn_solution.cache_utils import cache_user_data
+# from dn_solution.cache_manager import cache_manager, CacheManager - removed
+from django.core.cache import cache
 
 logger = logging.getLogger('auth')
 
@@ -66,8 +66,14 @@ class EnhancedTokenObtainPairView(TokenObtainPairView):
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
             
-            # 사용자 데이터 캐싱
-            user_data = cache_user_data(user.id, data_type='profile')
+            # 사용자 데이터 캐싱 (간단한 캐시 처리)
+            cache_key = f'user_profile_{user.id}'
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+            }
+            cache.set(cache_key, user_data, timeout=3600)  # 1시간 캐시
             
             # 로그인 성공 기록
             self._log_successful_login(user, request)
@@ -193,14 +199,14 @@ class EnhancedTokenObtainPairView(TokenObtainPairView):
         
         # 최근 로그인 IP를 캐시에 저장
         cache_key = f"recent_login_ip:{user.id}"
-        recent_ips = cache_manager.get(cache_key, [])
+        recent_ips = cache.get(cache_key, [])
         
         current_ip = self._get_client_ip(request)
         if current_ip not in recent_ips:
             recent_ips.append(current_ip)
             # 최근 5개 IP만 유지
             recent_ips = recent_ips[-5:]
-            cache_manager.set(cache_key, recent_ips, CacheManager.CACHE_TIMEOUTS['daily'])
+            cache.set(cache_key, recent_ips, 86400)  # 24시간
     
     def _log_failed_login(self, username: str, request, reason: str):
         """실패한 로그인 기록"""
@@ -209,11 +215,11 @@ class EnhancedTokenObtainPairView(TokenObtainPairView):
         
         # 실패 횟수 추적 (IP별)
         cache_key = f"failed_login:{ip}"
-        failed_count = cache_manager.get(cache_key, 0)
+        failed_count = cache.get(cache_key, 0)
         failed_count += 1
         
         # 5분간 실패 횟수 저장
-        cache_manager.set(cache_key, failed_count, 300)
+        cache.set(cache_key, failed_count, 300)
         
         if failed_count >= 5:
             logger.error(f"IP {ip}에서 5회 이상 로그인 실패")
@@ -302,9 +308,9 @@ class LogoutView(APIView):
                 revoked_count = TokenManager.revoke_user_tokens(request.user)
                 logger.info(f"사용자 {request.user.username}의 모든 토큰 무효화: {revoked_count}개")
             
-            # 사용자 관련 캐시 삭제
-            cache_manager.delete_pattern(f'user:{request.user.id}:*')
-            cache_manager.delete_pattern(f'token_usage:{request.user.id}:*')
+            # 사용자 관련 캐시 삭제 (간단한 방식으로 대체)
+            cache.delete(f'user_profile_{request.user.id}')
+            cache.delete(f'user_permissions:{request.user.id}')
             
             logger.info(f"로그아웃: {request.user.username}")
             
@@ -338,9 +344,35 @@ class TokenInfoView(APIView):
             
             # 추가 정보 포함
             response_data = token_info.copy()
+            
+            # 사용자 기본 정보 추가
+            user_data = {
+                'id': request.user.id,
+                'username': request.user.username,
+                'email': request.user.email,
+                'first_name': request.user.first_name,
+                'last_name': request.user.last_name,
+            }
+            
+            # 회사 정보 추가
+            company_data = None
+            role = None
+            if hasattr(request.user, 'companyuser'):
+                company_user = request.user.companyuser
+                company_data = {
+                    'id': str(company_user.company.id),
+                    'name': company_user.company.name,
+                    'code': company_user.company.code,
+                    'type': company_user.company.type,
+                }
+                role = company_user.role
+            
             response_data.update({
                 'is_valid': True,
                 'user_active': request.user.is_active,
+                'user': user_data,
+                'company': company_data,
+                'role': role,
                 'permissions': self._get_user_permissions(request.user),
             })
             
@@ -366,7 +398,7 @@ class TokenInfoView(APIView):
     def _get_user_permissions(self, user) -> list:
         """사용자 권한 목록 조회 (캐시 활용)"""
         cache_key = f"user_permissions:{user.id}"
-        permissions = cache_manager.get(cache_key)
+        permissions = cache.get(cache_key)
         
         if permissions is None:
             permissions = []
@@ -397,7 +429,7 @@ class TokenInfoView(APIView):
                     permissions.append('primary_admin')
             
             permissions = list(set(permissions))  # 중복 제거
-            cache_manager.set(cache_key, permissions, CacheManager.CACHE_TIMEOUTS['long'])
+            cache.set(cache_key, permissions, 3600)  # 1시간 캐싱
         
         return permissions
 

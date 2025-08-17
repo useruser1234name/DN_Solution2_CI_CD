@@ -1,0 +1,168 @@
+.rebate-calculator {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.rebate-calculator .ant-card-head {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-bottom: none;
+}
+
+.rebate-calculator .ant-card-head-title {
+  color: white;
+}
+
+.calculator-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+}
+
+.calculator-title .anticon {
+  font-size: 18px;
+}
+
+/* 빈 상태 */
+.rebate-calculator.empty-state {
+  border: 2px dashed #d9d9d9;
+  background-color: #fafafa;
+}
+
+.empty-content {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: #d9d9d9;
+  margin-bottom: 16px;
+}
+
+/* 로딩 상태 */
+.rebate-calculator.loading-state {
+  border: 1px solid #e8f4fd;
+  background-color: #f6ffed;
+}
+
+.loading-content {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+/* 오류 상태 */
+.rebate-calculator.error-state {
+  border: 1px solid #ffccc7;
+}
+
+/* 데이터 없음 상태 */
+.rebate-calculator.no-data-state {
+  border: 1px solid #fff7e6;
+}
+
+/* 리베이트 내용 */
+.rebate-content {
+  padding: 8px 0;
+}
+
+.rebate-section {
+  padding: 12px 0;
+}
+
+.rebate-amount {
+  margin: 0 !important;
+  font-weight: 600;
+}
+
+.rebate-amount.positive {
+  color: #52c41a;
+}
+
+.rebate-amount.negative {
+  color: #ff4d4f;
+}
+
+.sim-cost-detail {
+  margin-top: 4px;
+  text-align: right;
+}
+
+.sim-info {
+  padding: 8px 0;
+}
+
+.calculation-info {
+  padding: 8px 0;
+  text-align: center;
+}
+
+/* 구분선 스타일 */
+.rebate-calculator .ant-divider {
+  margin: 12px 0;
+  border-color: #f0f0f0;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .rebate-calculator {
+    margin-bottom: 12px;
+  }
+  
+  .empty-content,
+  .loading-content {
+    padding: 30px 16px;
+  }
+  
+  .empty-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+  
+  .rebate-section {
+    padding: 8px 0;
+  }
+  
+  .rebate-amount {
+    font-size: 18px !important;
+  }
+  
+  .calculator-title {
+    font-size: 14px;
+  }
+  
+  .calculator-title .anticon {
+    font-size: 16px;
+  }
+}
+
+/* 애니메이션 */
+.rebate-calculator {
+  transition: all 0.3s ease;
+}
+
+.rebate-calculator:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.rebate-amount {
+  transition: color 0.3s ease;
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  .rebate-calculator.empty-state {
+    background-color: #1f1f1f;
+    border-color: #434343;
+  }
+  
+  .empty-icon {
+    color: #434343;
+  }
+  
+  .rebate-calculator.loading-state {
+    background-color: #1f1f1f;
+    border-color: #434343;
+  }
+}
+

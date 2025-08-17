@@ -1,0 +1,337 @@
+/* 리베이트 요약 컴포넌트 스타일 */
+.rebate-summary {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.rebate-summary-header {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.rebate-summary-header h3 {
+    color: #2c3e50;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+}
+
+.summary-description {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* 요약 카드들 */
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.summary-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.summary-card.receivable {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border-color: #4caf50;
+}
+
+.summary-card.payable {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%);
+    border-color: #ff9800;
+}
+
+.summary-card.net {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-color: #2196f3;
+}
+
+.summary-card.stores {
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    border-color: #9c27b0;
+}
+
+.card-icon {
+    font-size: 2.5rem;
+    opacity: 0.8;
+}
+
+.card-content h4 {
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.card-content .amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 4px 0;
+    color: #2c3e50;
+}
+
+.card-content .amount.positive {
+    color: #27ae60;
+}
+
+.card-content .amount.negative {
+    color: #e74c3c;
+}
+
+.card-content .description {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    margin: 0;
+}
+
+/* 상세 리베이트 목록 */
+.rebate-details {
+    margin-top: 32px;
+}
+
+.rebate-details h4 {
+    color: #2c3e50;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+}
+
+.rebate-table {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.rebate-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+}
+
+.rebate-table th {
+    background: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 2px solid #dee2e6;
+    font-size: 0.9rem;
+}
+
+.rebate-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+}
+
+.rebate-table tr:hover {
+    background: #f8f9fa;
+}
+
+.rebate-table tr.receivable {
+    background: rgba(76, 175, 80, 0.05);
+}
+
+.rebate-table tr.payable {
+    background: rgba(255, 152, 0, 0.05);
+}
+
+.rebate-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.rebate-type-badge.receivable {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #4caf50;
+}
+
+.rebate-type-badge.payable {
+    background: #fff3e0;
+    color: #ef6c00;
+    border: 1px solid #ff9800;
+}
+
+.policy-title {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.company-name {
+    color: #495057;
+}
+
+.rebate-table .amount {
+    font-weight: 600;
+    text-align: right;
+}
+
+.rebate-table .amount.receivable {
+    color: #27ae60;
+}
+
+.rebate-table .amount.payable {
+    color: #e67e22;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-badge.active {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+/* 데이터 없음 상태 */
+.no-rebate-data {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.no-data-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.no-rebate-data h4 {
+    color: #495057;
+    font-size: 1.1rem;
+    margin: 0 0 8px 0;
+}
+
+.no-rebate-data p {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* 로딩 및 오류 상태 */
+.rebate-summary.loading,
+.rebate-summary.error {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.loading-spinner {
+    color: #6c757d;
+    font-size: 1rem;
+}
+
+.error-message {
+    color: #dc3545;
+    font-size: 1rem;
+    margin-bottom: 16px;
+}
+
+.retry-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s ease;
+}
+
+.retry-btn:hover {
+    background: #0056b3;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .rebate-summary {
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .summary-cards {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    
+    .summary-card {
+        padding: 16px;
+        gap: 12px;
+    }
+    
+    .card-icon {
+        font-size: 2rem;
+    }
+    
+    .card-content .amount {
+        font-size: 1.3rem;
+    }
+    
+    .rebate-table th,
+    .rebate-table td {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
+    
+    .rebate-type-badge {
+        font-size: 0.75rem;
+        padding: 2px 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    .rebate-summary-header h3 {
+        font-size: 1.3rem;
+    }
+    
+    .summary-description {
+        font-size: 0.8rem;
+    }
+    
+    .summary-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+    }
+    
+    .card-content .amount {
+        font-size: 1.2rem;
+    }
+    
+    .rebate-table {
+        font-size: 0.8rem;
+    }
+    
+    .rebate-table th,
+    .rebate-table td {
+        padding: 6px 8px;
+    }
+}

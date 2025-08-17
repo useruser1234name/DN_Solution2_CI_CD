@@ -1,0 +1,232 @@
+.enhanced-order-form {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.enhanced-order-form.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.form-header {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.form-header .ant-card-body {
+  padding: 24px;
+}
+
+.form-header h3 {
+  color: white;
+  margin: 0 0 8px 0;
+}
+
+.form-header .ant-typography {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.form-section {
+  margin-bottom: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.form-section:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.form-section .ant-card-head {
+  background-color: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.form-section .ant-card-head-title {
+  font-weight: 600;
+  color: #262626;
+}
+
+.order-form {
+  width: 100%;
+}
+
+.order-form .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.order-form .ant-form-item-label > label {
+  font-weight: 500;
+  color: #262626;
+}
+
+.order-form .ant-form-item-required::before {
+  color: #ff4d4f;
+}
+
+/* 입력 필드 스타일 */
+.order-form .ant-input,
+.order-form .ant-select-selector {
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+  transition: all 0.3s;
+}
+
+.order-form .ant-input:focus,
+.order-form .ant-input-focused,
+.order-form .ant-select-focused .ant-select-selector {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.order-form .ant-input:hover,
+.order-form .ant-select:hover .ant-select-selector {
+  border-color: #40a9ff;
+}
+
+/* 제출 버튼 영역 */
+.form-actions {
+  text-align: center;
+  padding: 24px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 24px;
+}
+
+.form-actions .ant-btn {
+  min-width: 120px;
+  height: 40px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.form-actions .ant-btn-primary {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.3);
+}
+
+.form-actions .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.4);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .enhanced-order-form {
+    padding: 16px;
+  }
+  
+  .form-section {
+    margin-bottom: 16px;
+  }
+  
+  .form-section .ant-card-body {
+    padding: 16px;
+  }
+  
+  .form-header .ant-card-body {
+    padding: 16px;
+  }
+  
+  .form-header h3 {
+    font-size: 18px;
+  }
+  
+  .order-form .ant-form-item {
+    margin-bottom: 12px;
+  }
+  
+  .form-actions {
+    padding: 16px 0;
+  }
+  
+  .form-actions .ant-btn {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  
+  .form-actions .ant-space {
+    width: 100%;
+  }
+  
+  .form-actions .ant-space-item {
+    width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .enhanced-order-form {
+    padding: 12px;
+  }
+  
+  .order-form .ant-col {
+    padding: 0 4px;
+  }
+  
+  .form-section .ant-card-body {
+    padding: 12px;
+  }
+}
+
+/* 애니메이션 */
+.enhanced-order-form {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.form-section {
+  animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 로딩 상태 */
+.enhanced-order-form.loading .ant-spin {
+  color: #1890ff;
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  .form-section {
+    background-color: #1f1f1f;
+    border-color: #434343;
+  }
+  
+  .form-section .ant-card-head {
+    background-color: #262626;
+    border-bottom-color: #434343;
+  }
+  
+  .form-section .ant-card-head-title {
+    color: #ffffff;
+  }
+  
+  .order-form .ant-form-item-label > label {
+    color: #ffffff;
+  }
+}
+

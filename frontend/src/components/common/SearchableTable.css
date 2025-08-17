@@ -1,0 +1,181 @@
+/* 검색 가능한 테이블 스타일 */
+
+.searchable-table {
+  margin-bottom: 24px;
+}
+
+.searchable-table .table-header {
+  margin-bottom: 0;
+}
+
+.searchable-table .ant-card-head {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.searchable-table .ant-card-body {
+  padding: 0;
+}
+
+.searchable-table .table-header {
+  padding: 16px 24px 0;
+}
+
+/* 검색 박스 스타일 */
+.searchable-table .ant-input-search {
+  width: 100%;
+}
+
+.searchable-table .ant-input-search .ant-input-search-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 필터 스타일 */
+.searchable-table .ant-select,
+.searchable-table .ant-picker {
+  width: 100%;
+}
+
+/* 액션 버튼 영역 */
+.searchable-table .table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 테이블 스타일 */
+.searchable-table .ant-table {
+  margin: 0;
+}
+
+.searchable-table .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #262626;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.searchable-table .ant-table-tbody > tr > td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.searchable-table .ant-table-tbody > tr:hover > td {
+  background: #f5f5f5;
+}
+
+/* 페이지네이션 스타일 */
+.searchable-table .ant-pagination {
+  padding: 16px 24px;
+  text-align: right;
+  border-top: 1px solid #f0f0f0;
+  margin: 0;
+}
+
+/* 액션 버튼 컬럼 스타일 */
+.searchable-table .action-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.searchable-table .action-buttons .ant-btn {
+  padding: 4px 8px;
+  height: auto;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* 상태 태그 스타일 */
+.searchable-table .status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.searchable-table .status-tag.active {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.searchable-table .status-tag.inactive {
+  background: #fff2f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+.searchable-table .status-tag.draft {
+  background: #f0f5ff;
+  color: #1890ff;
+  border: 1px solid #adc6ff;
+}
+
+.searchable-table .status-tag.pending {
+  background: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe7ba;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 768px) {
+  .searchable-table .table-header {
+    padding: 12px 16px 0;
+  }
+  
+  .searchable-table .ant-card-head {
+    padding: 12px 16px;
+  }
+  
+  .searchable-table .ant-pagination {
+    padding: 12px 16px;
+  }
+  
+  .searchable-table .table-header .ant-row {
+    gap: 8px !important;
+  }
+  
+  .searchable-table .action-buttons {
+    flex-direction: column;
+  }
+  
+  .searchable-table .action-buttons .ant-btn {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+}
+
+@media (max-width: 576px) {
+  .searchable-table .ant-table-tbody > tr > td {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  .searchable-table .action-buttons .ant-btn {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
+}
+
+/* 로딩 상태 */
+.searchable-table.loading .table-header {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* 빈 상태 */
+.searchable-table .ant-empty {
+  padding: 40px 20px;
+}
+
+.searchable-table .ant-empty-description {
+  color: #8c8c8c;
+}
+

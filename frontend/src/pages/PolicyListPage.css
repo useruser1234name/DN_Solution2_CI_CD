@@ -1,7 +1,5 @@
 .policy-list-page {
     padding: 20px;
-    max-width: 1200px;
-    margin: 0 auto;
 }
 
 .page-header {
@@ -9,165 +7,146 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
-    padding: 24px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding-bottom: 20px;
+    border-bottom: 2px solid #ecf0f1;
 }
 
 .header-content h1 {
-    margin: 0 0 8px 0;
-    color: #333;
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 28px;
+    color: #2c3e50;
+    margin: 0 0 10px 0;
 }
 
 .header-content p {
-    margin: 0;
-    color: #666;
+    color: #7f8c8d;
     font-size: 14px;
+    margin: 0;
 }
 
 .header-actions {
     display: flex;
-    gap: 12px;
-}
-
-.error-message {
-    background-color: #f8d7da;
-    color: #721c24;
-    padding: 15px;
-    border-radius: 5px;
-    margin-bottom: 20px;
-    border: 1px solid #f5c6cb;
-}
-
-.create-form-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-.create-form {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    max-width: 600px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.create-form h2 {
-    margin: 0 0 20px 0;
-    color: #333;
-    font-size: 1.5rem;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
-    color: #555;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 14px;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-}
-
-.checkbox-group {
-    display: flex;
-    align-items: center;
-}
-
-.checkbox-group label {
-    display: flex;
-    align-items: center;
-    margin: 0;
-    cursor: pointer;
-}
-
-.checkbox-group input[type="checkbox"] {
-    width: auto;
-    margin-right: 8px;
-}
-
-.form-actions {
-    display: flex;
     gap: 10px;
-    justify-content: flex-end;
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
+}
+
+.policies-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.policies-table {
+    overflow-x: auto;
+}
+
+.policies-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.policies-table th {
+    background: #f8f9fa;
+    padding: 15px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.policies-table td {
+    padding: 15px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.policies-table tr:last-child td {
+    border-bottom: none;
+}
+
+.policies-table tr:hover {
+    background: #f8f9fa;
+}
+
+.policy-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.policy-title strong {
+    color: #2c3e50;
+    font-size: 15px;
+}
+
+.policy-title small {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.badge.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge.inactive {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge.hidden {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
 }
 
 .btn {
-    padding: 10px 20px;
+    padding: 8px 16px;
     border: none;
-    border-radius: 5px;
-    cursor: pointer;
+    border-radius: 4px;
     font-size: 14px;
     font-weight: 500;
+    cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-primary {
-    background-color: #007bff;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
 }
 
 .btn-primary:hover {
-    background-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .btn-secondary {
-    background-color: #6c757d;
+    background: #6c757d;
     color: white;
 }
 
 .btn-secondary:hover {
-    background-color: #545b62;
+    background: #5a6268;
 }
 
 .btn-danger {
-    background-color: #dc3545;
+    background: #dc3545;
     color: white;
 }
 
 .btn-danger:hover {
-    background-color: #c82333;
+    background: #c82333;
 }
 
 .btn-small {
@@ -175,134 +154,68 @@
     font-size: 12px;
 }
 
-.policies-container {
-    margin-top: 20px;
+.btn-success {
+    background-color: #27ae60;
+    color: white;
+    border: 1px solid #27ae60;
 }
 
-.policies-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 20px;
+.btn-success:hover {
+    background-color: #219a52;
+    border-color: #219a52;
+    transform: translateY(-1px);
 }
 
-.policy-card {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.policy-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.policy-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 15px;
-}
-
-.policy-header h3 {
-    margin: 0;
-    color: #333;
-    font-size: 1.2rem;
-    flex: 1;
-}
-
-.status {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.status.active {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.status.inactive {
-    background-color: #f8d7da;
-    color: #721c24;
-}
-
-.policy-content {
-    margin-bottom: 15px;
-}
-
-.description {
-    color: #666;
-    margin-bottom: 15px;
-    line-height: 1.5;
-}
-
-.policy-details {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-
-.policy-details span {
-    background-color: #f8f9fa;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #495057;
-}
-
-.policy-rebates {
-    display: flex;
-    gap: 15px;
-    font-size: 14px;
-    color: #666;
-}
-
-.policy-rebates span {
-    background-color: #e3f2fd;
-    padding: 4px 8px;
-    border-radius: 4px;
-    color: #1976d2;
-}
-
-.policy-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-
-.no-policies {
+.no-data {
     text-align: center;
     padding: 60px 20px;
-    color: #666;
 }
 
-.no-policies p {
+.no-data p {
+    color: #6c757d;
+    font-size: 16px;
     margin-bottom: 20px;
-    font-size: 1.1rem;
+}
+
+.loading,
+.error-message {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
+}
+
+.loading {
+    color: #667eea;
+}
+
+.error-message {
+    color: #dc3545;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
 }
 
 @media (max-width: 768px) {
     .page-header {
         flex-direction: column;
+        align-items: flex-start;
         gap: 15px;
-        align-items: stretch;
     }
     
-    .policies-grid {
-        grid-template-columns: 1fr;
+    .policies-table {
+        font-size: 14px;
     }
     
-    .form-row {
-        grid-template-columns: 1fr;
+    .policies-table th,
+    .policies-table td {
+        padding: 10px;
     }
     
-    .create-form {
-        width: 95%;
-        margin: 10px;
+    .action-buttons {
+        flex-direction: column;
     }
-} 
+    
+    .btn-small {
+        width: 100%;
+    }
+}

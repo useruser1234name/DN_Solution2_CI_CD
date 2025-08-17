@@ -1,0 +1,254 @@
+.company-tree-view {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.company-tree-node {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.company-tree-node:last-child {
+  border-bottom: none;
+}
+
+.company-tree-node.level-0 {
+  background: #fff;
+}
+
+.company-tree-node.level-1 {
+  background: #f8f9fa;
+  margin-left: 20px;
+}
+
+.company-tree-node.level-2 {
+  background: #f1f3f4;
+  margin-left: 40px;
+}
+
+.company-tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-left: 4px solid transparent;
+}
+
+.company-tree-header.expandable:hover {
+  background-color: rgba(0, 123, 255, 0.05);
+  border-left-color: #007bff;
+}
+
+.company-tree-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 15px;
+}
+
+.expand-icon {
+  font-size: 12px;
+  color: #666;
+  transition: transform 0.2s ease;
+  min-width: 12px;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.company-main-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.company-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 16px;
+}
+
+.company-code {
+  background: #e9ecef;
+  color: #495057;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.company-type-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.company-type-badge.headquarters {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.company-type-badge.agency {
+  background: #e8f5e8;
+  color: #2e7d32;
+}
+
+.company-type-badge.dealer {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.company-type-badge.retail {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-badge.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.company-meta {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-left: auto;
+}
+
+.created-date {
+  color: #666;
+  font-size: 12px;
+}
+
+.children-count {
+  color: #666;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.company-tree-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn.view {
+  background-color: #6c757d;
+  color: white;
+}
+
+.action-btn.view:hover {
+  background-color: #545b62;
+}
+
+.action-btn.edit {
+  background-color: #007bff;
+  color: white;
+}
+
+.action-btn.edit:hover {
+  background-color: #0056b3;
+}
+
+.action-btn.delete {
+  background-color: #dc3545;
+  color: white;
+}
+
+.action-btn.delete:hover {
+  background-color: #c82333;
+}
+
+.company-tree-content {
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid #e9ecef;
+}
+
+.unassigned-section {
+  padding: 20px;
+  border-top: 2px solid #dee2e6;
+  background: #f8f9fa;
+}
+
+.unassigned-section h3 {
+  color: #dc3545;
+  font-size: 16px;
+  margin: 0 0 15px 0;
+  font-weight: 600;
+}
+
+/* 회사 타입별 구분선 색상 */
+.company-tree-node.level-0[data-type="headquarters"] .company-tree-header {
+  border-left-color: #007bff;
+}
+
+.company-tree-node.level-1[data-type="agency"] .company-tree-header {
+  border-left-color: #28a745;
+}
+
+.company-tree-node.level-2[data-type="retail"] .company-tree-header {
+  border-left-color: #17a2b8;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .company-tree-node.level-1 {
+    margin-left: 10px;
+  }
+  
+  .company-tree-node.level-2 {
+    margin-left: 20px;
+  }
+  
+  .company-tree-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 15px;
+  }
+  
+  .company-main-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .company-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    margin-left: 0;
+  }
+  
+  .company-tree-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

@@ -1,0 +1,359 @@
+/* 업체 트리 뷰 스타일 */
+
+.company-tree-view {
+  height: 100%;
+  min-height: 600px;
+}
+
+.company-tree-view .ant-card-body {
+  padding: 16px;
+  height: calc(100% - 56px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 트리 컨테이너 */
+.company-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* 커스텀 트리 노드 */
+.tree-node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  min-height: 32px;
+}
+
+.tree-node:hover {
+  background: #f5f5f5;
+}
+
+.tree-node.selected {
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+}
+
+/* 노드 정보 영역 */
+.node-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.company-name {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  color: #262626;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.company-details {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 1.2;
+}
+
+.company-code {
+  font-family: 'Courier New', monospace;
+  background: #f5f5f5;
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-right: 8px;
+}
+
+/* 노드 액션 영역 */
+.node-actions {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.tree-node:hover .node-actions {
+  opacity: 1;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  background: rgba(24, 144, 255, 0.1);
+  color: #1890ff;
+}
+
+/* 트리 라인 스타일 */
+.company-tree .ant-tree-treenode {
+  padding: 2px 0;
+}
+
+.company-tree .ant-tree-node-content-wrapper {
+  padding: 0;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.company-tree .ant-tree-node-content-wrapper:hover {
+  background: transparent;
+}
+
+.company-tree .ant-tree-node-selected .ant-tree-node-content-wrapper {
+  background: transparent;
+}
+
+.company-tree .ant-tree-title {
+  width: 100%;
+}
+
+/* 트리 아이콘 */
+.company-tree .ant-tree-iconEle {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.company-tree .ant-tree-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 배지 스타일 */
+.company-tree .ant-badge {
+  font-size: 10px;
+}
+
+.company-tree .ant-badge .ant-badge-count {
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  border-radius: 8px;
+}
+
+/* 태그 스타일 */
+.company-tree .ant-tag {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+  border-radius: 2px;
+}
+
+/* 빈 상태 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #8c8c8c;
+}
+
+.empty-state p {
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+/* 검색 영역 */
+.company-tree-view .ant-input-search {
+  margin-bottom: 16px;
+}
+
+/* 드롭다운 메뉴 스타일 */
+.company-tree .ant-dropdown-menu {
+  min-width: 140px;
+}
+
+.company-tree .ant-dropdown-menu-item {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.company-tree .ant-dropdown-menu-item .anticon {
+  margin-right: 8px;
+  font-size: 12px;
+}
+
+/* 로딩 상태 */
+.company-tree.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 768px) {
+  .company-tree-view {
+    min-height: 400px;
+  }
+  
+  .tree-node {
+    padding: 6px 4px;
+  }
+  
+  .company-name {
+    font-size: 13px;
+  }
+  
+  .company-details {
+    font-size: 11px;
+  }
+  
+  .company-code {
+    display: none;
+  }
+  
+  .node-actions {
+    opacity: 1;
+  }
+  
+  .action-button {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 576px) {
+  .company-tree-view .ant-card-body {
+    padding: 12px;
+  }
+  
+  .tree-node {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 8px 4px;
+  }
+  
+  .node-actions {
+    align-self: flex-end;
+    margin-top: 4px;
+  }
+  
+  .company-name .ant-tag {
+    margin-left: 4px;
+    font-size: 9px;
+  }
+}
+
+/* 스크롤바 스타일 */
+.company-tree::-webkit-scrollbar {
+  width: 4px;
+}
+
+.company-tree::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 2px;
+}
+
+.company-tree::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 2px;
+}
+
+.company-tree::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 하이라이트 검색 결과 */
+.search-highlight {
+  background: #fff2e6;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* 애니메이션 */
+@keyframes nodeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.tree-node {
+  animation: nodeSlideIn 0.2s ease-out;
+}
+
+/* 접근성 개선 */
+.tree-node:focus {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.action-button:focus {
+  outline: 2px solid #1890ff;
+  outline-offset: 1px;
+}
+
+/* 다크 모드 준비 */
+@media (prefers-color-scheme: dark) {
+  .tree-node {
+    color: #ffffff;
+  }
+  
+  .tree-node:hover {
+    background: #262626;
+  }
+  
+  .tree-node.selected {
+    background: #111b26;
+    border-color: #177ddc;
+  }
+  
+  .company-name {
+    color: #ffffff;
+  }
+  
+  .company-details {
+    color: #a6a6a6;
+  }
+  
+  .company-code {
+    background: #262626;
+    color: #ffffff;
+  }
+  
+  .empty-state {
+    color: #a6a6a6;
+  }
+}
+
+/* 인쇄 스타일 */
+@media print {
+  .node-actions {
+    display: none !important;
+  }
+  
+  .company-tree-view .ant-card-extra {
+    display: none !important;
+  }
+  
+  .tree-node {
+    border: 1px solid #e8e8e8 !important;
+    margin-bottom: 4px;
+    page-break-inside: avoid;
+  }
+}
+
+
