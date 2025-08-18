@@ -44,7 +44,8 @@ urlpatterns = [
     path('rebate/summary/', views.rebate_summary, name='rebate_summary'),
     
     # Policy API endpoints (일관된 UUID 파라미터명 사용)
-    path('<uuid:policy_id>/exposures/', PolicyExposureViewSet.as_view({'get': 'list', 'post': 'create'}), name='policy-exposures'),
+    path('<uuid:policy_id>/exposures/', PolicyExposureViewSet.as_view({'get': 'list', 'post': 'create', 'delete': 'destroy'}), name='policy-exposures'),
+    path('<uuid:policy_id>/exposures/<uuid:pk>/', PolicyExposureViewSet.as_view({'delete': 'destroy'}), name='policy-exposure-detail'),
     path('<uuid:policy_id>/form-template/', views.PolicyFormTemplateView.as_view(), name='policy-form-template'),
     path('<uuid:policy_id>/rebate-matrix/', views.PolicyRebateMatrixView.as_view(), name='policy-rebate-matrix'),
     path('<uuid:policy_id>/agency-rebate/', views.AgencyRebateMatrixView.as_view(), name='agency-rebate-matrix'),

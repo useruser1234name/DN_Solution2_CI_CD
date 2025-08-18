@@ -40,7 +40,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
             if company.type == 'headquarters':
                 return Policy.objects.all()
             else:
-                # 협력사는 노출된 정책만, 판매점은 배정된 정책만 조회
+                # 협력사는 노출된 정책만 조회
                 if company.type == 'agency':
                     # 협력사는 본사가 노출한 정책들만 조회
                     from .models import PolicyExposure
@@ -49,12 +49,24 @@ class PolicyViewSet(viewsets.ModelViewSet):
                         exposures__is_active=True
                     ).distinct()
                 else:
-                    # 판매점은 자신에게 노출된 정책 조회 (하위 자동 노출 포함)
+                    # 판매점은 자신에게 노출된 정책과 상위 협력사에 노출된 정책 모두 조회
                     from .models import PolicyExposure
-                    return Policy.objects.filter(
-                        exposures__agency=company,
-                        exposures__is_active=True
-                    ).distinct()
+                    
+                    # 판매점의 상위 협력사 확인
+                    parent_agency = company.parent_company
+                    
+                    if parent_agency and parent_agency.type == 'agency':
+                        # 판매점 자신에게 직접 노출된 정책 또는 상위 협력사에 노출된 정책 조회
+                        return Policy.objects.filter(
+                            Q(exposures__agency=company, exposures__is_active=True) |
+                            Q(exposures__agency=parent_agency, exposures__is_active=True)
+                        ).distinct()
+                    else:
+                        # 상위 협력사가 없는 경우 자신에게 직접 노출된 정책만 조회
+                        return Policy.objects.filter(
+                            exposures__agency=company,
+                            exposures__is_active=True
+                        ).distinct()
         return Policy.objects.none()
     
     def list(self, request, *args, **kwargs):
@@ -204,6 +216,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
         company_id = request.data.get('company_id')
         
         try:
+            from companies.models import Company
             target_company = Company.objects.get(id=company_id)
             
             # 권한 확인
@@ -227,8 +240,8 @@ class PolicyViewSet(viewsets.ModelViewSet):
             # 정책 할당
             assignment, created = PolicyAssignment.objects.get_or_create(
                 policy=policy,
-                assigned_to=target_company,
-                defaults={'assigned_by': request.user}
+                company=target_company,
+                defaults={'assigned_to_name': target_company.name}
             )
             
             if created:
