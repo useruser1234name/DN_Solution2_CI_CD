@@ -8,6 +8,7 @@
 .matrix-rebate-editor .ant-card-head {
   background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
   border-radius: 12px 12px 0 0;
+  color: white !important;
 }
 
 .matrix-rebate-editor .ant-card-head-title {
@@ -15,8 +16,27 @@
   font-weight: 600;
 }
 
-.matrix-rebate-editor .ant-card-head-title * {
+/* 중복 선택자 제거하고 우선순위 높이기 */
+.matrix-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: white !important;
+  z-index: 100;
+  position: relative;
+}
+
+.matrix-title span {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+/* 추가 선택자로 확실히 적용되도록 */
+.matrix-rebate-editor .ant-card-head .matrix-title,
+.matrix-rebate-editor .ant-card-head .matrix-title span,
+.matrix-rebate-editor .ant-card-head .matrix-title svg {
+  color: white !important;
+  fill: white !important;
 }
 
 .matrix-rebate-editor .ant-card-extra {
@@ -48,9 +68,15 @@
 }
 
 /* 테이블 스타일 */
-.rebate-matrix-table {
+.rebate-matrix-table-container {
   border-radius: 8px;
-  overflow: hidden;
+  overflow: auto;
+  max-width: 100%;
+  max-height: 600px;
+}
+
+.rebate-matrix-table {
+  width: 100%;
 }
 
 .rebate-matrix-table .ant-table-thead > tr > th {

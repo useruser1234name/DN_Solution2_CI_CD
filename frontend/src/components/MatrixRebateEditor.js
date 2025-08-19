@@ -22,15 +22,26 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
     { value: 99000, label: '99K' },
   ]);
 
-  // 동적 계약기간 관리 (기본 3개)
-  const [contractPeriods, setContractPeriods] = useState([12, 24, 36]);
+  // 동적 계약기간 관리 (기본 2개 - MNP 버전)
+  const [contractPeriods, setContractPeriods] = useState([12, 24]);
+  
+  // 계약기간 레이블 매핑
+  const periodLabels = {
+    12: '12개월MNP',
+    24: '24개월MNP',
+    36: '36개월MNP',
+    48: '48개월MNP',
+    60: '60개월MNP',
+  };
   
   // 모달 상태
   const [addRowModal, setAddRowModal] = useState(false);
+  const [editRowModal, setEditRowModal] = useState(false);
   const [addColumnModal, setAddColumnModal] = useState(false);
   const [newPlanValue, setNewPlanValue] = useState('');
   const [newPlanLabel, setNewPlanLabel] = useState('');
   const [newPeriod, setNewPeriod] = useState('');
+  const [editingPlan, setEditingPlan] = useState(null);
 
   useEffect(() => {
     console.log('[MatrixRebateEditor] matrix prop 변경됨:', matrix);
@@ -121,23 +132,39 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
           }}>
             {record.planLabel}
           </div>
-          {planRanges.length > 1 && (
+          <div>
             <Button 
               type="text" 
               size="small" 
-              icon={<DeleteOutlined />}
+              icon={<EditOutlined />}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('[MatrixRebateEditor] 요금제 삭제 버튼 클릭:', record.planValue);
-                handleDeleteRow(record.planValue);
+                console.log('[MatrixRebateEditor] 요금제 수정 버튼 클릭:', record.planValue);
+                handleEditRow(record.planValue, record.planLabel);
               }}
               disabled={disabled}
-              danger
-              title={`요금제 삭제 (현재 ${planRanges.length}개)`}
+              title="요금제 수정"
               tabIndex={-1}
             />
-          )}
+            {planRanges.length > 1 && (
+              <Button 
+                type="text" 
+                size="small" 
+                icon={<DeleteOutlined />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('[MatrixRebateEditor] 요금제 삭제 버튼 클릭:', record.planValue);
+                  handleDeleteRow(record.planValue);
+                }}
+                disabled={disabled}
+                danger
+                title={`요금제 삭제 (현재 ${planRanges.length}개)`}
+                tabIndex={-1}
+              />
+            )}
+          </div>
         </Space>
       ),
     },
@@ -145,7 +172,7 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
     ...contractPeriods.map(period => ({
       title: (
         <Space>
-          <span>{period}개월</span>
+          <span>{periodLabels[period] || `${period}개월MNP`}</span>
           <Button 
             type="text" 
             size="small" 
@@ -291,7 +318,11 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
       return;
     }
 
-    const newPlan = { value: planValue, label: newPlanLabel };
+    // 새 요금제 라벨 포맷팅 - K 형식으로 변경
+    const valueInK = Math.floor(planValue / 1000);
+    const formattedLabel = `${valueInK}K`;
+    
+    const newPlan = { value: planValue, label: formattedLabel };
     const updatedPlanRanges = [...planRanges, newPlan].sort((a, b) => a.value - b.value);
     setPlanRanges(updatedPlanRanges);
 
@@ -306,7 +337,78 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
     setAddRowModal(false);
     setNewPlanValue('');
     setNewPlanLabel('');
-    message.success(`요금제 ${newPlanLabel}이 추가되었습니다.`);
+    message.success(`요금제 ${formattedLabel}이 추가되었습니다.`);
+  };
+
+  // 행(요금제) 수정 처리
+  const handleEditRow = (planValue, currentLabel) => {
+    setEditingPlan({ value: planValue, label: currentLabel });
+    // 수정을 위해 현재 값 설정
+    setNewPlanValue(planValue.toString());
+    setNewPlanLabel(currentLabel);
+    setEditRowModal(true);
+  };
+  
+  // 행(요금제) 수정 저장
+  const handleSaveEdit = () => {
+    if (!newPlanValue) {
+      message.error('요금제 금액을 입력해주세요.');
+      return;
+    }
+    
+    const planValue = parseInt(newPlanValue);
+    
+    // 자기 자신을 제외한 다른 요금제와 값이 겹치는지 확인
+    if (planValue !== editingPlan.value && 
+        planRanges.some(plan => plan.value === planValue)) {
+      message.error('이미 존재하는 요금제 값입니다.');
+      return;
+    }
+    
+    // 새 요금제 라벨 포맷팅 - K 형식으로 변경
+    const valueInK = Math.floor(planValue / 1000);
+    const formattedLabel = `${valueInK}K`;
+    
+    // 요금제 값이 변경되었는지 확인
+    if (planValue !== editingPlan.value) {
+      // 값이 변경되었으므로 기존 데이터 이동 필요
+      const newMatrixData = { ...matrixData };
+      
+      // 기존 데이터 값 복사
+      contractPeriods.forEach(period => {
+        const oldKey = `${editingPlan.value}_${period}`;
+        const newKey = `${planValue}_${period}`;
+        newMatrixData[newKey] = matrixData[oldKey] || 0;
+        delete newMatrixData[oldKey]; // 기존 키 삭제
+      });
+      
+      setMatrixData(newMatrixData);
+      
+      // 요금제 배열 업데이트
+      const updatedPlanRanges = planRanges.map(plan => 
+        plan.value === editingPlan.value ? 
+        { value: planValue, label: formattedLabel } : plan
+      ).sort((a, b) => a.value - b.value);
+      
+      setPlanRanges(updatedPlanRanges);
+      
+      // 부모 컴포넌트에 변경사항 전달
+      updateParentMatrix(newMatrixData, updatedPlanRanges, contractPeriods);
+    } else {
+      // 값은 그대로이고 라벨만 변경
+      const updatedPlanRanges = planRanges.map(plan => 
+        plan.value === editingPlan.value ? 
+        { ...plan, label: formattedLabel } : plan
+      );
+      
+      setPlanRanges(updatedPlanRanges);
+    }
+    
+    setEditRowModal(false);
+    setEditingPlan(null);
+    setNewPlanValue('');
+    setNewPlanLabel('');
+    message.success('요금제가 수정되었습니다.');
   };
 
   // 행(요금제) 삭제
@@ -435,12 +537,12 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
   };
 
   return (
-    <Card 
+          <Card 
       title={
-        <Space>
-          <DollarOutlined style={{ color: '#1890ff' }} />
-          <span>리베이트 매트릭스 - {carrier} 번호이동</span>
-        </Space>
+        <div className="matrix-title" id="matrix-title-container">
+          <DollarOutlined style={{ color: 'white' }} />
+          <span style={{ color: 'white', fontWeight: 'bold' }}>수수료 매트릭스 - {carrier} 번호이동</span>
+        </div>
       }
       className="matrix-rebate-editor"
       extra={
@@ -469,19 +571,21 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
     >
       <div className="matrix-description">
         <Text type="secondary">
-          요금제별 계약기간에 따른 리베이트 금액을 입력하세요. (단위: 원)
+          요금제별 계약기간에 따른 수수료 금액을 입력하세요. (단위: 원)
         </Text>
       </div>
 
-      <Table
-        columns={columns}
-        dataSource={dataSource}
-        pagination={false}
-        size="middle"
-        bordered
-        className="rebate-matrix-table"
-        scroll={{ x: 600 }}
-      />
+      <div className="rebate-matrix-table-container">
+        <Table
+          columns={columns}
+          dataSource={dataSource}
+          pagination={false}
+          size="middle"
+          bordered
+          className="rebate-matrix-table"
+          scroll={{ x: 600, y: 400 }}
+        />
+      </div>
 
       <div className="matrix-summary" style={{ marginTop: 16 }}>
         <Text type="secondary">
@@ -517,13 +621,35 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
               parser={value => value.replace(/\$\s?|(,*)/g, '')}
             />
           </div>
+        </Space>
+      </Modal>
+      
+      {/* 요금제 수정 모달 */}
+      <Modal
+        title="요금제 수정"
+        open={editRowModal}
+        onOk={handleSaveEdit}
+        onCancel={() => {
+          setEditRowModal(false);
+          setEditingPlan(null);
+          setNewPlanValue('');
+          setNewPlanLabel('');
+        }}
+        okText="저장"
+        cancelText="취소"
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
           <div>
-            <Text strong>요금제 라벨</Text>
-            <Input
-              value={newPlanLabel}
-              onChange={(e) => setNewPlanLabel(e.target.value)}
-              style={{ marginTop: 8 }}
-              placeholder="예: 110K"
+            <Text strong>요금제 금액 (원)</Text>
+            <InputNumber
+              value={newPlanValue}
+              onChange={setNewPlanValue}
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder="예: 110000"
+              min={1000}
+              step={1000}
+              formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={value => value.replace(/\$\s?|(,*)/g, '')}
             />
           </div>
         </Space>
@@ -549,11 +675,11 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
             style={{ width: '100%', marginTop: 8 }}
             placeholder="계약기간을 선택하세요"
           >
-            <Option value="36">36개월</Option>
-            <Option value="48">48개월</Option>
-            <Option value="60">60개월</Option>
-            <Option value="6">6개월</Option>
-            <Option value="18">18개월</Option>
+            <Option value="36">36개월MNP</Option>
+            <Option value="48">48개월MNP</Option>
+            <Option value="60">60개월MNP</Option>
+            <Option value="6">6개월MNP</Option>
+            <Option value="18">18개월MNP</Option>
           </Select>
           <Text type="secondary" style={{ fontSize: '12px', marginTop: 8, display: 'block' }}>
             일반적이지 않은 기간을 추가하려면 직접 입력하세요:

@@ -11,12 +11,43 @@ const PolicyCreatePage = () => {
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
     
+    // 그레이드 추가 핸들러
+    const handleAddGrade = () => {
+        setFormData(prev => ({
+            ...prev,
+            grades: [...prev.grades, { count: '', amount: '' }]
+        }));
+    };
+    
+    // 그레이드 변경 핸들러
+    const handleGradeChange = (index, field, value) => {
+        const updatedGrades = [...formData.grades];
+        updatedGrades[index][field] = value;
+        
+        setFormData(prev => ({
+            ...prev,
+            grades: updatedGrades
+        }));
+    };
+    
+    // 그레이드 삭제 핸들러
+    const handleRemoveGrade = (index) => {
+        const updatedGrades = formData.grades.filter((_, i) => i !== index);
+        
+        setFormData(prev => ({
+            ...prev,
+            grades: updatedGrades
+        }));
+    };
+    
     const [formData, setFormData] = useState({
         title: '',
         description: '',
         carrier: 'skt',
-        expose: true,
-        is_active: true
+        is_active: true,
+        activation_notes: '', // 개통시 유의사항
+        common_notes: '',    // 공통 유의사항
+        grades: []           // 그레이드 설정 배열 [{count: 50, amount: 20000}, {count: 100, amount: 30000}]
     });
     
     const [rebateMatrix, setRebateMatrix] = useState([]);
@@ -56,7 +87,7 @@ const PolicyCreatePage = () => {
         }
 
         if (rebateMatrix.length === 0) {
-            newErrors.rebateMatrix = '최소 하나 이상의 리베이트를 설정해주세요.';
+            newErrors.rebateMatrix = '최소 하나 이상의 수수료를 설정해주세요.';
         }
 
         setErrors(newErrors);
@@ -83,16 +114,16 @@ const PolicyCreatePage = () => {
             if (policyResponse.success) {
                 const policyId = policyResponse.data.id;
                 
-                // 리베이트 매트릭스 저장 (TODO: 백엔드 API 구현 후 활성화)
+                // 수수료 매트릭스 저장 (TODO: 백엔드 API 구현 후 활성화)
                 if (rebateMatrix.length > 0) {
                     try {
                         const matrixResponse = await post(`api/policies/${policyId}/rebate-matrix/`, {
                             matrix: rebateMatrix
                         });
-                        console.log('[PolicyCreatePage] 리베이트 매트릭스 저장 응답:', matrixResponse);
+                        console.log('[PolicyCreatePage] 수수료 매트릭스 저장 응답:', matrixResponse);
                     } catch (matrixError) {
-                        console.warn('[PolicyCreatePage] 리베이트 매트릭스 저장 실패 (API 미구현):', matrixError);
-                        // 리베이트 매트릭스 저장 실패는 정책 생성을 막지 않음
+                        console.warn('[PolicyCreatePage] 수수료 매트릭스 저장 실패 (API 미구현):', matrixError);
+                        // 수수료 매트릭스 저장 실패는 정책 생성을 막지 않음
                     }
                 }
                 
@@ -117,7 +148,7 @@ const PolicyCreatePage = () => {
         <div className="policy-create-page">
             <div className="page-header">
                 <h1>새 정책 생성</h1>
-                <p>새로운 정책을 생성하고 리베이트를 설정합니다.</p>
+                <p>새로운 정책을 생성하고 수수료를 설정합니다.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="policy-form">
@@ -169,21 +200,7 @@ const PolicyCreatePage = () => {
                         {errors.carrier && <span className="error">{errors.carrier}</span>}
                     </div>
 
-                    <div className="form-row">
-                        <div className="form-group checkbox-group">
-                            <label>
-                                <input
-                                    type="checkbox"
-                                    name="expose"
-                                    checked={formData.expose}
-                                    onChange={handleChange}
-                                    disabled={loading}
-                                />
-                                정책 노출
-                            </label>
-                            <span className="field-hint">체크하면 하위 업체에서 정책을 볼 수 있습니다.</span>
-                        </div>
-
+                                        <div className="form-row">
                         <div className="form-group checkbox-group">
                             <label>
                                 <input
@@ -199,9 +216,65 @@ const PolicyCreatePage = () => {
                         </div>
                     </div>
                 </div>
+                
+                <div className="form-section">
+                    <div className="form-header">
+                        <h3>그레이드 설정</h3>
+                        <button 
+                            type="button" 
+                            className="btn btn-sm btn-primary" 
+                            onClick={() => handleAddGrade()}
+                            disabled={loading}
+                        >
+                            그레이드 추가 +
+                        </button>
+                    </div>
+                    
+                    <div className="grade-settings-container">
+                        {formData.grades && formData.grades.length > 0 ? (
+                            formData.grades.map((grade, index) => (
+                                <div key={index} className="grade-row">
+                                    <div className="grade-input-group">
+                                        <input
+                                            type="number"
+                                            value={grade.count}
+                                            onChange={(e) => handleGradeChange(index, 'count', e.target.value)}
+                                            disabled={loading}
+                                            min="1"
+                                            placeholder="건수"
+                                        />
+                                        <span className="grade-text">이상</span>
+                                        <input
+                                            type="number"
+                                            value={grade.amount}
+                                            onChange={(e) => handleGradeChange(index, 'amount', e.target.value)}
+                                            disabled={loading}
+                                            min="1000"
+                                            step="1000"
+                                            placeholder="수수료"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-danger"
+                                            onClick={() => handleRemoveGrade(index)}
+                                            disabled={loading}
+                                            title="그레이드 삭제"
+                                        >
+                                            삭제
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="no-grades-message">
+                                그레이드가 없습니다. 그레이드를 추가하세요.
+                            </div>
+                        )}
+                    </div>
+                </div>
 
                 <div className="form-section">
-                    <h3>리베이트 매트릭스</h3>
+                    <h3>수수료 매트릭스</h3>
                     {errors.rebateMatrix && (
                         <div className="error-message">{errors.rebateMatrix}</div>
                     )}
@@ -211,6 +284,36 @@ const PolicyCreatePage = () => {
                         disabled={loading}
                         carrier={formData.carrier || 'KT'}
                     />
+                </div>
+                
+                <div className="form-section">
+                    <h3>유의사항</h3>
+                    
+                    <div className="form-group">
+                        <label htmlFor="activation_notes">개통시 유의사항</label>
+                        <textarea
+                            id="activation_notes"
+                            name="activation_notes"
+                            value={formData.activation_notes}
+                            onChange={handleChange}
+                            disabled={loading}
+                            placeholder="개통시 유의해야 할 사항을 입력하세요"
+                            rows="5"
+                        />
+                    </div>
+                    
+                    <div className="form-group">
+                        <label htmlFor="common_notes">공통 유의사항</label>
+                        <textarea
+                            id="common_notes"
+                            name="common_notes"
+                            value={formData.common_notes}
+                            onChange={handleChange}
+                            disabled={loading}
+                            placeholder="공통적으로 유의해야 할 사항을 입력하세요"
+                            rows="5"
+                        />
+                    </div>
                 </div>
 
                 {errors.general && (

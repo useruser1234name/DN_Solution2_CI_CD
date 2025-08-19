@@ -59,6 +59,12 @@ const Sidebar = () => {
                     label: '새 업체 등록', 
                     icon: '➕',
                     permission: 'companies'
+                },
+                { 
+                    path: '/users/approval', 
+                    label: '사용자 승인', 
+                    icon: '✅',
+                    permission: 'canApproveUsers'
                 }
             ]
         },
@@ -79,13 +85,7 @@ const Sidebar = () => {
                     icon: '➕',
                     permission: 'canManagePolicies'  // 본사만!
                 },
-                { 
-                    path: '/carrier-plans', 
-                    label: '요금제 관리', 
-                    icon: '📱',
-                    permission: 'canManagePolicies',  // 본사만!
-                    companyTypeRestriction: 'headquarters'  // 본사 타입인 경우에만 표시
-                },
+                // 요금제 관리는 시스템 설정으로 이동
             ]
         },
         {

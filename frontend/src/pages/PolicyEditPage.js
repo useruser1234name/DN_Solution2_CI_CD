@@ -15,12 +15,44 @@ const PolicyEditPage = () => {
     const [originalPolicy, setOriginalPolicy] = useState(null);
     const [viewMode, setViewMode] = useState('view'); // 'view' 또는 'edit'
     
+    // 그레이드 추가 핸들러
+    const handleAddGrade = () => {
+        setFormData(prev => ({
+            ...prev,
+            grades: [...prev.grades, { count: '', amount: '' }]
+        }));
+    };
+    
+    // 그레이드 변경 핸들러
+    const handleGradeChange = (index, field, value) => {
+        const updatedGrades = [...formData.grades];
+        updatedGrades[index][field] = value;
+        
+        setFormData(prev => ({
+            ...prev,
+            grades: updatedGrades
+        }));
+    };
+    
+    // 그레이드 삭제 핸들러
+    const handleRemoveGrade = (index) => {
+        const updatedGrades = formData.grades.filter((_, i) => i !== index);
+        
+        setFormData(prev => ({
+            ...prev,
+            grades: updatedGrades
+        }));
+    };
+    
     const [formData, setFormData] = useState({
         title: '',
         description: '',
         carrier: 'skt',
         expose: true,
-        is_active: true
+        is_active: true,
+        activation_notes: '',
+        common_notes: '',
+        grades: []
     });
     
     const [rebateMatrix, setRebateMatrix] = useState([]);
@@ -63,7 +95,10 @@ const PolicyEditPage = () => {
                     description: policy.description || '',
                     carrier: policy.carrier || 'skt',
                     expose: policy.expose !== false,
-                    is_active: policy.is_active !== false
+                    is_active: policy.is_active !== false,
+                    activation_notes: policy.activation_notes || '',
+                    common_notes: policy.common_notes || '',
+                    grades: policy.grades || []
                 });
 
                 // 기존 리베이트 매트릭스 로드
@@ -168,7 +203,7 @@ const PolicyEditPage = () => {
         }
 
         if (rebateMatrix.length === 0) {
-            newErrors.rebateMatrix = '최소 하나 이상의 리베이트를 설정해주세요.';
+            newErrors.rebateMatrix = '최소 하나 이상의 수수료를 설정해주세요.';
         }
 
         setErrors(newErrors);
@@ -354,20 +389,6 @@ const PolicyEditPage = () => {
                             <label>
                                 <input
                                     type="checkbox"
-                                    name="expose"
-                                    checked={formData.expose}
-                                    onChange={handleChange}
-                                    disabled={saving || viewMode === 'view'}
-                                />
-                                정책 노출
-                            </label>
-                            <span className="field-hint">체크하면 하위 업체에서 정책을 볼 수 있습니다.</span>
-                        </div>
-
-                        <div className="form-group checkbox-group">
-                            <label>
-                                <input
-                                    type="checkbox"
                                     name="is_active"
                                     checked={formData.is_active}
                                     onChange={handleChange}
@@ -381,7 +402,7 @@ const PolicyEditPage = () => {
                 </div>
 
                 <div className="form-section">
-                    <h3>리베이트 매트릭스</h3>
+                    <h3>수수료 매트릭스</h3>
                     {errors.rebateMatrix && (
                         <div className="error-message">{errors.rebateMatrix}</div>
                     )}
@@ -391,6 +412,110 @@ const PolicyEditPage = () => {
                         disabled={saving || viewMode === 'view'}
                         carrier={formData.carrier || 'KT'}
                     />
+                </div>
+                
+                <div className="form-section">
+                    <h3>그레이드 설정</h3>
+                    {viewMode === 'edit' ? (
+                        <div className="grade-settings-container">
+                            <div className="form-header">
+                                <button 
+                                    type="button" 
+                                    className="btn btn-sm btn-primary" 
+                                    onClick={() => handleAddGrade()}
+                                    disabled={saving}
+                                >
+                                    그레이드 추가 +
+                                </button>
+                            </div>
+                            
+                            {formData.grades && formData.grades.length > 0 ? (
+                                formData.grades.map((grade, index) => (
+                                    <div key={index} className="grade-row">
+                                        <div className="grade-input-group">
+                                            <input
+                                                type="number"
+                                                value={grade.count}
+                                                onChange={(e) => handleGradeChange(index, 'count', e.target.value)}
+                                                disabled={saving}
+                                                min="1"
+                                                placeholder="건수"
+                                            />
+                                            <span className="grade-text">이상</span>
+                                            <input
+                                                type="number"
+                                                value={grade.amount}
+                                                onChange={(e) => handleGradeChange(index, 'amount', e.target.value)}
+                                                disabled={saving}
+                                                min="1000"
+                                                step="1000"
+                                                placeholder="수수료"
+                                            />
+                                                                                            <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-danger"
+                                                    onClick={() => handleRemoveGrade(index)}
+                                                    disabled={saving}
+                                                    title="그레이드 삭제"
+                                                >
+                                                    삭제
+                                                </button>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="no-grades-message">
+                                    그레이드가 없습니다. 그레이드를 추가하세요.
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="grades-container">
+                            {formData.grades && formData.grades.length > 0 ? (
+                                formData.grades.map((grade, index) => (
+                                    <div key={index} className="grade-item">
+                                        <span className="grade-count">{grade.count}건 이상</span>
+                                        <span className="grade-amount">{Number(grade.amount).toLocaleString()}원</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="no-grades-message">
+                                    그레이드가 없습니다.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                
+                <div className="form-section">
+                    <h3>유의사항</h3>
+                    <div className="form-group">
+                        <label htmlFor="activation_notes">개통시 유의사항</label>
+                        <textarea
+                            id="activation_notes"
+                            name="activation_notes"
+                            value={formData.activation_notes}
+                            onChange={handleChange}
+                            disabled={saving || viewMode === 'view'}
+                            readOnly={viewMode === 'view'}
+                            placeholder="개통시 유의사항을 입력하세요"
+                            rows="4"
+                        />
+                    </div>
+                    
+                    <div className="form-group">
+                        <label htmlFor="common_notes">공통 유의사항</label>
+                        <textarea
+                            id="common_notes"
+                            name="common_notes"
+                            value={formData.common_notes}
+                            onChange={handleChange}
+                            disabled={saving || viewMode === 'view'}
+                            readOnly={viewMode === 'view'}
+                            placeholder="공통 유의사항을 입력하세요"
+                            rows="4"
+                        />
+                    </div>
                 </div>
 
                 {errors.general && (

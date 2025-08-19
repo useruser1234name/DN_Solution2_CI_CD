@@ -99,6 +99,7 @@ const MENU_PERMISSIONS = {
   dashboard: [], // 모든 사용자 접근 가능
   companies: ['canViewAllCompanies', 'canManageAgencies', 'canManageDealers', 'canManageRetailers'],
   users: ['canManageUsers', 'canViewUserHierarchy'],
+  userApproval: ['canApproveUsers'], // 사용자 승인 권한 추가
   policies: ['canViewPolicies', 'canManagePolicies', 'canViewAssignedPolicies'], // 정책 조회 권한 추가
   orders: ['canCreateOrders', 'canApproveOrders', 'canViewOwnReports', 'canViewAllOrders'],
   settlements: ['canManageSettlements', 'canViewOwnSettlements'],

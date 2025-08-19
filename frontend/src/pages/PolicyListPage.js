@@ -126,10 +126,19 @@ const PolicyListPage = () => {
     };
 
     const getStatusBadge = (policy) => {
-        if (policy.is_active === false) {
+        // 디버그를 위해 값 출력
+        console.log('[PolicyListPage] 정책 상태:', { 
+            id: policy.id, 
+            title: policy.title,
+            is_active: policy.is_active, 
+            expose: policy.expose,
+            type: typeof policy.is_active
+        });
+        
+        if (policy.is_active === false || policy.is_active === 'false') {
             return <span className="badge inactive">비활성</span>;
         }
-        if (policy.expose) {
+        if (policy.expose === true || policy.expose === 'true') {
             return <span className="badge active">활성</span>;
         }
         return <span className="badge hidden">숨김</span>;
@@ -269,9 +278,10 @@ const PolicyListPage = () => {
                                                     >
                                                         노출설정
                                                     </button>
-                                                    <button 
+                                                                                                                                                                <button 
                                                         className="btn btn-small btn-primary"
-                                                        onClick={() => handleEditPolicy(policy.id)}
+                                                        onClick={() => handleViewPolicy(policy.id)}
+                                                        title="정책 상세 보기"
                                                     >
                                                         보기
                                                     </button>

@@ -24,7 +24,7 @@ import OrderCreatePageNew from './pages/OrderCreatePageNew';
 import OrderDetailPage from './pages/OrderDetailPage';
 import SettlementListPage from './pages/SettlementListPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
-import CarrierPlanManagementPage from './pages/CarrierPlanManagementPage';
+// 요금제 관리 페이지는 AdminSettingsPage로 통합
 // import { testConnection } from './services/api'; // 제거: 로그인 전 API 호출 방지
 import './App.css';
 
@@ -117,6 +117,21 @@ const App = () => {
               }
             />
             
+            {/* 사용자 승인 */}
+            <Route
+              path="/users/approval"
+              element={
+                <ProtectedRoute requiredPermissions={['canApproveUsers']}>
+                  <MainLayout>
+                    <div className="page-placeholder">
+                      <h1>✅ 사용자 승인</h1>
+                      <p>승인 대기 중인 사용자 목록을 확인하고 승인/거부할 수 있습니다.</p>
+                    </div>
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            
             {/* 정책 관리 */}
             <Route
               path="/policies"
@@ -140,16 +155,7 @@ const App = () => {
               }
             />
             
-            <Route
-              path="/carrier-plans"
-              element={
-                <ProtectedRoute requiredPermissions={['canManagePolicies']}>
-                  <MainLayout>
-                    <CarrierPlanManagementPage />
-                  </MainLayout>
-                </ProtectedRoute>
-              }
-            />
+            {/* 요금제 관리 페이지는 /settings 로 통합됨 */}
             
             <Route
               path="/policies/:id"

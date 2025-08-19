@@ -324,6 +324,61 @@
     border: 1px solid #e9ecef;
 }
 
+/* 그레이드 설정 스타일 */
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.grade-settings-container {
+    margin-top: 15px;
+}
+
+.grade-row {
+    margin-bottom: 10px;
+}
+
+.grade-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.grade-input-group input {
+    width: 120px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.grade-text {
+    font-weight: 500;
+}
+
+.no-grades-message {
+    color: #888;
+    font-style: italic;
+    padding: 10px 0;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.btn-danger {
+    background: #ff4d4f;
+    color: white !important;
+    border-color: #ff4d4f;
+}
+
+.btn-danger:hover {
+    background: #ff7875;
+    border-color: #ff7875;
+}
+
 .flow-step {
     display: flex;
     align-items: center;

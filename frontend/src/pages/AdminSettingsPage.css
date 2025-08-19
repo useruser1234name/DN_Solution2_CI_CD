@@ -77,3 +77,72 @@
   margin-right: 8px;
 }
 
+/* 요금제 관리 스타일 */
+.carrier-plan-management {
+  width: 100%;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.carrier-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.carrier-tab {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #f5f5f5;
+  transition: all 0.3s;
+}
+
+.carrier-tab.active {
+  background-color: #1890ff;
+  color: white;
+}
+
+.add-button {
+  margin-left: 16px;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.total-count {
+  font-weight: 500;
+}
+
+.table-wrapper {
+  margin-top: 16px;
+}
+
+/* 페이지네이션 중앙 정렬 - 별도 컨테이너 */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 24px;
+  padding-bottom: 24px;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.ant-pagination {
+  display: flex;
+  justify-content: center;
+}
+
+

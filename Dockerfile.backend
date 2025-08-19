@@ -1,5 +1,5 @@
 # Django Backend Dockerfile - DN_SOLUTION2
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # 환경 변수 설정
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 
 # Python 의존성 설치
 COPY requirements.txt requirements-dev.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip==24.0 && \
     pip install --no-cache-dir -r requirements.txt
 
 # 개발 환경에서는 dev 의존성도 설치

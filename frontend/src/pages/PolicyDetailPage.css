@@ -1,43 +1,67 @@
 .policy-detail-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 24px;
+  background: #ffffff !important;
+  min-height: 100vh;
+}
+
+/* 전역 다크 모드 비활성화 */
+.policy-detail-page,
+.policy-detail-page *,
+.policy-detail-page *::before,
+.policy-detail-page *::after {
+  background-color: #ffffff !important;
+  color: #262626 !important;
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f0f0f0;
 }
 
 .header-content {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: flex-start;
   gap: 15px;
+  flex: 1;
 }
 
 .back-btn {
-  background: none;
-  border: none;
-  color: #666;
+  padding: 8px 16px;
+  background: #f5f5f5 !important;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  color: #666 !important;
+  text-decoration: none;
   font-size: 14px;
   cursor: pointer;
-  padding: 5px 0;
-  text-align: left;
+  transition: all 0.2s ease;
 }
 
 .back-btn:hover {
-  color: #007bff;
-  text-decoration: underline;
+  background: #e9e9e9 !important;
+  color: #333 !important;
 }
 
 .header-info h1 {
+  color: #262626 !important;
   font-size: 28px;
   font-weight: 600;
-  color: #333;
+  margin: 0 0 8px 0;
+}
+
+.header-info p {
+  color: #595959 !important;
+  font-size: 16px;
   margin: 0;
 }
 
@@ -137,19 +161,21 @@
 }
 
 .policy-section {
-  background: white;
-  border-radius: 8px;
-  padding: 25px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: #ffffff !important;
+  border: 1px solid #f0f0f0 !important;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
 }
 
 .policy-section h3 {
+  color: #262626 !important;
   font-size: 20px;
   font-weight: 600;
-  color: #333;
   margin: 0 0 20px 0;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #f8f9fa;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
 }
 
 .info-grid {
@@ -166,7 +192,7 @@
 
 .info-item label {
   font-weight: 600;
-  color: #666;
+  color: #666 !important;
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -174,8 +200,88 @@
 
 .info-item span {
   font-size: 16px;
-  color: #333;
+  color: #333 !important;
   padding: 8px 0;
+}
+
+/* 폼 스타일 */
+.form-section {
+  background: #ffffff;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #262626 !important;
+  font-weight: 500;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #d9d9d9;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #262626 !important;
+  background: #ffffff !important;
+  transition: all 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  outline: none;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #bfbfbf !important;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #262626 !important;
+  font-weight: 500;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  color: #8c8c8c !important;
+  font-size: 12px;
 }
 
 .policy-html-content {
@@ -259,6 +365,99 @@
 .exposed-company-item:hover {
   background-color: #e9ecef;
   border-color: #dee2e6;
+}
+
+/* 그레이드 정보 스타일 */
+.grades-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.grade-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #f0f7ff !important;
+  border: 1px solid #d1e9ff;
+  border-radius: 8px;
+}
+
+.grade-count {
+  font-weight: 600;
+  color: #0056b3 !important;
+}
+
+.grade-amount {
+  font-weight: 600;
+  color: #28a745 !important;
+}
+
+/* 그레이드 설정 스타일 */
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.grade-settings-container {
+  margin-top: 15px;
+}
+
+.grade-row {
+  margin-bottom: 10px;
+}
+
+.grade-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grade-input-group input {
+  width: 120px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.grade-text {
+  font-weight: 500;
+}
+
+.no-grades-message {
+  color: #888 !important;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* 유의사항 스타일 */
+.notes-item {
+  margin-bottom: 20px;
+}
+
+.notes-item label {
+  display: block;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.notes-content {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  white-space: pre-line;
+  line-height: 1.6;
 }
 
 .company-info {
