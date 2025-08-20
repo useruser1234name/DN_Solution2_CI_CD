@@ -4,6 +4,7 @@ import { SettingOutlined, ShopOutlined, MobileOutlined, DollarOutlined } from '@
 import CarrierPlanSelector from '../components/common/CarrierPlanSelector';
 import DeviceSelector from '../components/common/DeviceSelector';
 import OrderFormBuilder from '../components/OrderFormBuilder';
+import CarrierPlanManagementPage from './CarrierPlanManagementPage';
 import './AdminSettingsPage.css';
 
 const { Title, Text } = Typography;
@@ -22,16 +23,9 @@ const AdminSettingsPage = () => {
         </span>
       ),
       children: (
-        <Card title="통신사 요금제 관리" className="settings-card">
-          <Text type="secondary" className="card-description">
-            통신사별 요금제를 관리하고 새로운 요금제를 추가할 수 있습니다.
-          </Text>
-          <Divider />
-          <CarrierPlanSelector 
-            showAddButton={true}
-            showManagement={true}
-          />
-        </Card>
+        <div className="carrier-plan-tab-content">
+          <CarrierPlanManagementPage />
+        </div>
       )
     },
     {

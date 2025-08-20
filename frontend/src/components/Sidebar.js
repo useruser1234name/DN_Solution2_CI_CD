@@ -78,14 +78,7 @@ const Sidebar = () => {
                     label: '새 정책 등록', 
                     icon: '➕',
                     permission: 'canManagePolicies'  // 본사만!
-                },
-                { 
-                    path: '/carrier-plans', 
-                    label: '요금제 관리', 
-                    icon: '📱',
-                    permission: 'canManagePolicies',  // 본사만!
-                    companyTypeRestriction: 'headquarters'  // 본사 타입인 경우에만 표시
-                },
+                }
             ]
         },
         {

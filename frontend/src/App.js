@@ -24,7 +24,6 @@ import OrderCreatePageNew from './pages/OrderCreatePageNew';
 import OrderDetailPage from './pages/OrderDetailPage';
 import SettlementListPage from './pages/SettlementListPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
-import CarrierPlanManagementPage from './pages/CarrierPlanManagementPage';
 // import { testConnection } from './services/api'; // 제거: 로그인 전 API 호출 방지
 import './App.css';
 
@@ -140,17 +139,7 @@ const App = () => {
               }
             />
             
-            <Route
-              path="/carrier-plans"
-              element={
-                <ProtectedRoute requiredPermissions={['canManagePolicies']}>
-                  <MainLayout>
-                    <CarrierPlanManagementPage />
-                  </MainLayout>
-                </ProtectedRoute>
-              }
-            />
-            
+
             <Route
               path="/policies/:id"
               element={

@@ -77,3 +77,35 @@
   margin-right: 8px;
 }
 
+/* 통신사 요금제 관리 탭 컨테이너 */
+.carrier-plan-tab-content {
+  width: 100%;
+}
+
+/* 통신사 요금제 관리 페이지 스타일 오버라이드 */
+.carrier-plan-tab-content .carrier-plan-management-page {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* 카드 스타일 조정 */
+.carrier-plan-tab-content .carrier-plan-card {
+  border: none;
+  box-shadow: none;
+}
+
+/* 페이지네이션 래퍼 중앙 정렬 */
+.carrier-plan-tab-content .pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* 페이지네이션만 중앙 정렬 */
+.carrier-plan-tab-content .ant-pagination {
+  text-align: center;
+  margin-top: 16px;
+}
+

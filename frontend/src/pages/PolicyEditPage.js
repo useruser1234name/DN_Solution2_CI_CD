@@ -20,8 +20,6 @@ const PolicyEditPage = () => {
         title: '',
         description: '',
         carrier: 'skt',
-        commission_agency: 0,
-        commission_retail: 0,
         expose: true,
         premium_market_expose: false,
         is_active: true,
@@ -68,8 +66,6 @@ const PolicyEditPage = () => {
                     title: policy.title || '',
                     description: policy.description || '',
                     carrier: policy.carrier || 'skt',
-                    commission_agency: policy.commission_agency || 0,
-                    commission_retail: policy.commission_retail || 0,
                     is_active: policy.is_active !== false,
                     grade_period_type: policy.grade_period_type || 'monthly'
                 });
@@ -158,13 +154,7 @@ const PolicyEditPage = () => {
             newErrors.carrier = '통신사를 선택해주세요.';
         }
 
-        if (formData.commission_agency < 0) {
-            newErrors.commission_agency = '대리점 수수료는 0 이상이어야 합니다.';
-        }
 
-        if (formData.commission_retail < 0) {
-            newErrors.commission_retail = '판매점 수수료는 0 이상이어야 합니다.';
-        }
 
         // 그레이드 검증
         if (commissionGrades.length > 0) {
@@ -356,46 +346,7 @@ const PolicyEditPage = () => {
                     </div>
                 </div>
 
-                {/* 기본 수수료 설정 섹션 */}
-                <div className="form-section">
-                    <h3>기본 수수료 설정</h3>
-                    
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="commission_agency">대리점 수수료 (원) *</label>
-                            <input
-                                type="number"
-                                id="commission_agency"
-                                name="commission_agency"
-                                value={formData.commission_agency}
-                                onChange={handleChange}
-                                disabled={saving || viewMode === 'view'}
-                                readOnly={viewMode === 'view'}
-                                min="0"
-                                step="1000"
-                                placeholder="0"
-                            />
-                            {errors.commission_agency && <span className="error">{errors.commission_agency}</span>}
-                        </div>
 
-                        <div className="form-group">
-                            <label htmlFor="commission_retail">판매점 수수료 (원) *</label>
-                            <input
-                                type="number"
-                                id="commission_retail"
-                                name="commission_retail"
-                                value={formData.commission_retail}
-                                onChange={handleChange}
-                                disabled={saving || viewMode === 'view'}
-                                readOnly={viewMode === 'view'}
-                                min="0"
-                                step="1000"
-                                placeholder="0"
-                            />
-                            {errors.commission_retail && <span className="error">{errors.commission_retail}</span>}
-                        </div>
-                    </div>
-                </div>
 
                 {/* 수수료 그레이드 설정 섹션 */}
                 <div className="form-section">

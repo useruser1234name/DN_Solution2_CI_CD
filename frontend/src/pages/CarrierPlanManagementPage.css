@@ -85,6 +85,14 @@
   background-color: #e6f7ff;
 }
 
+/* 페이지네이션 래퍼 */
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  width: 100%;
+}
+
 /* 페이지네이션 중앙 정렬 */
 .carrier-plan-card .ant-pagination {
   display: flex;

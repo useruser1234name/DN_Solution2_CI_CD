@@ -12,7 +12,8 @@ import {
   message, 
   Typography, 
   Popconfirm,
-  Divider
+  Divider,
+  Pagination
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -94,6 +95,11 @@ const CarrierPlanManagementPage = () => {
   // 통신사 변경 핸들러
   const handleCarrierChange = (carrier) => {
     setActiveCarrier(carrier);
+    // 통신사 변경 시 첫 페이지로 이동
+    setPagination(prev => ({
+      ...prev,
+      current: 1
+    }));
   };
 
   // 요금제 추가 모달 열기
@@ -145,10 +151,7 @@ const CarrierPlanManagementPage = () => {
     }
   };
 
-  // 페이지네이션 변경 핸들러
-  const handleTableChange = (pagination) => {
-    setPagination(pagination);
-  };
+
 
   // 페이지 크기 변경 핸들러
   const handlePageSizeChange = (value) => {
@@ -214,6 +217,13 @@ const CarrierPlanManagementPage = () => {
     },
   ];
 
+  // 현재 페이지에 표시할 데이터 계산
+  const getCurrentPageData = () => {
+    const startIndex = (pagination.current - 1) * pagination.pageSize;
+    const endIndex = startIndex + pagination.pageSize;
+    return carrierPlans.slice(startIndex, endIndex);
+  };
+
   // 통신사 탭 옵션
   const carrierTabs = [
     { key: 'all', label: '전체 요금제' },
@@ -269,18 +279,28 @@ const CarrierPlanManagementPage = () => {
         <div className="table-wrapper">
           <Table 
             columns={columns} 
-            dataSource={carrierPlans} 
+            dataSource={getCurrentPageData()} 
             rowKey="id"
             loading={loading}
-            onChange={handleTableChange}
-            pagination={{
-              position: ['bottomCenter'],
-              showSizeChanger: false, // 기본 사이즈 체인저 숨김
-              pageSize: pagination.pageSize,
-              current: pagination.current,
-              total: pagination.total,
-              showTotal: () => null, // 기본 총 개수 표시 숨김
+            pagination={false} // 테이블 자체 페이지네이션 비활성화
+          />
+        </div>
+        
+        {/* 별도 페이지네이션 컴포넌트 */}
+        <div className="pagination-wrapper">
+          <Pagination
+            current={pagination.current}
+            pageSize={pagination.pageSize}
+            total={pagination.total}
+            showSizeChanger={false}
+            onChange={(page, pageSize) => {
+              setPagination(prev => ({
+                ...prev,
+                current: page,
+                pageSize: pageSize
+              }));
             }}
+            showTotal={() => null}
           />
         </div>
       </Card>
