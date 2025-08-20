@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from companies.models import Company
 from orders.models import Order
-from policies.models import Policy, RebateMatrix
+from policies.models import Policy, CommissionMatrix
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from companies.models import Company
 from .models import (
     Policy, PolicyNotice, PolicyAssignment, PolicyExposure, 
-    AgencyRebate, RebateMatrix, OrderFormTemplate, OrderFormField,
+    AgencyRebate, CommissionMatrix, OrderFormTemplate, OrderFormField,
     CarrierPlan, DeviceModel, DeviceColor
 )
 
@@ -302,8 +302,8 @@ class DeviceColorSerializer(serializers.ModelSerializer):
         return data
 
 
-class RebateMatrixSerializer(serializers.ModelSerializer):
-    """리베이트 매트릭스 시리얼라이저"""
+class CommissionMatrixSerializer(serializers.ModelSerializer):
+    """수수료 매트릭스 시리얼라이저 (기존 RebateMatrixSerializer에서 이름 변경)"""
     
     policy_title = serializers.CharField(source='policy.title', read_only=True)
     carrier_display = serializers.CharField(source='get_carrier_display', read_only=True)
@@ -311,7 +311,7 @@ class RebateMatrixSerializer(serializers.ModelSerializer):
     contract_period_display = serializers.CharField(source='get_contract_period_display', read_only=True)
     
     class Meta:
-        model = RebateMatrix
+        model = CommissionMatrix
         fields = [
             'id', 'policy', 'policy_title', 'carrier', 'carrier_display',
             'plan_range', 'plan_range_display', 'contract_period', 'contract_period_display',
@@ -334,7 +334,7 @@ class RebateMatrixSerializer(serializers.ModelSerializer):
         
         # 중복 검사 (수정 시에는 자기 자신 제외)
         instance = getattr(self, 'instance', None)
-        existing = RebateMatrix.objects.filter(
+        existing = CommissionMatrix.objects.filter(
             policy=policy,
             carrier=carrier,
             plan_range=plan_range,

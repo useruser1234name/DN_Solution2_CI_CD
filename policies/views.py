@@ -21,12 +21,12 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .models import (
-    Policy, PolicyNotice, PolicyAssignment, RebateMatrix,
+    Policy, PolicyNotice, PolicyAssignment, CommissionMatrix,
     CarrierPlan, DeviceModel, DeviceColor
 )
 from .serializers import (
     PolicySerializer, PolicyNoticeSerializer, CarrierPlanSerializer,
-    DeviceModelSerializer, DeviceColorSerializer, RebateMatrixSerializer
+    DeviceModelSerializer, DeviceColorSerializer, CommissionMatrixSerializer
 )
 from companies.models import Company
 
@@ -624,6 +624,7 @@ class PolicyApiCreateView(APIView):
         """정책 생성 시 기본 주문서 양식 자동 생성"""
         try:
             from .models import OrderFormTemplate, OrderFormField
+            from .form_builder import FormBuilder
             
             # 기본 템플릿 생성
             template = OrderFormTemplate.objects.create(
@@ -633,81 +634,8 @@ class PolicyApiCreateView(APIView):
                 created_by=user
             )
             
-            # 기본 필드들 생성
-            default_fields = [
-                # 고객 정보
-                {
-                    'field_name': 'customer_name',
-                    'field_label': '고객명',
-                    'field_type': 'text',
-                    'is_required': True,
-                    'placeholder': '고객명을 입력하세요',
-                    'help_text': '고객의 이름을 입력하세요',
-                    'order': 1,
-                    'field_options': {}
-                },
-                {
-                    'field_name': 'birth_date',
-                    'field_label': '생년월일',
-                    'field_type': 'text',
-                    'is_required': True,
-                    'placeholder': '예: 901234',
-                    'help_text': '고객의 생년월일 6자리를 입력하세요',
-                    'order': 2,
-                    'field_options': {}
-                },
-                {
-                    'field_name': 'phone_number',
-                    'field_label': '개통번호',
-                    'field_type': 'phone',
-                    'is_required': True,
-                    'placeholder': '010-1234-5678',
-                    'help_text': '개통할 전화번호를 입력하세요',
-                    'order': 3,
-                    'field_options': {}
-                },
-                # 통신 정보
-                {
-                    'field_name': 'carrier_plan',
-                    'field_label': '요금제',
-                    'field_type': 'carrier_plan',
-                    'is_required': True,
-                    'placeholder': '요금제를 선택하세요',
-                    'help_text': '통신사 요금제를 선택하세요',
-                    'order': 4,
-                    'field_options': {'dynamic': True, 'source': 'CarrierPlan'}
-                },
-                {
-                    'field_name': 'sim_type',
-                    'field_label': '유심 타입',
-                    'field_type': 'sim_type',
-                    'is_required': True,
-                    'placeholder': '유심 타입을 선택하세요',
-                    'help_text': '유심 타입에 따라 리베이트가 달라질 수 있습니다',
-                    'order': 5,
-                    'field_options': {}
-                },
-                {
-                    'field_name': 'contract_period',
-                    'field_label': '계약기간',
-                    'field_type': 'contract_period',
-                    'is_required': True,
-                    'placeholder': '계약기간을 선택하세요',
-                    'help_text': '계약기간에 따라 리베이트가 달라질 수 있습니다',
-                    'order': 6,
-                    'field_options': {}
-                },
-                {
-                    'field_name': 'installment_months',
-                    'field_label': '할부개월',
-                    'field_type': 'installment_months',
-                    'is_required': True,
-                    'placeholder': '할부개월을 선택하세요',
-                    'help_text': '단말기 할부 개월 수를 선택하세요',
-                    'order': 7,
-                    'field_options': {}
-                }
-            ]
+            # FormBuilder의 DEFAULT_FIELDS 사용
+            default_fields = FormBuilder.DEFAULT_FIELDS
             
             # 필드들 생성
             for field_data in default_fields:
@@ -1809,7 +1737,7 @@ class RebateCalculationAPIView(APIView):
             plan = get_object_or_404(CarrierPlan, id=plan_id, carrier=carrier)
             
             # 리베이트 매트릭스에서 금액 조회
-            rebate_amount = RebateMatrix.get_rebate_amount(
+            rebate_amount = CommissionMatrix.get_commission_amount(
                 policy=policy,
                 carrier=carrier,
                 plan_amount=plan.plan_price,
@@ -2052,21 +1980,21 @@ class PolicyFormTemplateView(APIView):
             }, status=500)
 
 
-class PolicyRebateMatrixView(APIView):
+class PolicyRebateMatrixView(APIView):  # 이름은 유지하고 내부에서 CommissionMatrix 사용
     """정책별 리베이트 매트릭스 API"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request, policy_id):
         """정책의 리베이트 매트릭스 조회"""
         try:
-            from .models import RebateMatrix
+            from .models import CommissionMatrix
             
             logger.info(f"리베이트 매트릭스 조회 요청 - 정책 ID: {policy_id}")
             policy = get_object_or_404(Policy, id=policy_id)
             logger.info(f"정책 찾음: {policy.title}")
             
             # 해당 정책의 리베이트 매트릭스 조회
-            matrix_queryset = RebateMatrix.objects.filter(policy=policy).order_by('plan_range', 'contract_period')
+            matrix_queryset = CommissionMatrix.objects.filter(policy=policy).order_by('plan_range', 'contract_period')
             logger.info(f"리베이트 매트릭스 개수: {matrix_queryset.count()}")
             
             if not matrix_queryset.exists():
@@ -2091,7 +2019,7 @@ class PolicyRebateMatrixView(APIView):
                     'contract_period': matrix_item.contract_period,
                     'rebate_amount': float(matrix_item.rebate_amount),
                     'carrier': matrix_item.carrier,
-                    'row': list(dict(RebateMatrix.PLAN_RANGE_CHOICES).keys()).index(matrix_item.plan_range),
+                    'row': list(dict(CommissionMatrix.PLAN_RANGE_CHOICES).keys()).index(matrix_item.plan_range),
                     'col': 0 if matrix_item.contract_period == 12 else 1  # 12개월=0, 24개월=1
                 })
             
@@ -2123,13 +2051,13 @@ class PolicyRebateMatrixView(APIView):
     def _save_matrix(self, request, policy_id):
         """리베이트 매트릭스 저장 공통 로직"""
         try:
-            from .models import RebateMatrix
+            from .models import CommissionMatrix
             
             policy = get_object_or_404(Policy, id=policy_id)
             data = request.data
             
             # 기존 매트릭스 삭제 후 새로 생성
-            RebateMatrix.objects.filter(policy=policy).delete()
+            CommissionMatrix.objects.filter(policy=policy).delete()
             
             # 새 매트릭스 생성
             matrix_data = data.get('matrix', [])
@@ -2152,7 +2080,7 @@ class PolicyRebateMatrixView(APIView):
                 
                 # 0이 아닌 리베이트만 저장
                 if rebate_amount > 0:
-                    RebateMatrix.objects.create(
+                    CommissionMatrix.objects.create(
                         policy=policy,
                         carrier=policy.carrier,  # 정책의 통신사 사용
                         plan_range=plan_range_value,

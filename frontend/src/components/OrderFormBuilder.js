@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
-import { Modal, Form, Input, Select, Button, Space, Card, Switch, message } from 'antd';
-import { PlusOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Input, Select, Button, Space, Card, Switch, message, Tabs, Spin } from 'antd';
+import { PlusOutlined, DeleteOutlined, DragOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { post } from '../services/api';
+import { get, post } from '../services/api';
 import './OrderFormBuilder.css';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { TabPane } = Tabs;
 
-const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
+const OrderFormBuilder = () => {
   const [form] = Form.useForm();
+  const [activeTab, setActiveTab] = useState('preview');
+  const [editMode, setEditMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [fields, setFields] = useState([
     {
       id: 'price_a',
@@ -42,6 +48,54 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
     }
   ]);
   const [saving, setSaving] = useState(false);
+  
+  // 템플릿 로드
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+  
+  // 템플릿 목록 가져오기
+  const fetchTemplates = async () => {
+    try {
+      setLoading(true);
+      const response = await get('api/system/order-templates/');
+      
+      if (response.success && response.data) {
+        setTemplates(response.data);
+        
+        // 기본 템플릿 선택
+        if (response.data.length > 0) {
+          setSelectedTemplate(response.data[0]);
+          await loadTemplateFields(response.data[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('템플릿 로드 실패:', error);
+      message.error('주문서 양식을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // 특정 템플릿의 필드 로드
+  const loadTemplateFields = async (templateId) => {
+    try {
+      setLoading(true);
+      const response = await get(`api/system/order-templates/${templateId}/fields/`);
+      
+      if (response.success && response.data) {
+        setFields(response.data.map(field => ({
+          ...field,
+          id: field.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        })));
+      }
+    } catch (error) {
+      console.error('필드 로드 실패:', error);
+      message.error('양식 필드를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fieldTypes = [
     { value: 'text', label: '텍스트' },
@@ -106,8 +160,8 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
       setSaving(true);
 
       const formData = {
-        title: values.title,
-        description: values.description,
+        title: values.title || selectedTemplate?.title,
+        description: values.description || selectedTemplate?.description,
         is_active: true,
         fields: fields.map(field => ({
           field_name: field.field_name,
@@ -117,13 +171,24 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
           placeholder: field.placeholder,
           help_text: field.help_text,
           field_options: field.field_options || {},
-          order: field.order
+          order: field.order,
+          is_readonly: field.is_readonly,
+          auto_fill: field.auto_fill,
+          auto_generate: field.auto_generate
         }))
       };
 
-      await post(`policies/${policyId}/order-form/`, formData);
-      message.success('주문서 양식이 저장되었습니다.');
-      onClose();
+      if (selectedTemplate) {
+        await post(`api/system/order-templates/${selectedTemplate.id}/update/`, formData);
+        message.success('주문서 양식이 업데이트되었습니다.');
+      } else {
+        await post(`api/system/order-templates/`, formData);
+        message.success('주문서 양식이 생성되었습니다.');
+      }
+      
+      setEditMode(false);
+      setActiveTab('preview');
+      await fetchTemplates(); // 다시 초기화
     } catch (error) {
       if (error.errorFields) {
         message.error('필수 입력 항목을 확인해주세요.');
@@ -133,6 +198,26 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
       console.error('Error saving form:', error);
     } finally {
       setSaving(false);
+    }
+  };
+  
+  // 편집 모드 전환
+  const handleEditMode = () => {
+    setEditMode(true);
+    setActiveTab('edit');
+    form.setFieldsValue({
+      title: selectedTemplate?.title,
+      description: selectedTemplate?.description
+    });
+  };
+  
+  // 편집 취소
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setActiveTab('preview');
+    // 필드 다시 불러오기
+    if (selectedTemplate) {
+      loadTemplateFields(selectedTemplate.id);
     }
   };
 
@@ -230,141 +315,180 @@ const OrderFormBuilder = ({ visible, onClose, policyId, policyTitle }) => {
   };
 
   return (
-    <Modal
-      title={`주문서 양식 설계 - ${policyTitle}`}
-      visible={visible}
-      onCancel={onClose}
-      width={900}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          취소
-        </Button>,
-        <Button 
-          key="save" 
-          type="primary" 
-          loading={saving}
-          onClick={handleSave}
-        >
-          저장
-        </Button>
-      ]}
-    >
-      <Form form={form} layout="vertical">
-        <Form.Item
-          name="title"
-          label="양식 제목"
-          rules={[{ required: true, message: '양식 제목을 입력하세요' }]}
-        >
-          <Input placeholder="예: SKT 5G 요금제 주문서" />
-        </Form.Item>
+    <div className="order-form-builder">
+      {loading && (
+        <div className="loading-container">
+          <Spin size="large" />
+          <div>주문서 양식 로드중...</div>
+        </div>
+      )}
 
-        <Form.Item
-          name="description"
-          label="양식 설명"
-        >
-          <TextArea rows={2} placeholder="이 양식에 대한 설명을 입력하세요" />
-        </Form.Item>
-
-        <div className="form-fields-section">
-          <div className="section-header">
-            <h3>주문서 필드</h3>
-            <Button 
-              type="dashed" 
-              icon={<PlusOutlined />}
-              onClick={handleAddField}
+      <div className="form-header">
+        <h2>주문서 양식 관리</h2>
+        {!editMode ? (
+          <Button 
+            type="primary" 
+            icon={<EditOutlined />} 
+            onClick={handleEditMode}
+          >
+            편집
+          </Button>
+        ) : null}
+      </div>
+      
+      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+        <TabPane tab={<span><EyeOutlined /> 미리보기</span>} key="preview">
+          {selectedTemplate && (
+            <Card title={selectedTemplate.title} className="preview-card">
+              <p className="template-description">{selectedTemplate.description}</p>
+              
+              <div className="field-preview-list">
+                {fields.map(field => (
+                  <div key={field.id} className="preview-field-item">
+                    <label>
+                      {field.field_label}
+                      {field.is_required && <span className="required-mark">*</span>}
+                    </label>
+                    {renderFieldPreview(field)}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </TabPane>
+        
+        <TabPane tab={<span><EditOutlined /> 편집</span>} key="edit" disabled={!editMode}>
+          <Form form={form} layout="vertical">
+            <Form.Item
+              name="title"
+              label="양식 제목"
+              rules={[{ required: true, message: '양식 제목을 입력하세요' }]}
             >
-              필드 추가
-            </Button>
-          </div>
+              <Input placeholder="예: SKT 5G 요금제 주문서" />
+            </Form.Item>
 
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="fields">
-              {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef}>
-                  {fields.map((field, index) => (
-                    <Draggable key={field.id} draggableId={field.id} index={index}>
-                      {(provided, snapshot) => (
-                        <Card
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={`field-card ${snapshot.isDragging ? 'dragging' : ''}`}
-                          style={{ ...provided.draggableProps.style }}
-                        >
-                          <div className="field-card-header">
-                            <div {...provided.dragHandleProps} className="drag-handle">
-                              <DragOutlined />
-                            </div>
-                            <Button
-                              type="text"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => handleRemoveField(field.id)}
-                            />
-                          </div>
+            <Form.Item
+              name="description"
+              label="양식 설명"
+            >
+              <TextArea rows={2} placeholder="이 양식에 대한 설명을 입력하세요" />
+            </Form.Item>
 
-                          <div className="field-config">
-                            <Space size="middle" style={{ width: '100%' }}>
-                              <Input
-                                placeholder="필드명 (영문)"
-                                value={field.field_name}
-                                onChange={(e) => handleFieldChange(field.id, 'field_name', e.target.value)}
-                                style={{ width: 150 }}
-                              />
-                              <Input
-                                placeholder="표시 레이블"
-                                value={field.field_label}
-                                onChange={(e) => handleFieldChange(field.id, 'field_label', e.target.value)}
-                                style={{ width: 150 }}
-                              />
-                              <Select
-                                value={field.field_type}
-                                onChange={(value) => handleFieldChange(field.id, 'field_type', value)}
-                                style={{ width: 120 }}
-                              >
-                                {fieldTypes.map(type => (
-                                  <Option key={type.value} value={type.value}>
-                                    {type.label}
-                                  </Option>
-                                ))}
-                              </Select>
-                              <Switch
-                                checked={field.is_required}
-                                onChange={(checked) => handleFieldChange(field.id, 'is_required', checked)}
-                                checkedChildren="필수"
-                                unCheckedChildren="선택"
-                              />
-                            </Space>
+            <div className="form-fields-section">
+              <div className="section-header">
+                <h3>주문서 필드</h3>
+                <Button 
+                  type="dashed" 
+                  icon={<PlusOutlined />}
+                  onClick={handleAddField}
+                >
+                  필드 추가
+                </Button>
+              </div>
 
-                            {field.field_type === 'select' && (
-                              <div className="field-options">
-                                <Input
-                                  placeholder="선택 옵션 (쉼표로 구분)"
-                                  value={field.field_options?.choices?.join(', ') || ''}
-                                  onChange={(e) => handleFieldChange(field.id, 'field_options', {
-                                    choices: e.target.value.split(',').map(s => s.trim()).filter(s => s)
-                                  })}
-                                  style={{ marginTop: 8 }}
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="fields">
+                  {(provided) => (
+                    <div {...provided.droppableProps} ref={provided.innerRef}>
+                      {fields.map((field, index) => (
+                        <Draggable key={field.id} draggableId={field.id} index={index}>
+                          {(provided, snapshot) => (
+                            <Card
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className={`field-card ${snapshot.isDragging ? 'dragging' : ''}`}
+                              style={{ ...provided.draggableProps.style }}
+                            >
+                              <div className="field-card-header">
+                                <div {...provided.dragHandleProps} className="drag-handle">
+                                  <DragOutlined />
+                                </div>
+                                <Button
+                                  type="text"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => handleRemoveField(field.id)}
                                 />
                               </div>
-                            )}
 
-                            <div className="field-preview">
-                              <label>{field.field_label || '레이블'} {field.is_required && <span style={{ color: 'red' }}>*</span>}</label>
-                              {renderFieldPreview(field)}
-                            </div>
-                          </div>
-                        </Card>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
-        </div>
-      </Form>
-    </Modal>
+                              <div className="field-config">
+                                <Space size="middle" style={{ width: '100%' }}>
+                                  <Input
+                                    placeholder="필드명 (영문)"
+                                    value={field.field_name}
+                                    onChange={(e) => handleFieldChange(field.id, 'field_name', e.target.value)}
+                                    style={{ width: 150 }}
+                                  />
+                                  <Input
+                                    placeholder="표시 레이블"
+                                    value={field.field_label}
+                                    onChange={(e) => handleFieldChange(field.id, 'field_label', e.target.value)}
+                                    style={{ width: 150 }}
+                                  />
+                                  <Select
+                                    value={field.field_type}
+                                    onChange={(value) => handleFieldChange(field.id, 'field_type', value)}
+                                    style={{ width: 120 }}
+                                  >
+                                    {fieldTypes.map(type => (
+                                      <Option key={type.value} value={type.value}>
+                                        {type.label}
+                                      </Option>
+                                    ))}
+                                  </Select>
+                                  <Switch
+                                    checked={field.is_required}
+                                    onChange={(checked) => handleFieldChange(field.id, 'is_required', checked)}
+                                    checkedChildren="필수"
+                                    unCheckedChildren="선택"
+                                  />
+                                </Space>
+
+                                {field.field_type === 'select' && (
+                                  <div className="field-options">
+                                    <Input
+                                      placeholder="선택 옵션 (쉼표로 구분)"
+                                      value={field.field_options?.choices?.join(', ') || ''}
+                                      onChange={(e) => handleFieldChange(field.id, 'field_options', {
+                                        choices: e.target.value.split(',').map(s => s.trim()).filter(s => s)
+                                      })}
+                                      style={{ marginTop: 8 }}
+                                    />
+                                  </div>
+                                )}
+
+                                <div className="field-preview">
+                                  <label>{field.field_label || '레이블'} {field.is_required && <span style={{ color: 'red' }}>*</span>}</label>
+                                  {renderFieldPreview(field)}
+                                </div>
+                              </div>
+                            </Card>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+              
+              <div className="form-actions">
+                <Button onClick={handleCancelEdit}>
+                  취소
+                </Button>
+                <Button 
+                  type="primary" 
+                  loading={saving}
+                  onClick={handleSave}
+                >
+                  저장
+                </Button>
+              </div>
+            </div>
+          </Form>
+        </TabPane>
+      </Tabs>
+    </div>
   );
 };
 

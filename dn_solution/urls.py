@@ -53,9 +53,9 @@ urlpatterns = [
     path('health/', simple_health_check, name='simple-health-check'),  # Docker health check용
     path('api/', include(router.urls)),  # REST API Router (policies viewset) - 기본 CRUD를 먼저
     path('api/companies/', include('companies.urls')),
-    path('api/policies/', include('policies.urls')),  # 추가 정책 관련 API들 (리베이트 매트릭스 등)
-    path('policies/', include('policies.urls', namespace='policies-frontend')),  # 프론트엔드 호환성을 위한 추가 경로
-    path('orders/', include('orders.urls', namespace='orders-frontend')),  # 프론트엔드 호환성을 위한 추가 경로
+    path('api/policies/', include('policies.urls', namespace='api-policies')),  # 추가 정책 관련 API들 (리베이트 매트릭스 등)
+    path('policies/', include('policies.urls', namespace='frontend-policies')),  # 프론트엔드 호환성을 위한 추가 경로
+    path('orders/', include('orders.urls')),  # 프론트엔드 호환성을 위한 추가 경로
     path('api/orders/', include('orders.urls')),
     path('api/settlements/', include('settlements.urls')),
     # path('api/inventory/', include('inventory.urls')),  # 제거 - MVP에 불필요

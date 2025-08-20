@@ -7,8 +7,17 @@ import {
   InputNumber,
   Radio,
   Checkbox,
-  Spin
+  Spin,
+  Button,
+  Space,
+  Upload,
+  message
 } from 'antd';
+import { 
+  LinkOutlined, 
+  ScanOutlined, 
+  UploadOutlined 
+} from '@ant-design/icons';
 import { get } from '../../services/api';
 
 const { Option } = Select;
@@ -17,6 +26,8 @@ const { TextArea } = Input;
 const DynamicOrderField = ({ field, form, dependencies = {} }) => {
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
+  const [fileList, setFileList] = useState([]);
 
   // 동적 옵션 로드
   useEffect(() => {
@@ -35,6 +46,60 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       setOptions(getDefaultOptionsForFieldType(field.field_type));
     }
   }, [field, dependencies]);
+
+  // 자동 입력 필드 처리
+  useEffect(() => {
+    if (field.auto_fill && form) {
+      let autoValue = '';
+      
+      switch (field.auto_fill) {
+        case 'current_datetime':
+          // 현재 날짜 및 시간 포맷팅
+          if (field.field_name === 'received_date') {
+            // 접수일자는 YYYY-MM-DD 형식으로
+            autoValue = new Date().toISOString().split('T')[0];
+          } else {
+            // 그 외에는 기존 포맷 유지
+            autoValue = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          }
+          break;
+        case 'current_user':
+          // 실제 환경에서는 useAuth 훅에서 사용자 정보 가져오기
+          if (field.field_name === 'company_code' || field.field_name === 'agency_code') {
+            // 1차 ID(접속자 업체코드)
+            autoValue = dependencies.company_code || '';
+          } else {
+            autoValue = dependencies.current_user || '현재 사용자';
+          }
+          break;
+        case 'from_policy':
+          if (field.field_name === 'carrier') {
+            autoValue = dependencies.policy_carrier || '';
+          } else if (field.field_name === 'subscription_type') {
+            autoValue = dependencies.policy_join_type || '';
+          }
+          break;
+        default:
+          break;
+      }
+      
+      if (field.auto_generate) {
+        // 자동 생성 필드 (예: 주문번호)
+        if (field.field_name === 'order_number') {
+          const prefix = dependencies.policy_carrier ? dependencies.policy_carrier.substring(0, 2).toUpperCase() : 'ORD';
+          const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(2, 12);
+          const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+          autoValue = `${prefix}-${timestamp}-${random}`;
+        } else {
+          autoValue = `ORD-${Date.now()}`;
+        }
+      }
+      
+      if (autoValue) {
+        form.setFieldsValue({ [field.field_name]: autoValue });
+      }
+    }
+  }, [field, form, dependencies]);
 
   const getDefaultOptionsForFieldType = (fieldType) => {
     const defaultOptions = {
@@ -127,10 +192,12 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
           // 정책 통신사에 맞는 요금제만 필터링
           if (dependencies.policy_carrier) {
             endpoint += `?carrier=${dependencies.policy_carrier}`;
+            console.log(`[DynamicOrderField] 통신사(${dependencies.policy_carrier})에 맞는 요금상품 불러오기`);
           }
-          // 기존 필터링 유지 (혹시 모를 경우를 위해)
+          // 폼에서 직접 선택한 통신사에 맞는 요금제 필터링
           else if (dependencies.carrier) {
             endpoint += `?carrier=${dependencies.carrier}`;
+            console.log(`[DynamicOrderField] 선택한 통신사(${dependencies.carrier})에 맞는 요금상품 불러오기`);
           }
           break;
         case 'DeviceModel':
@@ -199,17 +266,150 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
     }
   };
 
+  // 바코드 스캔 핸들러
+  const handleBarcodeScan = async () => {
+    setScanMode(true);
+    try {
+      // 웹 카메라를 사용한 바코드 스캔 시뮬레이션
+      // 실제 환경에서는 바코드 스캐너 라이브러리 (예: quagga, zxing-js) 사용
+      
+      // 사용자에게 바코드 값을 직접 입력받는 프롬프트 (임시)
+      const scannedValue = prompt(`${field.field_label} 바코드 값을 입력하세요:`);
+      
+      if (scannedValue && scannedValue.trim()) {
+        // 폼에 스캔된 값 설정
+        if (form) {
+          form.setFieldsValue({ [field.field_name]: scannedValue.trim() });
+        }
+        message.success(`${field.field_label} 바코드가 스캔되었습니다: ${scannedValue.trim()}`);
+      } else {
+        message.warning('바코드 스캔이 취소되었습니다.');
+      }
+      
+      // TODO: 실제 바코드 스캐너 구현 예시
+      // const result = await scanBarcodeWithCamera();
+      // form.setFieldsValue({ [field.field_name]: result });
+      
+    } catch (error) {
+      console.error('바코드 스캔 오류:', error);
+      message.error('바코드 스캔 중 오류가 발생했습니다.');
+    } finally {
+      setScanMode(false);
+    }
+  };
+
+  // 파일 업로드 핸들러
+  const handleFileUpload = ({ fileList }) => {
+    setFileList(fileList);
+    if (form) {
+      form.setFieldsValue({ 
+        [field.field_name]: fileList.map(f => f.originFileObj || f)
+      });
+    }
+  };
+
   const renderField = () => {
     const commonProps = {
       placeholder: field.placeholder || `${field.field_label}을(를) 입력하세요`,
-      disabled: loading
+      disabled: loading || field.is_readonly
     };
 
     switch (field.field_type) {
       case 'text':
       case 'phone':
       case 'email':
-        return <Input {...commonProps} />;
+        return (
+          <Input 
+            {...commonProps} 
+            readOnly={field.is_readonly}
+            type={field.is_masked ? 'password' : 'text'}
+          />
+        );
+      
+      case 'datetime':
+        return (
+          <DatePicker 
+            {...commonProps}
+            showTime
+            format="YYYY-MM-DD HH:mm:ss"
+            style={{ width: '100%' }}
+            disabled={field.is_readonly}
+          />
+        );
+      
+      case 'url':
+        return (
+          <Input 
+            {...commonProps}
+            prefix={<LinkOutlined />}
+            type="url"
+          />
+        );
+      
+      case 'barcode_scan':
+        return (
+          <Space style={{ width: '100%' }}>
+            <Input 
+              {...commonProps}
+              placeholder={field.placeholder || '바코드 스캔 또는 수기입력'}
+              disabled={field.is_readonly || scanMode}
+            />
+            {field.allow_manual && (
+              <Button 
+                icon={scanMode ? <Spin size="small" /> : <ScanOutlined />}
+                onClick={handleBarcodeScan}
+                disabled={field.is_readonly}
+              >
+                스캔
+              </Button>
+            )}
+          </Space>
+        );
+      
+      case 'large_textarea':
+        return (
+          <TextArea 
+            {...commonProps}
+            rows={field.rows || 8}
+            maxLength={2000}
+            showCount
+            style={{ resize: 'vertical' }}
+          />
+        );
+      
+      case 'dropdown_from_policy':
+        return (
+          <Select 
+            {...commonProps}
+            loading={loading}
+            showSearch
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
+            {options.map(option => (
+              <Option key={option.value} value={option.value}>
+                {option.label}
+              </Option>
+            ))}
+          </Select>
+        );
+      
+      case 'file_upload':
+        return (
+          <Upload
+            fileList={fileList}
+            onChange={handleFileUpload}
+            beforeUpload={() => false}
+            multiple={field.multiple}
+            maxCount={field.max_files || 4}
+            accept={field.accept}
+          >
+            <Button icon={<UploadOutlined />}>
+              파일 선택 (최대 {field.max_files || 4}개)
+            </Button>
+          </Upload>
+        );
 
       case 'number':
       case 'common_support':
@@ -245,13 +445,22 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       case 'installment_months':
       case 'insurance':
       case 'course':
+      case 'customer_type':
         return (
           <Select {...commonProps} loading={loading}>
-            {options.map(option => (
-              <Option key={option.value} value={option.value}>
-                {option.label}
-              </Option>
-            ))}
+            {field.field_options ? (
+              field.field_options.map(option => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))
+            ) : (
+              options.map(option => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))
+            )}
           </Select>
         );
 

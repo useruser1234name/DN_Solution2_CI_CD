@@ -76,6 +76,16 @@ const ComprehensiveOrderForm = ({
         }
         
         console.log('[ComprehensiveOrderForm] 정책 정보 로드 완료:', policyData);
+        
+        // 정책에서 통신사 정보 가져오기
+        if (policyData.carrier) {
+          console.log('[ComprehensiveOrderForm] 정책에서 통신사 정보 가져오기:', policyData.carrier);
+          // 폼에 통신사 정보 자동 설정
+          if (form) {
+            form.setFieldsValue({ carrier: policyData.carrier });
+          }
+        }
+        
         setPolicy(policyData);
       } else {
         console.warn('[ComprehensiveOrderForm] 정책 정보 없음:', policyResponse);
@@ -101,8 +111,25 @@ const ComprehensiveOrderForm = ({
       ]);
 
       if (policyResponse.success && policyResponse.data) {
-        setPolicy(policyResponse.data);
-        console.log('[ComprehensiveOrderForm] 정책 로드 완료:', policyResponse.data);
+        let policyData = policyResponse.data;
+        
+        // 이중래핑 처리
+        if (policyData.data && typeof policyData.data === 'object') {
+          console.log('[ComprehensiveOrderForm] 정책 이중래핑 감지, data.data 사용');
+          policyData = policyData.data;
+        }
+        
+        setPolicy(policyData);
+        console.log('[ComprehensiveOrderForm] 정책 로드 완료:', policyData);
+        
+        // 정책에서 통신사 정보 가져오기
+        if (policyData.carrier) {
+          console.log('[ComprehensiveOrderForm] 정책에서 통신사 정보 가져오기:', policyData.carrier);
+          // 폼에 통신사 정보 자동 설정
+          if (form) {
+            form.setFieldsValue({ carrier: policyData.carrier });
+          }
+        }
       }
 
       if (templateResponse.success && templateResponse.data) {
@@ -203,7 +230,8 @@ const ComprehensiveOrderForm = ({
         // 추가 메타데이터
         form_template_id: template?.id,
         created_by: user?.id,
-        company_id: user?.company_id
+        company_id: user?.company?.id,
+        company_code: user?.company?.code
       };
 
       const response = await post('api/orders/', orderData);
@@ -270,7 +298,9 @@ const ComprehensiveOrderForm = ({
                       ...formValues,
                       policy_carrier: policy?.carrier, // 정책의 통신사 정보 전달
                       policy_id: policy?.id, // 정책 ID 전달
-                      policy_contract_period: policy?.contract_period // 정책의 계약기간 전달
+                      policy_contract_period: policy?.contract_period, // 정책의 계약기간 전달
+                      company_code: user?.company?.code, // 업체코드 전달
+                      current_user: user?.username // 현재 사용자 전달
                     }}
                   />
                 </Col>

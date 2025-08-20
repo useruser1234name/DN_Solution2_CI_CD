@@ -968,10 +968,10 @@ class AgencyRebateMatrix(models.Model):
             raise
 
 
-class RebateMatrix(models.Model):
+class CommissionMatrix(models.Model):
     """
-    리베이트 매트릭스 모델
-    통신사별 요금제와 가입기간에 따른 리베이트 금액을 관리
+    수수료 매트릭스 모델 (기존 RebateMatrix에서 이름 변경)
+    통신사별 요금제와 가입기간에 따른 수수료 금액을 관리
     """
     
     # 통신사 선택지
@@ -1098,9 +1098,9 @@ class RebateMatrix(models.Model):
             raise
     
     @classmethod
-    def get_rebate_amount(cls, policy, carrier, plan_amount, contract_period):
+    def get_commission_amount(cls, policy, carrier, plan_amount, contract_period):
         """
-        주어진 조건에 맞는 리베이트 금액 조회
+        주어진 조건에 맞는 수수료 금액 조회 (기존 get_rebate_amount에서 이름 변경)
         
         Args:
             policy: Policy 객체
@@ -1109,7 +1109,7 @@ class RebateMatrix(models.Model):
             contract_period: 가입기간 (개월)
             
         Returns:
-            리베이트 금액 또는 None
+            수수료 금액 또는 None
         """
         # 요금제 금액에 맞는 범위 찾기
         plan_range = None
@@ -1147,7 +1147,7 @@ class RebateMatrix(models.Model):
     @classmethod
     def create_default_matrix(cls, policy):
         """
-        정책에 대한 기본 리베이트 매트릭스 생성
+        정책에 대한 기본 수수료 매트릭스 생성 (기존 리베이트 매트릭스에서 이름 변경)
         
         Args:
             policy: Policy 객체
@@ -1491,6 +1491,7 @@ class OrderFormField(models.Model):
     주문서 양식의 개별 필드를 정의
     """
     FIELD_TYPE_CHOICES = [
+        # 기본 필드 타입
         ('text', '텍스트'),
         ('number', '숫자'),
         ('select', '선택'),
@@ -1498,8 +1499,17 @@ class OrderFormField(models.Model):
         ('checkbox', '체크박스'),
         ('textarea', '텍스트 영역'),
         ('date', '날짜'),
+        ('datetime', '날짜/시간'),
         ('phone', '전화번호'),
         ('email', '이메일'),
+        ('url', 'URL'),
+        
+        # 특수 필드 타입
+        ('barcode_scan', '바코드 스캔'),
+        ('large_textarea', '대형 텍스트 영역'),
+        ('dropdown_from_policy', '정책 드롭다운'),
+        ('file_upload', '파일 업로드'),
+        ('customer_type', '고객유형'),
         ('carrier_plan', '통신사 요금제'),  # 통신사별 요금제 선택
         ('device_model', '기기 모델'),  # 기기 모델 선택
         ('device_color', '기기 색상'),  # 기기 색상 선택
@@ -1531,6 +1541,18 @@ class OrderFormField(models.Model):
     placeholder = models.CharField(max_length=200, blank=True, verbose_name='플레이스홀더')
     help_text = models.CharField(max_length=500, blank=True, verbose_name='도움말')
     order = models.IntegerField(default=0, verbose_name='순서')
+    
+    # 추가 필드 속성
+    is_readonly = models.BooleanField(default=False, verbose_name='읽기 전용')
+    is_masked = models.BooleanField(default=False, verbose_name='마스킹 여부')
+    auto_fill = models.CharField(max_length=50, blank=True, verbose_name='자동 채우기 타입')
+    auto_generate = models.BooleanField(default=False, verbose_name='자동 생성')
+    allow_manual = models.BooleanField(default=True, verbose_name='수기 입력 허용')
+    data_source = models.CharField(max_length=100, blank=True, verbose_name='데이터 소스')
+    rows = models.IntegerField(default=3, verbose_name='textarea 행 수')
+    multiple = models.BooleanField(default=False, verbose_name='다중 선택')
+    max_files = models.IntegerField(default=4, verbose_name='최대 파일 수')
+    accept = models.CharField(max_length=200, blank=True, default='image/*,.pdf,.doc,.docx', verbose_name='허용 파일 타입')
     
     class Meta:
         verbose_name = '주문서 필드'

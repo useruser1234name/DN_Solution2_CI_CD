@@ -82,13 +82,34 @@ const DynamicOrderForm = ({
   };
 
   const createDefaultFields = () => {
-    // 기본 필드들 생성
+    // 개선된 기본 필드들 생성
     const defaultFields = [
-      { field_name: 'customer_name', field_label: '고객명', field_type: 'text', is_required: true, order: 1 },
-      { field_name: 'phone_number', field_label: '개통번호', field_type: 'phone', is_required: true, order: 2 },
-      { field_name: 'carrier_plan', field_label: '요금제', field_type: 'carrier_plan', is_required: true, order: 3 },
-      { field_name: 'device_model', field_label: '모델명', field_type: 'device_model', is_required: true, order: 4 },
-      { field_name: 'device_color', field_label: '색상', field_type: 'device_color', is_required: true, order: 5 },
+      // 자동 입력 필드
+      { field_name: 'order_id', field_label: '주문번호', field_type: 'text', is_required: true, is_readonly: true, auto_generate: true, order: 1 },
+      { field_name: 'received_date', field_label: '접수일자', field_type: 'datetime', is_required: true, is_readonly: true, auto_fill: 'current_datetime', order: 2 },
+      { field_name: 'primary_id', field_label: '1차 ID', field_type: 'text', is_required: true, is_readonly: true, auto_fill: 'current_user', order: 3 },
+      { field_name: 'carrier', field_label: '통신사', field_type: 'text', is_required: true, is_readonly: true, auto_fill: 'from_policy', order: 4 },
+      { field_name: 'subscription_type', field_label: '가입유형', field_type: 'text', is_required: true, is_readonly: true, auto_fill: 'from_policy', order: 5 },
+      
+      // 고객 정보
+      { field_name: 'customer_name', field_label: '고객명', field_type: 'text', is_required: true, order: 6 },
+      { field_name: 'customer_type', field_label: '고객유형', field_type: 'select', is_required: true, order: 7 },
+      { field_name: 'phone_number', field_label: '개통번호', field_type: 'phone', is_required: true, order: 8 },
+      { field_name: 'ssn', field_label: '주민등록번호', field_type: 'text', is_required: true, is_masked: true, order: 9 },
+      
+      // 기기 정보 (바코드 스캔 가능)
+      { field_name: 'device_model', field_label: '단말기 모델', field_type: 'text', is_required: true, order: 11 },
+      { field_name: 'device_serial_number', field_label: '단말기 일련번호', field_type: 'barcode_scan', is_required: true, allow_manual: true, order: 12 },
+      { field_name: 'imei', field_label: 'IMEI', field_type: 'barcode_scan', is_required: true, allow_manual: true, order: 13 },
+      { field_name: 'imei2', field_label: 'IMEI2', field_type: 'barcode_scan', is_required: false, allow_manual: true, order: 14 },
+      { field_name: 'eid', field_label: 'EID', field_type: 'barcode_scan', is_required: false, allow_manual: true, order: 15 },
+      
+      // 요금제
+      { field_name: 'plan_name', field_label: '요금상품명', field_type: 'dropdown_from_policy', is_required: true, data_source: 'policy_plans', order: 16 },
+      
+      // 메모
+      { field_name: 'customer_memo', field_label: '고객 메모', field_type: 'large_textarea', is_required: false, rows: 8, order: 27 },
+      { field_name: 'reference_url', field_label: '참조 URL', field_type: 'url', is_required: false, order: 26 },
     ];
     setFields(defaultFields);
   };
@@ -124,16 +145,27 @@ const DynamicOrderForm = ({
   const handleSubmit = async (values) => {
     setSubmitting(true);
     try {
+      // 자동 입력 필드 추가
       const orderData = {
         ...values,
         policy_id: policyId,
-        rebate_data: rebateData
+        rebate_data: rebateData,
+        // 자동 입력 필드들
+        order_id: `ORD-${Date.now()}`, // 임시 주문번호 생성
+        received_date: new Date().toISOString(),
+        primary_id: user?.username || 'unknown',
+        carrier: policy?.carrier || 'unknown',
+        subscription_type: policy?.join_type || 'unknown'
       };
 
       let response;
       if (mode === 'create') {
         response = await post('api/orders/', orderData);
-        message.success('주문이 성공적으로 생성되었습니다.');
+        if (response.success) {
+          message.success(`주문이 성공적으로 생성되었습니다. 주문번호: ${response.data.order_number}`);
+        } else {
+          throw new Error(response.message || '주문 생성 실패');
+        }
       } else {
         response = await post(`api/orders/${initialValues.id}/`, orderData);
         message.success('주문이 성공적으로 수정되었습니다.');
@@ -144,7 +176,7 @@ const DynamicOrderForm = ({
       }
     } catch (error) {
       console.error('주문 처리 오류:', error);
-      message.error('주문 처리 중 오류가 발생했습니다.');
+      message.error(error.message || '주문 처리 중 오류가 발생했습니다.');
     } finally {
       setSubmitting(false);
     }
@@ -153,23 +185,47 @@ const DynamicOrderForm = ({
   // 필드들을 섹션별로 그룹화
   const groupFieldsBySection = (fields) => {
     const sections = {
+      auto: { title: '자동 입력 정보', fields: [] },
       customer: { title: '고객 정보', fields: [] },
       device: { title: '기기 정보', fields: [] },
-      plan: { title: '요금제 및 통신', fields: [] },
+      plan: { title: '요금제 및 서비스', fields: [] },
+      sim: { title: '유심 정보', fields: [] },
+      porting: { title: '번호이동 정보', fields: [] },
       payment: { title: '결제 정보', fields: [] },
       additional: { title: '추가 정보', fields: [] }
     };
 
     fields.forEach(field => {
-      if (['customer_name', 'birth_date', 'phone_number', 'join_type', 'foreigner_info'].includes(field.field_name)) {
+      // 자동 입력 필드
+      if (['order_id', 'received_date', 'primary_id', 'carrier', 'subscription_type'].includes(field.field_name)) {
+        sections.auto.fields.push(field);
+      }
+      // 고객 정보
+      else if (['customer_name', 'customer_type', 'phone_number', 'ssn', 'customer_address'].includes(field.field_name)) {
         sections.customer.fields.push(field);
-      } else if (['device_model', 'device_color', 'serial_number'].includes(field.field_name)) {
+      }
+      // 기기 정보
+      else if (['device_model', 'device_serial_number', 'imei', 'imei2', 'eid'].includes(field.field_name)) {
         sections.device.fields.push(field);
-      } else if (['carrier_plan', 'sim_type', 'contract_period'].includes(field.field_name)) {
+      }
+      // 요금제 및 서비스
+      else if (['plan_name', 'contract_period'].includes(field.field_name)) {
         sections.plan.fields.push(field);
-      } else if (['payment_method', 'installment_months', 'installment_principal'].includes(field.field_name)) {
+      }
+      // 유심 정보
+      else if (['sim_model', 'sim_serial_number'].includes(field.field_name)) {
+        sections.sim.fields.push(field);
+      }
+      // 번호이동 정보
+      else if (['previous_carrier', 'mvno_carrier'].includes(field.field_name)) {
+        sections.porting.fields.push(field);
+      }
+      // 결제 정보
+      else if (['payment_method', 'account_holder', 'bank_name', 'account_number'].includes(field.field_name)) {
         sections.payment.fields.push(field);
-      } else {
+      }
+      // 추가 정보
+      else {
         sections.additional.fields.push(field);
       }
     });
@@ -227,7 +283,10 @@ const DynamicOrderForm = ({
                       form={form}
                       dependencies={{
                         carrier: formValues.carrier,
-                        device_model: formValues.device_model
+                        device_model: formValues.device_model,
+                        policy_carrier: policy?.carrier,
+                        policy_join_type: policy?.join_type,
+                        current_user: user?.username
                       }}
                     />
                   ))}

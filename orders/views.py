@@ -1,400 +1,298 @@
 """
-주문 관리 시스템 뷰
-
-이 모듈은 주문 관련 API 엔드포인트를 제공합니다.
-주문 생성, 조회, 수정, 삭제 및 상태 관리 기능을 포함합니다.
+통신사 주문 관리 시스템 뷰
+주문서 생성, 조회, 상태 관리 등을 처리
 """
 
 import logging
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
 
-from .models import Order, OrderMemo, Invoice, OrderRequest
-from .serializers import (
-    OrderSerializer, OrderMemoSerializer, InvoiceSerializer,
-    OrderStatusUpdateSerializer, OrderBulkStatusUpdateSerializer,
-    OrderBulkDeleteSerializer
-)
+from .telecom_order_models import TelecomOrder, OrderStatusHistory
+from policies.models import Policy, OrderFormTemplate
 
 logger = logging.getLogger('orders')
 
 
-from .utils import get_visible_orders
-
-class OrderViewSet(viewsets.ModelViewSet):
-    """
-    주문 관리 ViewSet
-    
-    주문의 CRUD 작업과 상태 관리 기능을 제공합니다.
-    """
-    queryset = Order.objects.select_related('policy', 'company', 'created_by').prefetch_related('memos')
-    serializer_class = OrderSerializer
+class TelecomOrderCreateView(APIView):
+    """통신사 주문 생성 API"""
     permission_classes = [IsAuthenticated]
     
-    def get_queryset(self):
-        """사용자 권한에 따른 쿼리셋 필터링"""
-        queryset = get_visible_orders(self.request.user)
-        # N+1 쿼리 방지를 위한 select_related/prefetch_related 추가
-        queryset = queryset.select_related(
-            'policy',
-            'policy__created_by',
-            'company',
-            'company__parent_company',
-            'created_by'
-        ).prefetch_related(
-            'memos',
-            'memos__created_by',
-            'sensitive_data'
-        )
-        return queryset
-    
-    def perform_create(self, serializer):
-        """주문 생성 시 생성자 정보 추가"""
-        serializer.save(created_by=self.request.user)
-        logger.info(f"새 주문 생성: {serializer.instance.customer_name}")
-    
-    @action(detail=True, methods=['post'])
-    def update_status(self, request, pk=None):
-        """주문 상태 업데이트"""
-        order = self.get_object()
-        serializer = OrderStatusUpdateSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            new_status = serializer.validated_data['new_status']
-            memo = serializer.validated_data.get('memo', '')
-            
-            try:
-                order.update_status(new_status, request.user)
-                
-                # 메모 추가
-                if memo:
-                    OrderMemo.objects.create(
-                        order=order,
-                        memo=f"상태 변경: {order.get_status_display()} - {memo}",
-                        created_by=request.user
-                    )
-                
-                return Response({
-                    'success': True,
-                    'message': f'주문 상태가 {order.get_status_display()}로 변경되었습니다.',
-                    'status': order.status
-                })
-            except Exception as e:
-                return Response({
-                    'success': False,
-                    'message': str(e)
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_update_status(self, request):
-        """주문 일괄 상태 업데이트"""
-        serializer = OrderBulkStatusUpdateSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            order_ids = serializer.validated_data['order_ids']
-            new_status = serializer.validated_data['new_status']
-            
-            orders = Order.objects.filter(id__in=order_ids)
-            updated_count = 0
-            
-            for order in orders:
-                try:
-                    order.update_status(new_status, request.user)
-                    updated_count += 1
-                except Exception as e:
-                    logger.warning(f"주문 상태 변경 실패: {order.id} - {str(e)}")
-            
-            return Response({
-                'success': True,
-                'message': f'{updated_count}개 주문의 상태가 변경되었습니다.',
-                'updated_count': updated_count
-            })
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_delete(self, request):
-        """주문 일괄 삭제"""
-        serializer = OrderBulkDeleteSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            order_ids = serializer.validated_data['order_ids']
-            force_delete = serializer.validated_data['force_delete']
-            
-            orders = Order.objects.filter(id__in=order_ids)
-            deleted_count = 0
-            
-            for order in orders:
-                # 완료된 주문은 force_delete가 True일 때만 삭제
-                if order.status == 'completed' and not force_delete:
-                    continue
-                
-                try:
-                    order.delete()
-                    deleted_count += 1
-                except Exception as e:
-                    logger.warning(f"주문 삭제 실패: {order.id} - {str(e)}")
-            
-            return Response({
-                'success': True,
-                'message': f'{deleted_count}개 주문이 삭제되었습니다.',
-                'deleted_count': deleted_count
-            })
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        """주문 승인 (본사만 가능)"""
-        order = self.get_object()
-        
+    def post(self, request):
         try:
-            # 권한 확인 - 본사만 승인 가능
-            if not request.user.is_superuser:
-                try:
-                    from companies.models import CompanyUser
-                    company_user = CompanyUser.objects.get(django_user=request.user)
-                    if company_user.company.type != 'headquarters':
-                        return Response({
-                            'success': False,
-                            'message': '본사 관리자만 주문을 승인할 수 있습니다.'
-                        }, status=status.HTTP_403_FORBIDDEN)
-                except CompanyUser.DoesNotExist:
-                    return Response({
-                        'success': False,
-                        'message': '업체 정보를 찾을 수 없습니다.'
-                    }, status=status.HTTP_403_FORBIDDEN)
+            data = request.data
+            policy_id = data.get('policy_id')
             
-            # 주문 승인
-            order.approve(request.user)
+            # 정책 조회
+            policy = get_object_or_404(Policy, id=policy_id)
             
-            # 승인 메모 추가
-            memo_text = request.data.get('memo', '주문이 승인되었습니다.')
-            OrderMemo.objects.create(
-                order=order,
-                memo=f"[승인] {memo_text}",
-                created_by=request.user
+            # 주문 생성
+            order = TelecomOrder.objects.create(
+                policy=policy,
+                company=request.user.company,
+                created_by=request.user,
+                carrier=policy.carrier,
+                subscription_type=policy.join_type,
+                order_data=data,  # JSON 필드에 전체 주문 데이터 저장
+                current_status='received'
             )
             
-            return Response({
-                'success': True,
-                'message': '주문이 승인되었습니다.',
-                'status': order.status
-            })
-            
-        except Exception as e:
-            logger.error(f"주문 승인 실패: {str(e)} - 주문: {order.customer_name}")
-            return Response({
-                'success': False,
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def reject(self, request, pk=None):
-        """주문 반려 (본사만 가능)"""
-        order = self.get_object()
-        
-        try:
-            # 권한 확인 - 본사만 반려 가능
-            if not request.user.is_superuser:
-                try:
-                    from companies.models import CompanyUser
-                    company_user = CompanyUser.objects.get(django_user=request.user)
-                    if company_user.company.type != 'headquarters':
-                        return Response({
-                            'success': False,
-                            'message': '본사 관리자만 주문을 반려할 수 있습니다.'
-                        }, status=status.HTTP_403_FORBIDDEN)
-                except CompanyUser.DoesNotExist:
-                    return Response({
-                        'success': False,
-                        'message': '업체 정보를 찾을 수 없습니다.'
-                    }, status=status.HTTP_403_FORBIDDEN)
-            
-            # 대기 중인 주문만 반려 가능
-            if order.status != 'pending':
-                return Response({
-                    'success': False,
-                    'message': '대기 중인 주문만 반려할 수 있습니다.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # 주문 반려 (취소 상태로 변경)
-            order.update_status('cancelled', request.user)
-            
-            # 반려 메모 추가
-            memo_text = request.data.get('memo', '주문이 반려되었습니다.')
-            OrderMemo.objects.create(
+            # 초기 상태 이력 생성
+            OrderStatusHistory.objects.create(
                 order=order,
-                memo=f"[반려] {memo_text}",
-                created_by=request.user
+                status='received',
+                description='주문 접수',
+                updated_by=request.user,
+                user_role=request.user.role if hasattr(request.user, 'role') else 'user',
+                department='판매점',
+                ip_address=self.get_client_ip(request)
             )
             
+            logger.info(f"새 주문 생성: {order.order_number} by {request.user.username}")
+            
             return Response({
                 'success': True,
-                'message': '주문이 반려되었습니다.',
-                'status': order.status
+                'data': {
+                    'order_id': str(order.id),
+                    'order_number': order.order_number,
+                    'status': order.current_status
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"주문 생성 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '주문 생성 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_client_ip(self, request):
+        """클라이언트 IP 주소 조회"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+
+class TelecomOrderStatusUpdateView(APIView):
+    """통신사 주문 상태 업데이트 API (본사 전용)"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, order_id):
+        try:
+            # 본사 권한 확인
+            if not hasattr(request.user, 'company') or request.user.company.type != 'headquarters':
+                return Response({
+                    'success': False,
+                    'message': '본사 권한이 필요합니다.'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            data = request.data
+            new_status = data.get('status')
+            description = data.get('description', '')
+            
+            # 주문 조회
+            order = get_object_or_404(TelecomOrder, id=order_id)
+            
+            # 상태 변경 검증
+            if not self.can_transition_status(order.current_status, new_status):
+                return Response({
+                    'success': False,
+                    'message': f'현재 상태({order.current_status})에서 {new_status}로 변경할 수 없습니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 상태 업데이트
+            old_status = order.current_status
+            order.current_status = new_status
+            
+            # 개통 완료시 개통일자 설정
+            if new_status == 'activation_complete':
+                from django.utils import timezone
+                order.activation_date = timezone.now()
+            
+            order.save()
+            
+            # 상태 이력 생성
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=new_status,
+                description=description or f'{old_status} → {new_status}',
+                updated_by=request.user,
+                user_role=request.user.role if hasattr(request.user, 'role') else 'admin',
+                department='본사',
+                ip_address=self.get_client_ip(request)
+            )
+            
+            logger.info(f"주문 상태 변경: {order.order_number} {old_status} → {new_status} by {request.user.username}")
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'order_id': str(order.id),
+                    'old_status': old_status,
+                    'new_status': new_status,
+                    'updated_at': order.updated_at
+                }
             })
             
         except Exception as e:
-            logger.error(f"주문 반려 실패: {str(e)} - 주문: {order.customer_name}")
+            logger.error(f"주문 상태 업데이트 오류: {str(e)}")
             return Response({
                 'success': False,
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': '상태 업데이트 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """주문 통계 조회"""
-        from django.db.models import Count, Q
+    def can_transition_status(self, current_status, new_status):
+        """상태 전이 가능 여부 확인"""
+        transitions = {
+            'received': ['activation_request', 'cancelled'],
+            'activation_request': ['activating', 'pending', 'cancelled'],
+            'activating': ['activation_complete', 'pending', 'cancelled'],
+            'activation_complete': ['cancelled'],
+            'pending': ['activation_request', 'cancelled'],
+            'cancelled': [],  # 취소된 주문은 더 이상 변경 불가
+            'rejected': []    # 반려된 주문은 더 이상 변경 불가
+        }
         
-        queryset = self.get_queryset()
-        
-        # 상태별 통계
-        stats = queryset.aggregate(
-            total=Count('id'),
-            pending=Count('id', filter=Q(status='pending')),
-            approved=Count('id', filter=Q(status='approved')),
-            processing=Count('id', filter=Q(status='processing')),
-            shipped=Count('id', filter=Q(status='shipped')),
-            completed=Count('id', filter=Q(status='completed')),
-            cancelled=Count('id', filter=Q(status='cancelled')),
-        )
-        
-        # 반려는 취소된 것으로 간주
-        stats['rejected'] = stats['cancelled']
-        
-        return Response({
-            'success': True,
-            'data': stats
-        })
+        return new_status in transitions.get(current_status, [])
+    
+    def get_client_ip(self, request):
+        """클라이언트 IP 주소 조회"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
 
 
-class OrderMemoViewSet(viewsets.ModelViewSet):
-    """
-    주문 메모 관리 ViewSet
-    """
-    queryset = OrderMemo.objects.select_related('order', 'created_by')
-    serializer_class = OrderMemoSerializer
+class TelecomOrderDetailView(APIView):
+    """통신사 주문 상세 조회 API"""
     permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """사용자가 볼 수 있는 주문의 메모만 필터링"""
-        visible_orders = get_visible_orders(self.request.user)
-        return self.queryset.filter(order__in=visible_orders)
     
-    def perform_create(self, serializer):
-        """메모 생성 시 작성자 정보 추가"""
-        serializer.save(created_by=self.request.user)
-        logger.info(f"주문 메모 생성: {serializer.instance.order.customer_name}")
-
-
-class InvoiceViewSet(viewsets.ModelViewSet):
-    """
-    송장 관리 ViewSet
-    """
-    queryset = Invoice.objects.select_related('order')
-    serializer_class = InvoiceSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """사용자가 볼 수 있는 주문의 송장만 필터링"""
-        visible_orders = get_visible_orders(self.request.user)
-        return self.queryset.filter(order__in=visible_orders)
-    
-    def perform_create(self, serializer):
-        """송장 생성 시 자동으로 주문 상태 업데이트"""
-        invoice = serializer.save()
-        logger.info(f"송장 생성: {invoice.order.customer_name} - {invoice.courier}")
-    
-    @action(detail=True, methods=['post'])
-    def mark_delivered(self, request, pk=None):
-        """배송 완료 처리"""
-        invoice = self.get_object()
-        
+    def get(self, request, order_id):
         try:
-            success = invoice.mark_as_delivered()
-            if success:
-                return Response({
-                    'success': True,
-                    'message': '배송 완료 처리되었습니다.'
-                })
-            else:
+            order = get_object_or_404(TelecomOrder, id=order_id)
+            
+            # 권한 확인 (본사 또는 해당 주문의 업체)
+            if (hasattr(request.user, 'company') and 
+                request.user.company.type != 'headquarters' and 
+                order.company != request.user.company):
                 return Response({
                     'success': False,
-                    'message': '배송 완료 처리에 실패했습니다.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                    'message': '접근 권한이 없습니다.'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # 상태 이력 조회
+            status_history = OrderStatusHistory.objects.filter(
+                order=order
+            ).order_by('-created_at')
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'order': {
+                        'id': str(order.id),
+                        'order_number': order.order_number,
+                        'current_status': order.current_status,
+                        'policy_title': order.policy.title,
+                        'carrier': order.carrier,
+                        'subscription_type': order.subscription_type,
+                        'company_name': order.company.name,
+                        'created_by': order.created_by.username,
+                        'received_date': order.received_date,
+                        'activation_date': order.activation_date,
+                        'order_data': order.order_data
+                    },
+                    'status_history': [
+                        {
+                            'timestamp': history.created_at,
+                            'status': history.status,
+                            'description': history.description,
+                            'updated_by': history.updated_by.username if history.updated_by else 'System',
+                            'user_role': history.user_role,
+                            'department': history.department
+                        }
+                        for history in status_history
+                    ]
+                }
+            })
+            
         except Exception as e:
+            logger.error(f"주문 상세 조회 오류: {str(e)}")
             return Response({
                 'success': False,
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': '주문 정보를 불러오는 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class OrderRequestViewSet(viewsets.ModelViewSet):
-    """
-    주문 요청 관리 ViewSet
-    """
-    queryset = OrderRequest.objects.select_related('order', 'processed_by')
+class TelecomOrderListView(APIView):
+    """통신사 주문 목록 조회 API"""
     permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """사용자가 볼 수 있는 주문의 요청만 필터링"""
-        visible_orders = get_visible_orders(self.request.user)
-        return self.queryset.filter(order__in=visible_orders)
     
-    @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        """요청 승인"""
-        order_request = self.get_object()
-        
+    def get(self, request):
         try:
-            order_request.approve(request.user)
+            # 기본 쿼리셋
+            queryset = TelecomOrder.objects.all()
+            
+            # 권한에 따른 필터링
+            if hasattr(request.user, 'company'):
+                if request.user.company.type != 'headquarters':
+                    # 본사가 아니면 자신의 업체 주문만 조회
+                    queryset = queryset.filter(company=request.user.company)
+            
+            # 필터링 파라미터
+            status_filter = request.GET.get('status')
+            if status_filter:
+                queryset = queryset.filter(current_status=status_filter)
+            
+            carrier_filter = request.GET.get('carrier')
+            if carrier_filter:
+                queryset = queryset.filter(carrier=carrier_filter)
+            
+            # 페이지네이션
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 20))
+            
+            total_count = queryset.count()
+            start_index = (page - 1) * page_size
+            end_index = start_index + page_size
+            
+            orders = queryset.order_by('-received_date')[start_index:end_index]
+            
             return Response({
                 'success': True,
-                'message': '요청이 승인되었습니다.'
+                'data': {
+                    'orders': [
+                        {
+                            'id': str(order.id),
+                            'order_number': order.order_number,
+                            'current_status': order.current_status,
+                            'policy_title': order.policy.title,
+                            'carrier': order.carrier,
+                            'company_name': order.company.name,
+                            'created_by': order.created_by.username,
+                            'received_date': order.received_date,
+                            'activation_date': order.activation_date
+                        }
+                        for order in orders
+                    ],
+                    'pagination': {
+                        'page': page,
+                        'page_size': page_size,
+                        'total_count': total_count,
+                        'total_pages': (total_count + page_size - 1) // page_size
+                    }
+                }
             })
+            
         except Exception as e:
+            logger.error(f"주문 목록 조회 오류: {str(e)}")
             return Response({
                 'success': False,
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def reject(self, request, pk=None):
-        """요청 거절"""
-        order_request = self.get_object()
-        
-        try:
-            order_request.reject(request.user)
-            return Response({
-                'success': True,
-                'message': '요청이 거절되었습니다.'
-            })
-        except Exception as e:
-            return Response({
-                'success': False,
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def complete(self, request, pk=None):
-        """요청 완료"""
-        order_request = self.get_object()
-        
-        try:
-            order_request.complete(request.user)
-            return Response({
-                'success': True,
-                'message': '요청이 완료되었습니다.'
-            })
-        except Exception as e:
-            return Response({
-                'success': False,
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': '주문 목록을 불러오는 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -1,15 +1,22 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+"""
+통신사 주문 관리 시스템 URL 설정
+"""
+
+from django.urls import path
 from . import views
 
-router = DefaultRouter()
-router.register(r'', views.OrderViewSet)  # 빈 문자열로 변경하여 /api/orders/로 직접 접근 가능
-router.register(r'memos', views.OrderMemoViewSet)
-router.register(r'invoices', views.InvoiceViewSet)
-router.register(r'requests', views.OrderRequestViewSet)
-
-app_name = 'orders'
+# app_name = 'orders'
 
 urlpatterns = [
-    path('', include(router.urls)),
-] 
+    # 주문 생성
+    path('api/orders/', views.TelecomOrderCreateView.as_view(), name='order_create'),
+    
+    # 주문 상세 조회
+    path('api/orders/<uuid:order_id>/', views.TelecomOrderDetailView.as_view(), name='order_detail'),
+    
+    # 주문 상태 업데이트 (본사 전용)
+    path('api/orders/<uuid:order_id>/status/', views.TelecomOrderStatusUpdateView.as_view(), name='order_status_update'),
+    
+    # 주문 목록 조회
+    path('api/orders/list/', views.TelecomOrderListView.as_view(), name='order_list'),
+]
