@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { post } from '../services/api';
 import MatrixRebateEditor from '../components/MatrixRebateEditor';
-import CommissionGradeInput from '../components/CommissionGradeInput';
 import './PolicyCreatePage.css';
 
 const PolicyCreatePage = () => {
@@ -16,13 +15,10 @@ const PolicyCreatePage = () => {
         title: '',
         description: '',
         carrier: 'skt',
-        commission_agency: 0,
-        commission_retail: 0,
-        is_active: true,
-        grade_period_type: 'monthly'
+        expose: true,
+        is_active: true
     });
     
-    const [commissionGrades, setCommissionGrades] = useState([]);
     const [rebateMatrix, setRebateMatrix] = useState([]);
 
     const carriers = [
@@ -31,18 +27,13 @@ const PolicyCreatePage = () => {
         { value: 'lg', label: 'LG U+' }
     ];
 
-    const gradePeriodTypes = [
-        { value: 'monthly', label: '월별 (매월 1일 기준 리셋)' },
-        { value: 'quarterly', label: '분기별 (분기 시작일 기준 리셋)' },
-        { value: 'yearly', label: '연간 (매년 1월 1일 기준 리셋)' },
-        { value: 'policy_lifetime', label: '정책 전체 기간 (정책 활성화 이후 누적)' }
-    ];
+
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : (type === 'number' ? Number(value) : value)
+            [name]: type === 'checkbox' ? checked : value
         }));
         
         if (errors[name]) {
@@ -64,25 +55,8 @@ const PolicyCreatePage = () => {
             newErrors.carrier = '통신사를 선택해주세요.';
         }
 
-        if (formData.commission_agency < 0) {
-            newErrors.commission_agency = '대리점 수수료는 0 이상이어야 합니다.';
-        }
-
-        if (formData.commission_retail < 0) {
-            newErrors.commission_retail = '판매점 수수료는 0 이상이어야 합니다.';
-        }
-
-        // 그레이드 검증
-        if (commissionGrades.length > 0) {
-            const minOrdersList = commissionGrades.map(g => g.min_orders).filter(Boolean);
-            const duplicates = minOrdersList.filter((item, index) => minOrdersList.indexOf(item) !== index);
-            if (duplicates.length > 0) {
-                newErrors.commission_grades = '동일한 최소 주문건수가 중복됩니다.';
-            }
-        }
-
         if (rebateMatrix.length === 0) {
-            newErrors.rebateMatrix = '최소 하나 이상의 수수료를 설정해주세요.';
+            newErrors.rebateMatrix = '최소 하나 이상의 리베이트를 설정해주세요.';
         }
 
         setErrors(newErrors);
@@ -102,28 +76,23 @@ const PolicyCreatePage = () => {
         setErrors({});
 
         try {
-            // 정책 데이터 준비
-            const policyData = {
-                ...formData,
-                commission_grades: commissionGrades
-            };
-
             // 정책 생성
-            const policyResponse = await post('api/policies/', policyData);
+            const policyResponse = await post('api/policies/', formData);
             console.log('[PolicyCreatePage] 정책 생성 응답:', policyResponse);
 
             if (policyResponse.success) {
                 const policyId = policyResponse.data.id;
                 
-                // 수수료 매트릭스 저장
+                // 리베이트 매트릭스 저장 (TODO: 백엔드 API 구현 후 활성화)
                 if (rebateMatrix.length > 0) {
                     try {
-                        const matrixResponse = await post(`api/policies/${policyId}/commission-matrix/`, {
+                        const matrixResponse = await post(`api/policies/${policyId}/rebate-matrix/`, {
                             matrix: rebateMatrix
                         });
-                        console.log('[PolicyCreatePage] 수수료 매트릭스 저장 응답:', matrixResponse);
+                        console.log('[PolicyCreatePage] 리베이트 매트릭스 저장 응답:', matrixResponse);
                     } catch (matrixError) {
-                        console.warn('[PolicyCreatePage] 수수료 매트릭스 저장 실패:', matrixError);
+                        console.warn('[PolicyCreatePage] 리베이트 매트릭스 저장 실패 (API 미구현):', matrixError);
+                        // 리베이트 매트릭스 저장 실패는 정책 생성을 막지 않음
                     }
                 }
                 
@@ -148,11 +117,10 @@ const PolicyCreatePage = () => {
         <div className="policy-create-page">
             <div className="page-header">
                 <h1>새 정책 생성</h1>
-                <p>새로운 정책을 생성하고 수수료 및 그레이드를 설정합니다.</p>
+                <p>새로운 정책을 생성하고 리베이트를 설정합니다.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="policy-form">
-                {/* 기본 정보 섹션 */}
                 <div className="form-section">
                     <h3>기본 정보</h3>
                     
@@ -200,105 +168,40 @@ const PolicyCreatePage = () => {
                         </select>
                         {errors.carrier && <span className="error">{errors.carrier}</span>}
                     </div>
-                </div>
 
-                {/* 기본 수수료 설정 섹션 */}
-                <div className="form-section">
-                    <h3>기본 수수료 설정</h3>
-                    
                     <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="commission_agency">대리점 수수료 (원) *</label>
-                            <input
-                                type="number"
-                                id="commission_agency"
-                                name="commission_agency"
-                                value={formData.commission_agency}
-                                onChange={handleChange}
-                                disabled={loading}
-                                min="0"
-                                step="1000"
-                                placeholder="0"
-                            />
-                            {errors.commission_agency && <span className="error">{errors.commission_agency}</span>}
+                        <div className="form-group checkbox-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="expose"
+                                    checked={formData.expose}
+                                    onChange={handleChange}
+                                    disabled={loading}
+                                />
+                                정책 노출
+                            </label>
+                            <span className="field-hint">체크하면 하위 업체에서 정책을 볼 수 있습니다.</span>
                         </div>
 
-                        <div className="form-group">
-                            <label htmlFor="commission_retail">판매점 수수료 (원) *</label>
-                            <input
-                                type="number"
-                                id="commission_retail"
-                                name="commission_retail"
-                                value={formData.commission_retail}
-                                onChange={handleChange}
-                                disabled={loading}
-                                min="0"
-                                step="1000"
-                                placeholder="0"
-                            />
-                            {errors.commission_retail && <span className="error">{errors.commission_retail}</span>}
+                        <div className="form-group checkbox-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="is_active"
+                                    checked={formData.is_active}
+                                    onChange={handleChange}
+                                    disabled={loading}
+                                />
+                                정책 활성화
+                            </label>
+                            <span className="field-hint">체크하면 정책이 활성화됩니다.</span>
                         </div>
                     </div>
                 </div>
 
-                {/* 수수료 그레이드 설정 섹션 */}
                 <div className="form-section">
-                    <CommissionGradeInput
-                        value={commissionGrades}
-                        onChange={setCommissionGrades}
-                        disabled={loading}
-                        title="수수료 그레이드 설정"
-                    />
-                    {errors.commission_grades && (
-                        <div className="error-message">{errors.commission_grades}</div>
-                    )}
-                </div>
-
-                {/* 그레이드 적용 기간 설정 */}
-                <div className="form-section">
-                    <h3>그레이드 적용 설정</h3>
-                    
-                    <div className="form-group">
-                        <label htmlFor="grade_period_type">그레이드 적용 기간</label>
-                        <select
-                            id="grade_period_type"
-                            name="grade_period_type"
-                            value={formData.grade_period_type}
-                            onChange={handleChange}
-                            disabled={loading}
-                        >
-                            {gradePeriodTypes.map(period => (
-                                <option key={period.value} value={period.value}>
-                                    {period.label}
-                                </option>
-                            ))}
-                        </select>
-                        <span className="field-hint">그레이드 달성을 위한 주문량 집계 기간을 설정합니다.</span>
-                    </div>
-                </div>
-
-                {/* 정책 활성화 설정 */}
-                <div className="form-section">
-                    <h3>정책 활성화 설정</h3>
-                    
-                    <div className="form-group checkbox-group">
-                        <label>
-                            <input
-                                type="checkbox"
-                                name="is_active"
-                                checked={formData.is_active}
-                                onChange={handleChange}
-                                disabled={loading}
-                            />
-                            정책 활성화
-                        </label>
-                        <span className="field-hint">체크하면 정책이 활성화됩니다.</span>
-                    </div>
-                </div>
-
-                {/* 수수료 매트릭스 섹션 */}
-                <div className="form-section">
-                    <h3>수수료 매트릭스</h3>
+                    <h3>리베이트 매트릭스</h3>
                     {errors.rebateMatrix && (
                         <div className="error-message">{errors.rebateMatrix}</div>
                     )}

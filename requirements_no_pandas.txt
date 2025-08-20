@@ -40,7 +40,7 @@ django-filter==23.4
 Pillow==10.4.0
 requests==2.31.0
 openpyxl==3.1.2
-pandas==2.2.0
+# pandas는 제외 - 나중에 별도 설치
 
 # Logging & Monitoring
 colorlog==6.8.0
@@ -85,7 +85,3 @@ aiohttp==3.9.1
 
 # Error Monitoring (Production)
 sentry-sdk==1.38.0
-
-# Note: The following are Python built-in modules (no installation needed):
-# uuid, re, logging, functools, os, time, sys, json, asyncio, 
-# dataclasses, concurrent.futures, statistics, argparse, typing

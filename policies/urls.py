@@ -56,4 +56,11 @@ urlpatterns = [
     path('device-models/', views.DeviceModelAPIView.as_view(), name='device_models_api'),
     path('device-colors/', views.DeviceColorAPIView.as_view(), name='device_colors_api'),
     path('calculate-rebate/', views.RebateCalculationAPIView.as_view(), name='calculate_rebate_api'),
+    
+    # 그레이드 관련 API
+    path('api/<uuid:policy_id>/', views.policy_api_detail, name='api_detail'),
+    path('api/<uuid:policy_id>/update/', views.policy_api_update, name='api_update'),
+    path('<uuid:policy_id>/commission-matrix/', views.PolicyCommissionMatrixView.as_view(), name='policy-commission-matrix'),
+    path('<uuid:policy_id>/commission-grades/', views.policy_commission_grades, name='policy-commission-grades'),
+    path('calculate-grade-bonus/', views.calculate_grade_bonus, name='calculate-grade-bonus'),
 ] 

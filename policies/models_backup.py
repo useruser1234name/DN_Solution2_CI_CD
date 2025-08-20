@@ -172,13 +172,6 @@ class Policy(models.Model):
         help_text="프리미엄 마켓에 자동 노출할지 여부"
     )
     
-    # 정책 활성화 여부
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="활성화 여부",
-        help_text="정책의 활성화 여부"
-    )
-    
     # HTML 상세페이지 자동 생성 내용
     html_content = models.TextField(
         blank=True,

@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { get, put, post } from '../services/api';
 import MatrixRebateEditor from '../components/MatrixRebateEditor';
-import CommissionGradeInput from '../components/CommissionGradeInput';
 import './PolicyCreatePage.css'; // 동일한 스타일 사용
 
 const PolicyEditPage = () => {
@@ -20,15 +19,10 @@ const PolicyEditPage = () => {
         title: '',
         description: '',
         carrier: 'skt',
-        commission_agency: 0,
-        commission_retail: 0,
         expose: true,
-        premium_market_expose: false,
-        is_active: true,
-        grade_period_type: 'monthly'
+        is_active: true
     });
     
-    const [commissionGrades, setCommissionGrades] = useState([]);
     const [rebateMatrix, setRebateMatrix] = useState([]);
 
     const carriers = [
@@ -37,12 +31,7 @@ const PolicyEditPage = () => {
         { value: 'lg', label: 'LG U+' }
     ];
 
-    const gradePeriodTypes = [
-        { value: 'monthly', label: '월별 (매월 1일 기준 리셋)' },
-        { value: 'quarterly', label: '분기별 (분기 시작일 기준 리셋)' },
-        { value: 'yearly', label: '연간 (매년 1월 1일 기준 리셋)' },
-        { value: 'policy_lifetime', label: '정책 전체 기간 (정책 활성화 이후 누적)' }
-    ];
+    console.log('[PolicyEditPage] 컴포넌트 렌더링', { id, user: user?.username });
 
     useEffect(() => {
         if (id) {
@@ -51,6 +40,8 @@ const PolicyEditPage = () => {
     }, [id]);
 
     const fetchPolicy = async () => {
+        console.log('[PolicyEditPage] 정책 정보 가져오기 시작:', id);
+        
         try {
             setLoading(true);
             
@@ -58,49 +49,66 @@ const PolicyEditPage = () => {
             console.log('[PolicyEditPage] 정책 상세 응답:', response);
 
             if (response.success) {
+                // 이중 래핑 확인 및 처리
                 let policy = response.data;
                 if (policy.success && policy.data) {
+                    console.log('[PolicyEditPage] 이중 래핑된 정책 응답 감지');
                     policy = policy.data;
                 }
                 
+                console.log('[PolicyEditPage] 정책 데이터:', policy);
                 setOriginalPolicy(policy);
                 setFormData({
                     title: policy.title || '',
                     description: policy.description || '',
                     carrier: policy.carrier || 'skt',
-                    commission_agency: policy.commission_agency || 0,
-                    commission_retail: policy.commission_retail || 0,
-                    is_active: policy.is_active !== false,
-                    grade_period_type: policy.grade_period_type || 'monthly'
+                    expose: policy.expose !== false,
+                    is_active: policy.is_active !== false
                 });
 
-                // 수수료 그레이드 로드
-                if (policy.commission_grades && Array.isArray(policy.commission_grades)) {
-                    setCommissionGrades(policy.commission_grades);
-                }
-
-                // 기존 수수료 매트릭스 로드
+                // 기존 리베이트 매트릭스 로드
                 try {
-                    const matrixResponse = await get(`api/policies/${id}/commission-matrix/`);
+                    const matrixResponse = await get(`api/policies/${id}/rebate-matrix/`);
+                    console.log('[PolicyEditPage] 리베이트 매트릭스 원본 응답:', matrixResponse);
+                    console.log('[PolicyEditPage] 응답 타입:', typeof matrixResponse);
+                    console.log('[PolicyEditPage] 응답 키들:', Object.keys(matrixResponse || {}));
+                    
                     if (matrixResponse && matrixResponse.success && matrixResponse.data) {
+                        // 이중 래핑 확인 및 처리
                         let matrixData = matrixResponse.data;
+                        console.log('[PolicyEditPage] 매트릭스 데이터 (1차):', matrixData);
+                        console.log('[PolicyEditPage] 매트릭스 데이터 타입:', typeof matrixData);
+                        console.log('[PolicyEditPage] 매트릭스 데이터 키들:', Object.keys(matrixData || {}));
+                        
                         if (matrixData.success && matrixData.data) {
+                            console.log('[PolicyEditPage] 이중 래핑된 매트릭스 응답 감지');
                             matrixData = matrixData.data;
                         }
                         
+                        console.log('[PolicyEditPage] 최종 매트릭스 데이터:', matrixData);
+                        console.log('[PolicyEditPage] 매트릭스 배열:', matrixData.matrix);
+                        console.log('[PolicyEditPage] 매트릭스 배열 길이:', matrixData.matrix ? matrixData.matrix.length : 'undefined');
+                        
                         if (matrixData.matrix && Array.isArray(matrixData.matrix) && matrixData.matrix.length > 0) {
+                            console.log('[PolicyEditPage] 매트릭스 첫 번째 항목:', matrixData.matrix[0]);
                             setRebateMatrix(matrixData.matrix);
                         } else {
+                            console.log('[PolicyEditPage] 매트릭스 배열이 비어있음, 기본값 사용');
                             setRebateMatrix(getDefaultMatrix());
                         }
                     } else {
+                        console.log('[PolicyEditPage] 매트릭스 응답 구조 문제, 기본값 사용');
+                        console.log('[PolicyEditPage] success:', matrixResponse?.success);
+                        console.log('[PolicyEditPage] data:', matrixResponse?.data);
+                        // 기본 매트릭스 설정
                         setRebateMatrix(getDefaultMatrix());
                     }
                 } catch (matrixError) {
-                    console.warn('[PolicyEditPage] 수수료 매트릭스 로딩 실패, 기본값 사용:', matrixError);
+                    console.warn('[PolicyEditPage] 리베이트 매트릭스 로딩 실패, 기본값 사용:', matrixError);
                     setRebateMatrix(getDefaultMatrix());
                 }
             } else {
+                console.error('[PolicyEditPage] 정책 상세 실패:', response.message);
                 setErrors({ general: '정책 정보를 불러오는데 실패했습니다.' });
             }
         } catch (error) {
@@ -112,6 +120,7 @@ const PolicyEditPage = () => {
     };
 
     const getDefaultMatrix = () => {
+        // 기본 9x3 매트릭스 생성
         const planRanges = ['11K', '22K', '33K', '44K', '55K', '66K', '77K', '88K', '99K'];
         const contractPeriods = [12, 24, 36];
         const matrix = [];
@@ -136,7 +145,7 @@ const PolicyEditPage = () => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : (type === 'number' ? Number(value) : value)
+            [name]: type === 'checkbox' ? checked : value
         }));
         
         if (errors[name]) {
@@ -158,25 +167,8 @@ const PolicyEditPage = () => {
             newErrors.carrier = '통신사를 선택해주세요.';
         }
 
-        if (formData.commission_agency < 0) {
-            newErrors.commission_agency = '대리점 수수료는 0 이상이어야 합니다.';
-        }
-
-        if (formData.commission_retail < 0) {
-            newErrors.commission_retail = '판매점 수수료는 0 이상이어야 합니다.';
-        }
-
-        // 그레이드 검증
-        if (commissionGrades.length > 0) {
-            const minOrdersList = commissionGrades.map(g => g.min_orders).filter(Boolean);
-            const duplicates = minOrdersList.filter((item, index) => minOrdersList.indexOf(item) !== index);
-            if (duplicates.length > 0) {
-                newErrors.commission_grades = '동일한 최소 주문건수가 중복됩니다.';
-            }
-        }
-
         if (rebateMatrix.length === 0) {
-            newErrors.rebateMatrix = '최소 하나 이상의 수수료를 설정해주세요.';
+            newErrors.rebateMatrix = '최소 하나 이상의 리베이트를 설정해주세요.';
         }
 
         setErrors(newErrors);
@@ -188,6 +180,7 @@ const PolicyEditPage = () => {
         console.log('[PolicyEditPage] 정책 수정 시작');
 
         if (!validateForm()) {
+            console.log('[PolicyEditPage] 유효성 검사 실패');
             return;
         }
 
@@ -195,30 +188,26 @@ const PolicyEditPage = () => {
         setErrors({});
 
         try {
-            // 정책 데이터 준비
-            const policyData = {
-                ...formData,
-                commission_grades: commissionGrades
-            };
-
             // 정책 수정
-            const policyResponse = await put(`api/policies/${id}/`, policyData);
+            const policyResponse = await put(`api/policies/${id}/`, formData);
+            console.log('[PolicyEditPage] 정책 수정 응답:', policyResponse);
 
             if (policyResponse.success) {
-                // 수수료 매트릭스 저장
+                // 리베이트 매트릭스 저장 (TODO: 백엔드 API 구현 후 활성화)
                 if (rebateMatrix.length > 0) {
                     try {
-                        const matrixResponse = await post(`api/policies/${id}/commission-matrix/`, {
+                        const matrixResponse = await post(`api/policies/${id}/rebate-matrix/`, {
                             matrix: rebateMatrix
                         });
-                        console.log('[PolicyEditPage] 수수료 매트릭스 수정 응답:', matrixResponse);
+                        console.log('[PolicyEditPage] 리베이트 매트릭스 수정 응답:', matrixResponse);
                     } catch (matrixError) {
-                        console.warn('[PolicyEditPage] 수수료 매트릭스 저장 실패:', matrixError);
+                        console.warn('[PolicyEditPage] 리베이트 매트릭스 저장 실패 (API 미구현):', matrixError);
+                        // 리베이트 매트릭스 저장 실패는 정책 수정을 막지 않음
                     }
                 }
                 
                 alert('정책이 성공적으로 수정되었습니다.');
-                setViewMode('view');
+                setViewMode('view'); // 저장 후 보기 모드로 전환
             } else {
                 setErrors({ general: policyResponse.error || '정책 수정에 실패했습니다.' });
             }
@@ -227,6 +216,12 @@ const PolicyEditPage = () => {
             setErrors({ general: '정책 수정 중 오류가 발생했습니다.' });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        if (window.confirm('수정을 취소하시겠습니까? 변경사항은 저장되지 않습니다.')) {
+            navigate('/policies');
         }
     };
 
@@ -304,7 +299,6 @@ const PolicyEditPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="policy-form">
-                {/* 기본 정보 섹션 */}
                 <div className="form-section">
                     <h3>기본 정보</h3>
                     
@@ -354,107 +348,40 @@ const PolicyEditPage = () => {
                         </select>
                         {errors.carrier && <span className="error">{errors.carrier}</span>}
                     </div>
-                </div>
 
-                {/* 기본 수수료 설정 섹션 */}
-                <div className="form-section">
-                    <h3>기본 수수료 설정</h3>
-                    
                     <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="commission_agency">대리점 수수료 (원) *</label>
-                            <input
-                                type="number"
-                                id="commission_agency"
-                                name="commission_agency"
-                                value={formData.commission_agency}
-                                onChange={handleChange}
-                                disabled={saving || viewMode === 'view'}
-                                readOnly={viewMode === 'view'}
-                                min="0"
-                                step="1000"
-                                placeholder="0"
-                            />
-                            {errors.commission_agency && <span className="error">{errors.commission_agency}</span>}
+                        <div className="form-group checkbox-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="expose"
+                                    checked={formData.expose}
+                                    onChange={handleChange}
+                                    disabled={saving || viewMode === 'view'}
+                                />
+                                정책 노출
+                            </label>
+                            <span className="field-hint">체크하면 하위 업체에서 정책을 볼 수 있습니다.</span>
                         </div>
 
-                        <div className="form-group">
-                            <label htmlFor="commission_retail">판매점 수수료 (원) *</label>
-                            <input
-                                type="number"
-                                id="commission_retail"
-                                name="commission_retail"
-                                value={formData.commission_retail}
-                                onChange={handleChange}
-                                disabled={saving || viewMode === 'view'}
-                                readOnly={viewMode === 'view'}
-                                min="0"
-                                step="1000"
-                                placeholder="0"
-                            />
-                            {errors.commission_retail && <span className="error">{errors.commission_retail}</span>}
+                        <div className="form-group checkbox-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="is_active"
+                                    checked={formData.is_active}
+                                    onChange={handleChange}
+                                    disabled={saving || viewMode === 'view'}
+                                />
+                                정책 활성화
+                            </label>
+                            <span className="field-hint">체크하면 정책이 활성화됩니다.</span>
                         </div>
                     </div>
                 </div>
 
-                {/* 수수료 그레이드 설정 섹션 */}
                 <div className="form-section">
-                    <CommissionGradeInput
-                        value={commissionGrades}
-                        onChange={setCommissionGrades}
-                        disabled={saving || viewMode === 'view'}
-                        title="수수료 그레이드 설정"
-                    />
-                    {errors.commission_grades && (
-                        <div className="error-message">{errors.commission_grades}</div>
-                    )}
-                </div>
-
-                {/* 그레이드 적용 기간 설정 */}
-                <div className="form-section">
-                    <h3>그레이드 적용 설정</h3>
-                    
-                    <div className="form-group">
-                        <label htmlFor="grade_period_type">그레이드 적용 기간</label>
-                        <select
-                            id="grade_period_type"
-                            name="grade_period_type"
-                            value={formData.grade_period_type}
-                            onChange={handleChange}
-                            disabled={saving || viewMode === 'view'}
-                        >
-                            {gradePeriodTypes.map(period => (
-                                <option key={period.value} value={period.value}>
-                                    {period.label}
-                                </option>
-                            ))}
-                        </select>
-                        <span className="field-hint">그레이드 달성을 위한 주문량 집계 기간을 설정합니다.</span>
-                    </div>
-                </div>
-
-                {/* 정책 활성화 설정 */}
-                <div className="form-section">
-                    <h3>정책 활성화 설정</h3>
-                    
-                    <div className="form-group checkbox-group">
-                        <label>
-                            <input
-                                type="checkbox"
-                                name="is_active"
-                                checked={formData.is_active}
-                                onChange={handleChange}
-                                disabled={saving || viewMode === 'view'}
-                            />
-                            정책 활성화
-                        </label>
-                        <span className="field-hint">체크하면 정책이 활성화됩니다.</span>
-                    </div>
-                </div>
-
-                {/* 수수료 매트릭스 섹션 */}
-                <div className="form-section">
-                    <h3>수수료 매트릭스</h3>
+                    <h3>리베이트 매트릭스</h3>
                     {errors.rebateMatrix && (
                         <div className="error-message">{errors.rebateMatrix}</div>
                     )}
@@ -471,6 +398,8 @@ const PolicyEditPage = () => {
                         {errors.general}
                     </div>
                 )}
+
+                {/* 폼 액션 버튼들은 헤더로 이동됨 */}
             </form>
         </div>
     );

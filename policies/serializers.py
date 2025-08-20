@@ -23,6 +23,7 @@ class PolicySerializer(serializers.ModelSerializer):
     form_type_display = serializers.CharField(source='get_form_type_display', read_only=True)
     type_display = serializers.CharField(source='get_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+
     
     class Meta:
         model = Policy
@@ -31,7 +32,7 @@ class PolicySerializer(serializers.ModelSerializer):
             'type', 'type_display', 'status', 'status_display',
             'carrier', 'carrier_display', 'join_type', 'join_type_display',
             'contract_period', 'contract_period_display',
-            'rebate_agency', 'rebate_retail', 'expose', 'premium_market_expose',
+            'rebate_agency', 'rebate_retail', 'is_active',
             'html_content', 'created_by', 'created_by_username',
             'created_at', 'updated_at', 'assignment_count'
         ]
@@ -40,6 +41,8 @@ class PolicySerializer(serializers.ModelSerializer):
     def get_assignment_count(self, obj):
         """배정된 업체 수 반환"""
         return obj.get_assignment_count()
+    
+
     
     def validate_title(self, value):
         """제목 중복 검사"""
@@ -56,6 +59,8 @@ class PolicySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("동일한 제목의 정책이 이미 존재합니다.")
         
         return value.strip()
+    
+
     
     def validate(self, data):
         """전체 데이터 검증"""
