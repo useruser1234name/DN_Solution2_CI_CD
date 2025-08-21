@@ -126,13 +126,14 @@ const PolicyListPage = () => {
     };
 
     const getStatusBadge = (policy) => {
+        // 정책의 is_active 상태만 확인
         if (policy.is_active === false) {
             return <span className="badge inactive">비활성</span>;
         }
-        if (policy.expose) {
-            return <span className="badge active">활성</span>;
-        }
-        return <span className="badge hidden">숨김</span>;
+        
+        // is_active가 true면 활성으로 표시
+        // 노출 여부는 백엔드에서 필터링되어 이미 처리됨
+        return <span className="badge active">활성</span>;
     };
 
     const getCarrierLabel = (carrier) => {

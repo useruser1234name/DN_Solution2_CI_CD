@@ -6,12 +6,15 @@ import { hasPermission } from '../utils/rolePermissions';
 const ProtectedRoute = ({ children, requiredPermissions = [] }) => {
     const { user, loading } = useAuth();
 
-    console.log('[ProtectedRoute] 컴포넌트 렌더링', { 
-        user: user?.username, 
-        loading, 
-        isAuthenticated: !!user,
-        requiredPermissions
-    });
+    // 개발환경에서만 로그 출력
+    if (process.env.NODE_ENV === 'development') {
+        console.log('[ProtectedRoute] 컴포넌트 렌더링', { 
+            user: user?.username, 
+            loading, 
+            isAuthenticated: !!user,
+            requiredPermissions
+        });
+    }
 
     if (loading) {
 

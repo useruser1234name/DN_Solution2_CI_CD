@@ -105,6 +105,11 @@
     color: #856404;
 }
 
+.badge.unknown {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
 .action-buttons {
     display: flex;
     gap: 5px;
