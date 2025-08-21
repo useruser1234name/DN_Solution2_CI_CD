@@ -1,0 +1,265 @@
+{
+  "version": "1.0",
+  "updated_at": "2023-10-15",
+  "fields": [
+    {
+      "field_name": "order_id",
+      "field_label": "주문번호",
+      "field_type": "text",
+      "is_required": true,
+      "is_readonly": true,
+      "auto_generate": true,
+      "order": 1
+    },
+    {
+      "field_name": "received_date",
+      "field_label": "접수일자",
+      "field_type": "datetime",
+      "is_required": true,
+      "is_readonly": true,
+      "auto_fill": "current_datetime",
+      "order": 2
+    },
+    {
+      "field_name": "primary_id",
+      "field_label": "1차 ID",
+      "field_type": "text",
+      "is_required": true,
+      "is_readonly": true,
+      "auto_fill": "current_user",
+      "order": 3
+    },
+    {
+      "field_name": "carrier",
+      "field_label": "통신사",
+      "field_type": "text",
+      "is_required": true,
+      "is_readonly": true,
+      "auto_fill": "from_policy",
+      "order": 4
+    },
+    {
+      "field_name": "subscription_type",
+      "field_label": "가입유형",
+      "field_type": "text",
+      "is_required": true,
+      "is_readonly": true,
+      "auto_fill": "from_policy",
+      "order": 5
+    },
+    {
+      "field_name": "customer_name",
+      "field_label": "고객명",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "고객님의 성함을 입력해주세요",
+      "order": 6
+    },
+    {
+      "field_name": "customer_type",
+      "field_label": "고객유형",
+      "field_type": "select",
+      "is_required": true,
+      "field_options": [
+        {"value": "성인일반", "label": "성인일반"},
+        {"value": "법인", "label": "법인"},
+        {"value": "외국인", "label": "외국인"},
+        {"value": "미성년자", "label": "미성년자"}
+      ],
+      "order": 7
+    },
+    {
+      "field_name": "phone_number",
+      "field_label": "개통번호",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "010-0000-0000",
+      "order": 8
+    },
+    {
+      "field_name": "ssn",
+      "field_label": "주민등록번호",
+      "field_type": "text",
+      "is_required": true,
+      "is_masked": true,
+      "placeholder": "000000-0******",
+      "order": 9
+    },
+    {
+      "field_name": "customer_address",
+      "field_label": "고객주소",
+      "field_type": "text",
+      "is_required": false,
+      "placeholder": "주소를 입력해주세요",
+      "order": 10
+    },
+    {
+      "field_name": "device_model",
+      "field_label": "단말기 모델",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "모델명 입력",
+      "order": 11
+    },
+    {
+      "field_name": "device_serial_number",
+      "field_label": "단말기 일련번호",
+      "field_type": "barcode_scan",
+      "is_required": true,
+      "allow_manual": true,
+      "placeholder": "바코드 스캔 또는 수기입력",
+      "order": 12
+    },
+    {
+      "field_name": "imei",
+      "field_label": "IMEI",
+      "field_type": "barcode_scan",
+      "is_required": true,
+      "allow_manual": true,
+      "placeholder": "바코드 스캔 또는 수기입력",
+      "order": 13
+    },
+    {
+      "field_name": "imei2",
+      "field_label": "IMEI2",
+      "field_type": "barcode_scan",
+      "is_required": false,
+      "allow_manual": true,
+      "placeholder": "바코드 스캔 또는 수기입력 (선택)",
+      "order": 14
+    },
+    {
+      "field_name": "eid",
+      "field_label": "EID",
+      "field_type": "barcode_scan",
+      "is_required": false,
+      "allow_manual": true,
+      "placeholder": "바코드 스캔 또는 수기입력 (선택)",
+      "order": 15
+    },
+    {
+      "field_name": "plan_name",
+      "field_label": "요금상품명",
+      "field_type": "dropdown_from_policy",
+      "is_required": true,
+      "data_source": "policy_plans",
+      "placeholder": "요금제를 선택해주세요",
+      "order": 16
+    },
+    {
+      "field_name": "contract_period",
+      "field_label": "약정기간",
+      "field_type": "select",
+      "is_required": true,
+      "field_options": [
+                 {"value": "무약정", "label": "무약정"},
+         {"value": "선택약정12개월", "label": "선택약정 12개월"},
+         {"value": "선택약정24개월", "label": "선택약정 24개월"},
+         {"value": "공시지원금12개월", "label": "공시지원금 12개월"},
+         {"value": "공시지원금24개월", "label": "공시지원금 24개월"}
+      ],
+      "order": 17
+    },
+    {
+      "field_name": "sim_model",
+      "field_label": "유심 모델",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "예: U2920",
+      "order": 18
+    },
+    {
+      "field_name": "sim_serial_number",
+      "field_label": "유심일련번호",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "유심 일련번호 입력",
+      "order": 19
+    },
+    {
+      "field_name": "previous_carrier",
+      "field_label": "이전통신사",
+      "field_type": "select",
+      "is_required": false,
+      "field_options": [
+        {"value": "SKT", "label": "SKT"},
+        {"value": "KT", "label": "KT"},
+        {"value": "LGU+", "label": "LG U+"},
+        {"value": "알뜰폰", "label": "알뜰폰"}
+      ],
+      "order": 20
+    },
+    {
+      "field_name": "mvno_carrier",
+      "field_label": "별정통신사",
+      "field_type": "text",
+      "is_required": false,
+      "placeholder": "MVNO 사업자명 (알뜰폰인 경우)",
+      "order": 21
+    },
+    {
+      "field_name": "payment_method",
+      "field_label": "납부방법",
+      "field_type": "select",
+      "is_required": true,
+      "field_options": [
+        {"value": "은행자동이체", "label": "은행 자동이체"},
+        {"value": "카드자동이체", "label": "카드 자동이체"},
+        {"value": "지로", "label": "지로"}
+      ],
+      "order": 22
+    },
+    {
+      "field_name": "account_holder",
+      "field_label": "예금주명",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "예금주 또는 카드주 성명",
+      "order": 23
+    },
+    {
+      "field_name": "bank_name",
+      "field_label": "은행(카드)명",
+      "field_type": "text",
+      "is_required": true,
+      "placeholder": "은행 또는 카드사명",
+      "order": 24
+    },
+    {
+      "field_name": "account_number",
+      "field_label": "계좌(카드)번호",
+      "field_type": "text",
+      "is_required": true,
+      "is_masked": true,
+      "placeholder": "계좌번호 또는 카드번호",
+      "order": 25
+    },
+    {
+      "field_name": "reference_url",
+      "field_label": "참조 URL",
+      "field_type": "url",
+      "is_required": false,
+      "placeholder": "https://... (관련 링크가 있으면 입력)",
+      "order": 26
+    },
+    {
+      "field_name": "customer_memo",
+      "field_label": "고객 메모",
+      "field_type": "large_textarea",
+      "is_required": false,
+      "placeholder": "고객 관련 상세 메모사항을 자유롭게 입력해주세요.\n여러 줄 입력이 가능합니다.",
+      "rows": 8,
+      "order": 27
+    },
+    {
+      "field_name": "attachments",
+      "field_label": "첨부파일",
+      "field_type": "file_upload",
+      "is_required": false,
+      "multiple": true,
+      "accept": "image/*,.pdf,.doc,.docx",
+      "max_files": 4,
+      "order": 28
+    }
+  ]
+}

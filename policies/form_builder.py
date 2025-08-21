@@ -5,9 +5,11 @@
 
 import json
 import logging
+import os
 from typing import Dict, List, Any, Optional
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.conf import settings
 
 from policies.models import OrderFormTemplate, OrderFormField, Policy
 
@@ -20,8 +22,29 @@ class FormBuilder:
     동적으로 주문서 양식을 생성하고 관리
     """
     
-    # 기본 필드 템플릿 (개선된 버전)
-    DEFAULT_FIELDS = [
+    # 설정 파일 경로
+    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config', 'order_form_fields.json')
+    
+    # 기본 필드 템플릿 (외부 설정 파일에서 로드)
+    @classmethod
+    def load_fields_from_config(cls):
+        """설정 파일에서 필드 정의 로드"""
+        try:
+            if os.path.exists(cls.CONFIG_FILE):
+                with open(cls.CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return config.get('fields', [])
+            else:
+                logger.warning(f"설정 파일을 찾을 수 없습니다: {cls.CONFIG_FILE}")
+                return cls._get_default_fields()
+        except Exception as e:
+            logger.error(f"설정 파일 로드 실패: {str(e)}")
+            return cls._get_default_fields()
+    
+    @classmethod
+    def _get_default_fields(cls):
+        """기본 필드 정의 (설정 파일이 없는 경우 사용)"""
+        return [
         # ========== 자동 입력 필드 ==========
         {
             'field_name': 'order_id',
@@ -300,6 +323,13 @@ class FormBuilder:
         }
     ]
     
+    # DEFAULT_FIELDS 속성을 동적으로 로드하는 프로퍼티로 정의
+    @classmethod
+    @property
+    def DEFAULT_FIELDS(cls):
+        """설정 파일에서 필드 정의를 동적으로 로드"""
+        return cls.load_fields_from_config()
+    
     @classmethod
     def create_template(cls, policy: Policy, fields: List[Dict] = None, 
                        title: str = None, description: str = None) -> OrderFormTemplate:
@@ -330,7 +360,7 @@ class FormBuilder:
                 )
                 
                 # 필드 생성
-                fields_to_create = fields or cls.DEFAULT_FIELDS
+                fields_to_create = fields or cls.load_fields_from_config()
                 for field_data in fields_to_create:
                     cls._create_field(template, field_data)
                 
@@ -357,13 +387,13 @@ class FormBuilder:
         )
     
     @classmethod
-    def update_template(cls, template: OrderFormTemplate, fields: List[Dict]) -> OrderFormTemplate:
+    def update_template(cls, template: OrderFormTemplate, fields: List[Dict] = None) -> OrderFormTemplate:
         """
         기존 템플릿 업데이트
         
         Args:
             template: 업데이트할 템플릿
-            fields: 새로운 필드 정의
+            fields: 새로운 필드 정의 (없으면 설정 파일에서 로드)
             
         Returns:
             업데이트된 템플릿
@@ -374,7 +404,8 @@ class FormBuilder:
                 template.fields.all().delete()
                 
                 # 새 필드 생성
-                for field_data in fields:
+                fields_to_create = fields or cls.load_fields_from_config()
+                for field_data in fields_to_create:
                     cls._create_field(template, field_data)
                 
                 logger.info(f"주문서 템플릿 '{template.title}'이 업데이트되었습니다.")

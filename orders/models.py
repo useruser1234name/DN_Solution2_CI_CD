@@ -32,12 +32,10 @@ class Order(models.Model):
     STATUS_CHOICES = [
         ('pending', '접수대기'),
         ('approved', '승인됨'),
-        ('processing', '처리중'),
-        ('shipped', '배송중'),
+        ('processing', '개통 준비중'),
+        ('shipped', '개통중'),
         ('completed', '완료'),
-        ('cancelled', '취소'),
-        ('return_requested', '반품요청'),
-        ('exchanged', '교환완료'),
+        ('cancelled', '개통취소'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

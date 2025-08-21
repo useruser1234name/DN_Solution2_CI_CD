@@ -623,28 +623,13 @@ class PolicyApiCreateView(APIView):
     def create_default_order_form(self, policy, user):
         """정책 생성 시 기본 주문서 양식 자동 생성"""
         try:
-            from .models import OrderFormTemplate, OrderFormField
-            from .form_builder import FormBuilder
+            from .utils.order_form_manager import OrderFormManager
             
-            # 기본 템플릿 생성
-            template = OrderFormTemplate.objects.create(
-                policy=policy,
-                title=f"{policy.title} - 주문서",
-                description="기본 주문서 양식입니다.",
-                created_by=user
-            )
+            # OrderFormManager를 사용하여 주문서 양식 생성
+            template = OrderFormManager.create_order_form(policy, user)
             
-            # FormBuilder의 DEFAULT_FIELDS 사용
-            default_fields = FormBuilder.DEFAULT_FIELDS
-            
-            # 필드들 생성
-            for field_data in default_fields:
-                OrderFormField.objects.create(
-                    template=template,
-                    **field_data
-                )
-            
-            logger.info(f"기본 주문서 양식 생성 완료: {policy.title} - {len(default_fields)}개 필드")
+            logger.info(f"기본 주문서 양식 생성 완료: {policy.title}")
+            return template
             
         except Exception as e:
             logger.error(f"기본 주문서 양식 생성 실패: {policy.title} - {str(e)}")

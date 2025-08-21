@@ -463,6 +463,63 @@ class Policy(models.Model):
         except Exception as e:
             logger.error(f"프리미엄 마켓 노출 상태 변경 중 오류 발생: {str(e)} - 정책: {self.title}")
             return False
+    
+    def ensure_order_form(self, force_update=False):
+        """
+        정책에 최신 주문서 양식이 적용되어 있는지 확인하고,
+        없거나 오래된 경우 최신 양식을 적용
+        
+        Args:
+            force_update: 강제 업데이트 여부 (기본값: False)
+            
+        Returns:
+            OrderFormTemplate 객체
+        """
+        from .utils.order_form_manager import OrderFormManager
+        return OrderFormManager.ensure_latest_order_form(self, force=force_update)
+    
+    def update_order_form(self):
+        """
+        정책의 주문서 양식을 최신 버전으로 강제 업데이트
+        
+        Returns:
+            업데이트된 OrderFormTemplate 객체 또는 None (양식이 없는 경우)
+        """
+        if hasattr(self, 'order_form'):
+            from .utils.order_form_manager import OrderFormManager
+            return OrderFormManager.update_order_form(self.order_form, force=True)
+        else:
+            logger.warning(f"정책 '{self.title}'에 주문서 양식이 없습니다.")
+            return self.ensure_order_form()
+    
+    def get_order_form_status(self):
+        """
+        주문서 양식 상태 확인
+        
+        Returns:
+            상태 정보를 담은 딕셔너리
+        """
+        if not hasattr(self, 'order_form'):
+            return {
+                'has_form': False,
+                'message': '주문서 양식이 없습니다.',
+                'fields_count': 0,
+                'is_latest': False
+            }
+        
+        from policies.form_builder import FormBuilder
+        
+        current_fields_count = self.order_form.fields.count()
+        default_fields_count = len(FormBuilder.load_fields_from_config())
+        is_latest = current_fields_count == default_fields_count
+        
+        return {
+            'has_form': True,
+            'message': '최신 주문서 양식이 적용되어 있습니다.' if is_latest else '주문서 양식 업데이트가 필요합니다.',
+            'fields_count': current_fields_count,
+            'is_latest': is_latest,
+            'default_fields_count': default_fields_count
+        }
 
 
 class PolicyNotice(models.Model):
