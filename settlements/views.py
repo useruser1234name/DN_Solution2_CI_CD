@@ -17,10 +17,18 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from core.permissions import HierarchyPermission, CompanyTypePermission
-from .models import Settlement, SettlementBatch
+from companies.models import Company
+from policies.models import Policy
+from .models import (
+    Settlement, SettlementBatch, 
+    CommissionGradeTracking, GradeAchievementHistory, GradeBonusSettlement
+)
 from .serializers import (
     SettlementSerializer, SettlementBatchSerializer,
-    SettlementStatsSerializer, SettlementCreateSerializer
+    SettlementStatsSerializer, SettlementCreateSerializer,
+    PaymentUpdateSerializer, ExpectedPaymentDateSerializer,
+    CommissionGradeTrackingSerializer, GradeAchievementHistorySerializer, 
+    GradeBonusSettlementSerializer, GradeTargetSetupSerializer, GradeStatsSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -101,6 +109,7 @@ class SettlementViewSet(viewsets.ModelViewSet):
             pending_count=Count('id', filter=Q(status='pending')),
             approved_count=Count('id', filter=Q(status='approved')),
             paid_count=Count('id', filter=Q(status='paid')),
+            unpaid_count=Count('id', filter=Q(status='unpaid')),  # 새로 추가
             cancelled_count=Count('id', filter=Q(status='cancelled'))
         )
         
@@ -132,19 +141,142 @@ class SettlementViewSet(viewsets.ModelViewSet):
             )
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CompanyTypePermission])
+    def pay(self, request, pk=None):
+        """입금 처리 (본사만 가능) - mark_paid의 별칭"""
+        # mark_paid와 동일한 로직 사용
+        return self.mark_paid(request, pk)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CompanyTypePermission])
     def mark_paid(self, request, pk=None):
-        """지급 완료 처리 (본사만 가능)"""
+        """입금 완료 처리 (본사만 가능)"""
         settlement = self.get_object()
+        serializer = PaymentUpdateSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         try:
-            settlement.mark_as_paid()
-            serializer = self.get_serializer(settlement)
-            return Response(serializer.data)
+            payment_method = serializer.validated_data.get('payment_method', '')
+            payment_reference = serializer.validated_data.get('payment_reference', '')
+            
+            settlement.mark_as_paid(
+                user=request.user,
+                payment_method=payment_method,
+                payment_reference=payment_reference
+            )
+            
+            result_serializer = self.get_serializer(settlement)
+            return Response({
+                'message': '입금 완료 처리가 완료되었습니다.',
+                'settlement': result_serializer.data
+            })
         except Exception as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CompanyTypePermission])
+    def mark_unpaid(self, request, pk=None):
+        """미입금 처리 (본사만 가능)"""
+        settlement = self.get_object()
+        reason = request.data.get('reason', '')
+        
+        if not reason.strip():
+            return Response(
+                {'error': '미입금 사유를 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            settlement.mark_as_unpaid(reason, request.user)
+            serializer = self.get_serializer(settlement)
+            return Response({
+                'message': '미입금 처리가 완료되었습니다.',
+                'settlement': serializer.data
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['get'])
+    def pending_payments(self, request):
+        """입금 대기 중인 정산 목록"""
+        queryset = self.get_queryset().filter(status='approved').order_by('-approved_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CompanyTypePermission])
+    def set_expected_date(self, request, pk=None):
+        """입금 예정일 설정 (본사만 가능)"""
+        settlement = self.get_object()
+        serializer = ExpectedPaymentDateSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            expected_date = serializer.validated_data['expected_payment_date']
+            settlement.set_expected_payment_date(expected_date, request.user)
+            
+            result_serializer = self.get_serializer(settlement)
+            return Response({
+                'message': f'입금 예정일이 {expected_date}로 설정되었습니다.',
+                'settlement': result_serializer.data
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['get'])
+    def payment_schedule(self, request):
+        """입금 예정 일정 조회"""
+        # 오늘부터 30일 내 예정된 입금
+        from datetime import date, timedelta
+        
+        today = date.today()
+        end_date = today + timedelta(days=30)
+        
+        queryset = self.get_queryset().filter(
+            status__in=['approved', 'unpaid'],
+            expected_payment_date__gte=today,
+            expected_payment_date__lte=end_date
+        ).order_by('expected_payment_date')
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def unpaid_settlements(self, request):
+        """미입금 정산 목록"""
+        queryset = self.get_queryset().filter(status='unpaid').order_by('-updated_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -349,3 +481,288 @@ class SettlementBatchViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class CommissionGradeTrackingViewSet(viewsets.ModelViewSet):
+    """수수료 그레이드 추적 뷰셋"""
+    
+    serializer_class = CommissionGradeTrackingSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """쿼리셋 필터링"""
+        queryset = CommissionGradeTracking.objects.select_related(
+            'company', 'policy'
+        ).filter(is_active=True)
+        
+        # 본사가 아닌 경우 자신의 그레이드 추적만 조회 가능
+        if not self.request.user.is_staff:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=self.request.user)
+                queryset = queryset.filter(company=company_user.company)
+            except CompanyUser.DoesNotExist:
+                queryset = queryset.none()
+        
+        # 필터링
+        company_id = self.request.query_params.get('company')
+        if company_id:
+            queryset = queryset.filter(company_id=company_id)
+        
+        policy_id = self.request.query_params.get('policy')
+        if policy_id:
+            queryset = queryset.filter(policy_id=policy_id)
+        
+        period_type = self.request.query_params.get('period_type')
+        if period_type:
+            queryset = queryset.filter(period_type=period_type)
+        
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['post'], permission_classes=[CompanyTypePermission(required_types=['headquarters'])])
+    def setup_target(self, request):
+        """그레이드 목표 설정"""
+        serializer = GradeTargetSetupSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        data = serializer.validated_data
+        
+        try:
+            company = Company.objects.get(id=data['company'])
+            policy = Policy.objects.get(id=data['policy'])
+            
+            # 그레이드 추적 생성 또는 업데이트
+            if data['period_type'] == 'monthly':
+                tracking = CommissionGradeTracking.create_monthly_tracking(
+                    company=company,
+                    policy=policy,
+                    year=data['year'],
+                    month=data['month'],
+                    target_orders=data['target_orders']
+                )
+            elif data['period_type'] == 'quarterly':
+                tracking = CommissionGradeTracking.create_quarterly_tracking(
+                    company=company,
+                    policy=policy,
+                    year=data['year'],
+                    quarter=data['quarter'],
+                    target_orders=data['target_orders']
+                )
+            else:
+                return Response({
+                    'error': '월별 또는 분기별 추적만 지원됩니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            serializer = CommissionGradeTrackingSerializer(tracking)
+            return Response({
+                'message': f'{company.name}의 그레이드 목표가 설정되었습니다.',
+                'tracking': serializer.data
+            })
+            
+        except Company.DoesNotExist:
+            return Response({'error': '업체를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        except Policy.DoesNotExist:
+            return Response({'error': '정책을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"그레이드 목표 설정 실패: {str(e)}")
+            return Response({'error': '그레이드 목표 설정 중 오류가 발생했습니다.'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['post'])
+    def update_orders(self, request, pk=None):
+        """주문 수 업데이트"""
+        tracking = self.get_object()
+        
+        try:
+            old_level = tracking.achieved_grade_level
+            tracking.update_current_orders()
+            
+            # 그레이드 레벨이 변경되었는지 확인
+            if old_level != tracking.achieved_grade_level:
+                # 그레이드 달성 이력 생성
+                GradeAchievementHistory.objects.create(
+                    grade_tracking=tracking,
+                    from_level=old_level,
+                    to_level=tracking.achieved_grade_level,
+                    orders_at_change=tracking.current_orders,
+                    bonus_amount=tracking.bonus_per_order
+                )
+                
+                # 보너스 정산 생성 또는 업데이트
+                if tracking.total_bonus > 0:
+                    GradeBonusSettlement.create_bonus_settlement(tracking)
+            
+            serializer = CommissionGradeTrackingSerializer(tracking)
+            return Response({
+                'message': '주문 수가 업데이트되었습니다.',
+                'tracking': serializer.data,
+                'grade_changed': old_level != tracking.achieved_grade_level
+            })
+            
+        except Exception as e:
+            logger.error(f"주문 수 업데이트 실패: {str(e)}")
+            return Response({'error': '주문 수 업데이트 중 오류가 발생했습니다.'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """그레이드 통계"""
+        queryset = self.get_queryset()
+        
+        # 기본 통계
+        total_companies = queryset.values('company').distinct().count()
+        active_trackings = queryset.count()
+        
+        # 보너스 통계
+        bonus_stats = GradeBonusSettlement.objects.aggregate(
+            total_bonus=Sum('bonus_amount'),
+            pending_bonus=Sum('bonus_amount', filter=Q(status='pending')),
+            paid_bonus=Sum('bonus_amount', filter=Q(status='paid'))
+        )
+        
+        # 그레이드별 분포
+        grade_distribution = {}
+        for level in range(6):  # 0-5 레벨
+            count = queryset.filter(achieved_grade_level=level).count()
+            grade_distribution[str(level)] = count
+        
+        # 기간 타입별 분포
+        period_distribution = {}
+        for period_type, _ in CommissionGradeTracking.PERIOD_TYPE_CHOICES:
+            count = queryset.filter(period_type=period_type).count()
+            period_distribution[period_type] = count
+        
+        stats_data = {
+            'total_companies': total_companies,
+            'active_trackings': active_trackings,
+            'total_bonus_amount': bonus_stats['total_bonus'] or 0,
+            'pending_bonus_amount': bonus_stats['pending_bonus'] or 0,
+            'paid_bonus_amount': bonus_stats['paid_bonus'] or 0,
+            'grade_distribution': grade_distribution,
+            'period_type_distribution': period_distribution
+        }
+        
+        serializer = GradeStatsSerializer(stats_data)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def current_month(self, request):
+        """현재 월 그레이드 추적 조회"""
+        now = timezone.now()
+        year = now.year
+        month = now.month
+        
+        queryset = self.get_queryset().filter(
+            period_type='monthly',
+            period_start__year=year,
+            period_start__month=month
+        )
+        
+        serializer = CommissionGradeTrackingSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def top_performers(self, request):
+        """상위 성과 업체 조회"""
+        limit = int(request.query_params.get('limit', 10))
+        
+        queryset = self.get_queryset().filter(
+            period_type='monthly',
+            period_start__gte=timezone.now().replace(day=1)  # 이번 달
+        ).order_by('-achieved_grade_level', '-current_orders')[:limit]
+        
+        serializer = CommissionGradeTrackingSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class GradeAchievementHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """그레이드 달성 이력 뷰셋"""
+    
+    serializer_class = GradeAchievementHistorySerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """쿼리셋 필터링"""
+        queryset = GradeAchievementHistory.objects.select_related(
+            'grade_tracking__company', 'grade_tracking__policy'
+        )
+        
+        # 본사가 아닌 경우 자신의 이력만 조회 가능
+        if not self.request.user.is_staff:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=self.request.user)
+                queryset = queryset.filter(grade_tracking__company=company_user.company)
+            except CompanyUser.DoesNotExist:
+                queryset = queryset.none()
+        
+        # 필터링
+        company_id = self.request.query_params.get('company')
+        if company_id:
+            queryset = queryset.filter(grade_tracking__company_id=company_id)
+        
+        tracking_id = self.request.query_params.get('tracking_id')
+        if tracking_id:
+            queryset = queryset.filter(grade_tracking__id=tracking_id)
+            
+        return queryset.order_by('-achieved_at')
+
+
+class GradeBonusSettlementViewSet(viewsets.ModelViewSet):
+    """그레이드 보너스 정산 뷰셋"""
+    
+    serializer_class = GradeBonusSettlementSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """쿼리셋 필터링"""
+        queryset = GradeBonusSettlement.objects.select_related(
+            'grade_tracking__company', 'approved_by'
+        )
+        
+        # 본사가 아닌 경우 자신의 보너스 정산만 조회 가능
+        if not self.request.user.is_staff:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=self.request.user)
+                queryset = queryset.filter(grade_tracking__company=company_user.company)
+            except CompanyUser.DoesNotExist:
+                queryset = queryset.none()
+        
+        # 필터링
+        company_id = self.request.query_params.get('company')
+        if company_id:
+            queryset = queryset.filter(grade_tracking__company_id=company_id)
+        
+        policy_id = self.request.query_params.get('policy')
+        if policy_id:
+            queryset = queryset.filter(grade_tracking__policy_id=policy_id)
+        
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+            
+        return queryset.order_by('-created_at')
+        
+    @action(detail=True, methods=['post'], permission_classes=[CompanyTypePermission(required_types=['headquarters'])])
+    def approve(self, request, pk=None):
+        """보너스 정산 승인"""
+        settlement = self.get_object()
+        try:
+            settlement.approve(self.request.user)
+            return Response({'message': '보너스 정산이 승인되었습니다.'})
+        except Exception as e:
+            logger.error(f"보너스 정산 승인 실패: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+    @action(detail=True, methods=['post'], permission_classes=[CompanyTypePermission(required_types=['headquarters'])])
+    def mark_as_paid(self, request, pk=None):
+        """보너스 정산 지급 완료 처리"""
+        settlement = self.get_object()
+        try:
+            settlement.mark_as_paid(self.request.user)
+            return Response({'message': '보너스 정산 지급이 완료되었습니다.'})
+        except Exception as e:
+            logger.error(f"보너스 정산 지급 완료 처리 실패: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

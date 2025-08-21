@@ -137,6 +137,22 @@
     color: #0c5460;
 }
 
+.badge.final-approved {
+    background: #007bff;
+    color: white;
+    font-weight: bold;
+}
+
+.badge.processing {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge.shipped {
+    background: #cce5ff;
+    color: #004085;
+}
+
 .badge.cancelled {
     background: #f5f5f5;
     color: #6c757d;

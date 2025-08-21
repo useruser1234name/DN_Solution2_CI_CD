@@ -89,31 +89,79 @@ const OrderListPage = () => {
         }
     };
 
-    const handleRejectOrder = async (orderId) => {
-        const reason = window.prompt('반려 사유를 입력하세요:');
-        if (!reason) return;
+    const handleFinalApprove = async (orderId) => {
+        if (!window.confirm('이 주문을 최종 승인하여 정산을 생성하시겠습니까?')) {
+            return;
+        }
 
         try {
-            const response = await post(`orders/${orderId}/reject/`, { reason });
+            const response = await post(`api/orders/${orderId}/final_approve/`);
             if (response.success) {
-                alert('주문이 반려되었습니다.');
+                alert('주문이 최종 승인되어 정산이 생성되었습니다.');
                 fetchOrders();
             } else {
-                alert(response.message || '주문 반려에 실패했습니다.');
+                alert(response.message || '최종 승인에 실패했습니다.');
             }
         } catch (error) {
-            console.error('[OrderListPage] 주문 반려 실패:', error);
-            alert('주문 반려 중 오류가 발생했습니다.');
+            console.error('[OrderListPage] 최종 승인 실패:', error);
+            alert('최종 승인 중 오류가 발생했습니다.');
+        }
+    };
+
+    const handleUpdateStatus = async (orderId, status) => {
+        const statusName = {
+            'processing': '개통 준비중',
+            'shipped': '개통중',
+            'completed': '개통완료',
+            'cancelled': '개통취소'
+        }[status] || status;
+
+        // 상태 변경 사유 입력 (취소의 경우 필수)
+        let reason = '';
+        if (status === 'cancelled') {
+            reason = prompt('취소 사유를 입력해주세요:');
+            if (reason === null) {
+                return; // 취소
+            }
+            if (!reason.trim()) {
+                alert('취소 사유는 필수입니다.');
+                return;
+            }
+        } else {
+            // 다른 상태는 선택적
+            reason = prompt(`주문 상태를 '${statusName}'로 변경하는 사유를 입력해주세요 (선택사항):`) || '';
+        }
+
+        if (!window.confirm(`주문 상태를 '${statusName}'(으)로 변경하시겠습니까?`)) {
+            return;
+        }
+
+        try {
+            const response = await post(`api/orders/${orderId}/update_status/`, { 
+                status,
+                reason: reason?.trim() || ''
+            });
+            if (response.success) {
+                alert(`주문 상태가 '${statusName}'(으)로 변경되었습니다.`);
+                fetchOrders();
+            } else {
+                alert(response.message || '상태 변경에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('[OrderListPage] 상태 변경 실패:', error);
+            alert('상태 변경 중 오류가 발생했습니다.');
         }
     };
 
     const getStatusBadge = (status) => {
         const statusMap = {
-            'pending': { label: '대기', className: 'pending' },
-            'approved': { label: '승인', className: 'approved' },
-            'rejected': { label: '반려', className: 'rejected' },
-            'completed': { label: '완료', className: 'completed' },
-            'cancelled': { label: '취소', className: 'cancelled' }
+            'pending': { label: '접수대기', className: 'pending' },
+            'approved': { label: '승인됨', className: 'approved' },
+            'processing': { label: '개통준비중', className: 'processing' },
+            'shipped': { label: '개통중', className: 'shipped' },
+            'completed': { label: '개통완료', className: 'completed' },
+            'final_approved': { label: '승인(완료)', className: 'final-approved' },
+            'cancelled': { label: '개통취소', className: 'cancelled' }
         };
         
         const statusInfo = statusMap[status] || { label: status, className: 'default' };
@@ -189,10 +237,16 @@ const OrderListPage = () => {
                         승인 ({orders.filter(o => o.status === 'approved').length})
                     </button>
                     <button 
-                        className={`filter-btn ${filter === 'rejected' ? 'active' : ''}`}
-                        onClick={() => setFilter('rejected')}
+                        className={`filter-btn ${filter === 'completed' ? 'active' : ''}`}
+                        onClick={() => setFilter('completed')}
                     >
-                        반려 ({orders.filter(o => o.status === 'rejected').length})
+                        개통완료 ({orders.filter(o => o.status === 'completed').length})
+                    </button>
+                    <button 
+                        className={`filter-btn ${filter === 'final_approved' ? 'active' : ''}`}
+                        onClick={() => setFilter('final_approved')}
+                    >
+                        승인완료 ({orders.filter(o => o.status === 'final_approved').length})
                     </button>
                 </div>
             </div>
@@ -251,11 +305,55 @@ const OrderListPage = () => {
                                                         >
                                                             승인
                                                         </button>
+                                                    </PermissionGuard>
+                                                )}
+                                                {order.status === 'approved' && (
+                                                    <PermissionGuard permission="canApproveOrders">
+                                                        <button 
+                                                            className="btn btn-small btn-info"
+                                                            onClick={() => handleUpdateStatus(order.id, 'processing')}
+                                                        >
+                                                            개통준비
+                                                        </button>
+                                                    </PermissionGuard>
+                                                )}
+                                                {order.status === 'processing' && (
+                                                    <PermissionGuard permission="canApproveOrders">
+                                                        <button 
+                                                            className="btn btn-small btn-info"
+                                                            onClick={() => handleUpdateStatus(order.id, 'shipped')}
+                                                        >
+                                                            개통시작
+                                                        </button>
+                                                    </PermissionGuard>
+                                                )}
+                                                {order.status === 'shipped' && (
+                                                    <PermissionGuard permission="canApproveOrders">
+                                                        <button 
+                                                            className="btn btn-small btn-success"
+                                                            onClick={() => handleUpdateStatus(order.id, 'completed')}
+                                                        >
+                                                            개통완료
+                                                        </button>
+                                                    </PermissionGuard>
+                                                )}
+                                                {order.status === 'completed' && (
+                                                    <PermissionGuard permission="canApproveOrders">
+                                                        <button 
+                                                            className="btn btn-small btn-primary"
+                                                            onClick={() => handleFinalApprove(order.id)}
+                                                        >
+                                                            최종승인
+                                                        </button>
+                                                    </PermissionGuard>
+                                                )}
+                                                {(order.status === 'pending' || order.status === 'approved' || order.status === 'processing' || order.status === 'shipped') && (
+                                                    <PermissionGuard permission="canApproveOrders">
                                                         <button 
                                                             className="btn btn-small btn-danger"
-                                                            onClick={() => handleRejectOrder(order.id)}
+                                                            onClick={() => handleUpdateStatus(order.id, 'cancelled')}
                                                         >
-                                                            반려
+                                                            취소
                                                         </button>
                                                     </PermissionGuard>
                                                 )}

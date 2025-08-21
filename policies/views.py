@@ -2487,7 +2487,7 @@ class PolicyCommissionMatrixView(APIView):
                     'plan_range': matrix_item.plan_range,
                     'plan_range_display': matrix_item.get_plan_range_display(),
                     'contract_period': matrix_item.contract_period,
-                    'commission_amount': float(matrix_item.commission_amount),
+                    'rebate_amount': float(matrix_item.rebate_amount),
                     'carrier': matrix_item.carrier,
                     'row': list(dict(CommissionMatrix.PLAN_RANGE_CHOICES).keys()).index(matrix_item.plan_range),
                     'col': 0 if matrix_item.contract_period == 12 else (1 if matrix_item.contract_period == 24 else 2)
@@ -2541,17 +2541,22 @@ class PolicyCommissionMatrixView(APIView):
                 else:
                     plan_range_value = int(plan_range_raw)
                 
-                commission_amount = item.get('commission_amount', 0)
+                rebate_amount = item.get('rebate_amount', 0)
                 contract_period = item.get('contract_period', 12)
                 
+                # 필수 필드 검증
+                if not plan_range_value or not contract_period:
+                    logger.warning(f"필수 필드 누락: {item}")
+                    continue
+
                 # 0이 아닌 수수료만 저장
-                if commission_amount > 0:
+                if rebate_amount > 0:
                     CommissionMatrix.objects.create(
                         policy=policy,
                         carrier=policy.carrier,
                         plan_range=plan_range_value,
                         contract_period=contract_period,
-                        commission_amount=commission_amount
+                        rebate_amount=rebate_amount
                     )
                     created_count += 1
             

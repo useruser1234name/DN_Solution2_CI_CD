@@ -1,0 +1,30 @@
+# Temporary file - will be deleted
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('orders', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='order',
+            name='status',
+            field=models.CharField(
+                choices=[
+                    ('pending', '접수대기'),
+                    ('approved', '승인됨'),
+                    ('processing', '개통 준비중'),
+                    ('shipped', '개통중'),
+                    ('completed', '개통완료'),
+                    ('final_approved', '승인(완료)'),
+                    ('cancelled', '개통취소'),
+                ],
+                default='pending',
+                max_length=20,
+                verbose_name='주문 상태'
+            ),
+        ),
+    ]

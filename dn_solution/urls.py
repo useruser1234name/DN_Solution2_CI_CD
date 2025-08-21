@@ -57,6 +57,7 @@ urlpatterns = [
     path('policies/', include('policies.urls', namespace='frontend-policies')),  # 프론트엔드 호환성을 위한 추가 경로
     path('orders/', include('orders.urls')),  # 프론트엔드 호환성을 위한 추가 경로
     path('api/orders/', include('orders.urls')),
+    path('settlements/', include('settlements.urls')),  # 프론트엔드 호환성을 위한 추가 경로
     path('api/settlements/', include('settlements.urls')),
     # path('api/inventory/', include('inventory.urls')),  # 제거 - MVP에 불필요
     # path('api/messaging/', include('messaging.urls')),  # 제거 - MVP에 불필요

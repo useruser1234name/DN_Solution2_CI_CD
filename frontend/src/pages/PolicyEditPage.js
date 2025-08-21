@@ -85,7 +85,12 @@ const PolicyEditPage = () => {
                         }
                         
                         if (matrixData.matrix && Array.isArray(matrixData.matrix) && matrixData.matrix.length > 0) {
-                            setRebateMatrix(matrixData.matrix);
+                            // plan_range를 숫자로 변환하여 저장
+                            const transformedMatrix = matrixData.matrix.map(item => ({
+                                ...item,
+                                plan_range: Number(item.plan_range) // 문자열을 숫자로 변환
+                            }));
+                            setRebateMatrix(transformedMatrix);
                         } else {
                             setRebateMatrix(getDefaultMatrix());
                         }

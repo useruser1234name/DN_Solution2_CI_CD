@@ -34,7 +34,8 @@ class Order(models.Model):
         ('approved', '승인됨'),
         ('processing', '개통 준비중'),
         ('shipped', '개통중'),
-        ('completed', '완료'),
+        ('completed', '개통완료'),
+        ('final_approved', '승인(완료)'),  # 새로 추가 - 정산 생성 트리거
         ('cancelled', '개통취소'),
     ]
     
@@ -173,39 +174,202 @@ class Order(models.Model):
             logger.error(f"리베이트 계산 실패: {str(e)} - 주문: {self.customer_name}")
             return 0
     
-    def update_status(self, new_status, user=None):
-        """주문 상태 업데이트"""
+    def update_status(self, new_status, user=None, reason=None):
+        """주문 상태 업데이트 - 강화된 검증 및 로깅"""
         if new_status not in dict(self.STATUS_CHOICES):
             raise ValidationError("유효하지 않은 주문 상태입니다.")
         
+        # 권한 및 상태 전환 가능성 검증
+        if not self.can_transition_to(new_status, user):
+            if user:
+                try:
+                    from companies.models import CompanyUser
+                    company_user = CompanyUser.objects.get(django_user=user)
+                    user_info = f"{user.username} ({company_user.company.name})"
+                except CompanyUser.DoesNotExist:
+                    user_info = user.username
+            else:
+                user_info = "Unknown"
+            
+            raise ValidationError(
+                f"사용자 {user_info}는 주문 상태를 '{self.get_status_display()}'에서 '{dict(self.STATUS_CHOICES)[new_status]}'로 변경할 권한이 없습니다."
+            )
+        
         old_status = self.status
+        old_status_display = self.get_status_display()
+        
+        # 상태 변경 전 추가 검증
+        self._validate_status_change(old_status, new_status, user)
+        
+        # 상태 변경
         self.status = new_status
         self.save()
         
-        logger.info(f"주문 상태 변경: {self.customer_name} - {old_status} → {new_status}")
+        new_status_display = self.get_status_display()
         
-        # 상태 변경 시 메모 추가
+        # 상세 로깅
+        user_info = "System"
         if user:
+            try:
+                from companies.models import CompanyUser
+                company_user = CompanyUser.objects.get(django_user=user)
+                user_info = f"{user.username} ({company_user.company.name}, {company_user.get_role_display()})"
+            except CompanyUser.DoesNotExist:
+                user_info = user.username
+        
+        logger.info(
+            f"[주문 상태 변경] {self.customer_name} - "
+            f"{old_status_display} → {new_status_display} by {user_info}"
+            f"{f' (사유: {reason})' if reason else ''}"
+        )
+        
+        # 자동 메모 생성
+        if user:
+            memo_content = f"주문 상태가 '{old_status_display}'에서 '{new_status_display}'로 변경되었습니다."
+            if reason:
+                memo_content += f" 사유: {reason}"
+            
             OrderMemo.objects.create(
                 order=self,
-                memo=f"주문 상태가 '{self.get_status_display()}'로 변경되었습니다.",
+                memo=memo_content,
                 created_by=user
             )
+        
+        # 상태별 후처리
+        self._handle_status_change_side_effects(old_status, new_status, user)
+        
+        # 상태 변경 이력 생성
+        self._create_status_history(old_status, new_status, user, reason)
     
-    def can_transition_to(self, new_status):
-        """상태 전환 가능 여부 확인"""
+    def _validate_status_change(self, old_status, new_status, user):
+        """상태 변경 전 추가 검증"""
+        
+        # 승인(completed) → 최종승인(final_approved) 시 추가 검증
+        if old_status == 'completed' and new_status == 'final_approved':
+            # 이미 정산이 생성되었는지 확인
+            from settlements.models import Settlement
+            if Settlement.objects.filter(order=self).exists():
+                raise ValidationError("이미 정산이 생성된 주문입니다.")
+        
+        # 취소 시 추가 검증
+        if new_status == 'cancelled':
+            # 이미 정산이 진행된 경우 취소 불가
+            from settlements.models import Settlement
+            settlements = Settlement.objects.filter(order=self)
+            if settlements.filter(status__in=['approved', 'paid']).exists():
+                raise ValidationError("이미 정산이 진행된 주문은 취소할 수 없습니다.")
+    
+    def _handle_status_change_side_effects(self, old_status, new_status, user):
+        """상태 변경 후 부가 처리"""
+        
+        # 취소 시 정산 취소 처리
+        if new_status == 'cancelled':
+            from settlements.models import Settlement
+            settlements = Settlement.objects.filter(order=self, status='pending')
+            for settlement in settlements:
+                settlement.status = 'cancelled'
+                settlement.save()
+                logger.info(f"주문 취소로 인한 정산 취소: {settlement.id}")
+        
+        # 최종 승인 시 알림 발송 (추후 구현)
+        if new_status == 'final_approved':
+            logger.info(f"주문 최종 승인 알림 발송 대상: {self.customer_name}")
+    
+    def _create_status_history(self, old_status, new_status, user, reason=None):
+        """상태 변경 이력 생성"""
+        try:
+            # HTTP 요청 정보 추출 (가능한 경우)
+            user_ip = None
+            user_agent = ''
+            
+            # Django request context에서 IP 및 User-Agent 추출
+            from django.core.context_processors import request
+            import threading
+            
+            # 현재 요청 정보 가져오기 (가능한 경우)
+            local_data = getattr(threading.current_thread(), 'request_data', None)
+            if local_data:
+                user_ip = local_data.get('ip')
+                user_agent = local_data.get('user_agent', '')
+            
+            OrderHistory.objects.create(
+                order=self,
+                from_status=old_status,
+                to_status=new_status,
+                changed_by=user,
+                reason=reason or '',
+                user_ip=user_ip,
+                user_agent=user_agent
+            )
+            
+            logger.debug(
+                f"상태 변경 이력 생성: {self.customer_name} - "
+                f"{old_status} → {new_status}"
+            )
+            
+        except Exception as e:
+            logger.error(f"상태 변경 이력 생성 실패: {str(e)}")
+    
+    def can_transition_to(self, new_status, user=None):
+        """상태 전환 가능 여부 확인 - 수정된 플로우 + 권한 검증"""
         valid_transitions = {
             'pending': ['approved', 'cancelled'],
             'approved': ['processing', 'cancelled'],
             'processing': ['shipped', 'cancelled'],
-            'shipped': ['completed', 'return_requested'],
-            'completed': ['return_requested'],
+            'shipped': ['completed', 'cancelled'],
+            'completed': ['final_approved', 'cancelled'],  # 수정: 개통완료 → 승인(완료)
+            'final_approved': [],  # 최종 상태 - 더 이상 전환 불가
             'cancelled': [],
-            'return_requested': ['exchanged'],
-            'exchanged': ['completed'],
         }
         
-        return new_status in valid_transitions.get(self.status, [])
+        # 기본 상태 전환 가능성 확인
+        if new_status not in valid_transitions.get(self.status, []):
+            return False
+        
+        # 사용자 기반 권한 검증
+        if user:
+            return self._check_user_permission_for_status_change(user, new_status)
+        
+        return True
+    
+    def _check_user_permission_for_status_change(self, user, new_status):
+        """사용자별 상태 변경 권한 검증"""
+        try:
+            from companies.models import CompanyUser
+            company_user = CompanyUser.objects.get(django_user=user)
+            company = company_user.company
+            role = company_user.role
+        except CompanyUser.DoesNotExist:
+            logger.warning(f"사용자 {user.username}의 회사 정보를 찾을 수 없습니다.")
+            return False
+        
+        # 단계별 권한 제어
+        if new_status == 'approved':
+            # 승인: 본사 관리자만 가능
+            return company.type == 'headquarters' and role == 'admin'
+        
+        elif new_status in ['processing', 'shipped', 'completed']:
+            # 개통 진행: 본사 직원 이상
+            return company.type == 'headquarters'
+        
+        elif new_status == 'final_approved':
+            # 최종 승인: 본사 관리자만 가능
+            return company.type == 'headquarters' and role == 'admin'
+        
+        elif new_status == 'cancelled':
+            # 취소: 본사는 언제나, 다른 업체는 제한적
+            if company.type == 'headquarters':
+                return True
+            elif company.type == 'agency':
+                # 협력사: 자신의 주문만 취소 가능, pending/approved 단계에서만
+                return (self.company == company and 
+                       self.status in ['pending', 'approved'])
+            elif company.type == 'retail':
+                # 판매점: 자신의 주문만 취소 가능, pending 단계에서만
+                return (self.company == company and 
+                       self.status == 'pending')
+        
+        return True
     
     def _encrypt_sensitive_data(self):
         """민감정보를 해시로 처리"""
@@ -233,7 +397,7 @@ class Order(models.Model):
             return self.customer_name[0] + "*" * (len(self.customer_name) - 2) + self.customer_name[-1]
     
     def approve(self, user=None):
-        """주문 승인 (본사만 가능)"""
+        """주문 승인 (본사만 가능) - 정산 생성하지 않음"""
         if self.status != 'pending':
             raise ValidationError("대기 중인 주문만 승인할 수 있습니다.")
         
@@ -241,15 +405,26 @@ class Order(models.Model):
         if not self.is_sensitive_data_encrypted:
             self._encrypt_sensitive_data()
         
-        # 상태 변경
+        # 상태 변경 (정산 생성하지 않음)
         self.update_status('approved', user)
         
-        # 주문 승인 시 자동 정산 생성
+        logger.info(f"주문 승인 완료: {self.customer_name} - 정산은 최종 승인 시 생성됨")
+    
+    def final_approve(self, user=None):
+        """최종 승인 (정산 생성 트리거)"""
+        if self.status != 'completed':
+            raise ValidationError("개통완료된 주문만 최종 승인할 수 있습니다.")
+        
+        # 상태 변경
+        self.update_status('final_approved', user)
+        
+        # 정산 자동 생성
         try:
             self._create_settlements()
-            logger.info(f"주문 승인 및 정산 생성 완료: {self.customer_name}")
+            logger.info(f"주문 최종 승인 및 정산 생성 완료: {self.customer_name}")
         except Exception as e:
             logger.error(f"정산 생성 실패: {str(e)} - 주문: {self.customer_name}")
+            raise
     
     def _create_settlements(self):
         """주문 승인 시 정산 자동 생성"""
@@ -662,3 +837,68 @@ class OrderRequest(models.Model):
         self.save()
         
         logger.info(f"주문 요청 완료: {self.order.customer_name} - {self.get_request_type_display()}")
+
+
+class OrderHistory(models.Model):
+    """
+    주문 상태 변경 이력 모델
+    
+    주문의 모든 상태 변경을 추적하고 기록합니다.
+    """
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='history',
+        verbose_name='주문'
+    )
+    from_status = models.CharField(
+        max_length=20,
+        choices=Order.STATUS_CHOICES,
+        verbose_name='이전 상태'
+    )
+    to_status = models.CharField(
+        max_length=20,
+        choices=Order.STATUS_CHOICES,
+        verbose_name='변경 상태'
+    )
+    changed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='변경자'
+    )
+    reason = models.TextField(
+        blank=True,
+        verbose_name='변경 사유'
+    )
+    changed_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='변경일시'
+    )
+    
+    # 시스템 정보
+    user_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        verbose_name='사용자 IP'
+    )
+    user_agent = models.TextField(
+        blank=True,
+        verbose_name='사용자 에이전트'
+    )
+    
+    class Meta:
+        verbose_name = '주문 상태 이력'
+        verbose_name_plural = '주문 상태 이력'
+        ordering = ['-changed_at']
+        indexes = [
+            models.Index(fields=['order', 'changed_at']),
+            models.Index(fields=['to_status']),
+            models.Index(fields=['changed_by']),
+        ]
+    
+    def __str__(self):
+        return f"{self.order.customer_name} - {self.get_from_status_display()} → {self.get_to_status_display()}"

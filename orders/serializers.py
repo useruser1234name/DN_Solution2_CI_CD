@@ -33,6 +33,7 @@ class OrderSerializer(serializers.ModelSerializer):
     memo_count = serializers.SerializerMethodField()
     has_invoice = serializers.SerializerMethodField()
     invoice_info = serializers.SerializerMethodField()
+    status_history = serializers.SerializerMethodField()
     
     # 프론트엔드에서 전송하는 form_data 처리
     form_data = serializers.DictField(write_only=True, required=False)
@@ -44,7 +45,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'customer_address', 'status', 'status_display', 'policy', 'policy_title', 
             'company', 'company_name', 'created_by', 'created_by_username',
             'total_amount', 'rebate_amount', 'notes', 'form_data',
-            'memo_count', 'has_invoice', 'invoice_info',
+            'memo_count', 'has_invoice', 'invoice_info', 'status_history',
             'created_at', 'updated_at'
         ]
         extra_kwargs = {
@@ -110,6 +111,26 @@ class OrderSerializer(serializers.ModelSerializer):
         except Exception as e:
             logger.warning(f"송장 정보 조회 중 오류: {str(e)} - 주문: {obj.customer_name}")
             return None
+    
+    def get_status_history(self, obj):
+        """상태 변경 이력 반환 (최근 5개)"""
+        try:
+            recent_history = obj.history.all()[:5]
+            return [
+                {
+                    'from_status': history.from_status,
+                    'from_status_display': history.get_from_status_display(),
+                    'to_status': history.to_status,
+                    'to_status_display': history.get_to_status_display(),
+                    'changed_by': history.changed_by.username if history.changed_by else 'System',
+                    'reason': history.reason,
+                    'changed_at': history.changed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                }
+                for history in recent_history
+            ]
+        except Exception as e:
+            logger.warning(f"상태 이력 조회 중 오류: {str(e)} - 주문: {obj.customer_name}")
+            return []
     
     def validate_customer_name(self, value):
         """고객명 검증"""

@@ -43,9 +43,16 @@ const MatrixRebateEditor = ({ matrix = [], onChange, disabled = false, carrier =
     planRanges.forEach(plan => {
       contractPeriods.forEach(period => {
         const key = `${plan.value}_${period}`;
-        const existingItem = matrix.find(
-          item => item.plan_range === plan.value && item.contract_period === period
-        );
+        // plan_range 값은 과거 데이터에서 '11K' 와 같이 문자열로 저장되어 있을 수 있으므로
+        // 숫자(11000)·라벨('11K')·숫자 문자열("11000") 모두 비교하도록 범위를 확장합니다.
+        const existingItem = matrix.find(item => {
+          const planRangeMatches =
+            item.plan_range === plan.value || // 최신 스키마: 숫자형 11000
+            item.plan_range === plan.label || // 과거 스키마: 문자열 라벨 '11K'
+            Number(item.plan_range) === plan.value; // 숫자 문자열 "11000"
+
+          return planRangeMatches && item.contract_period === period;
+        });
         const rebateAmount = existingItem ? existingItem.rebate_amount : 0;
         newMatrixData[key] = rebateAmount;
         

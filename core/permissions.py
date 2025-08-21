@@ -82,12 +82,12 @@ class HierarchyPermission(permissions.BasePermission):
             return True
             
         # 본사는 모든 데이터 접근 가능
-        if user_company.company_type == 'headquarters':
+        if user_company.type == 'headquarters':
             return True
             
         # 협력사는 자신의 하위 판매점 데이터만 접근 가능
-        if user_company.company_type == 'agency':
-            if target_company.company_type == 'retail' and \
+        if user_company.type == 'agency':
+            if target_company.type == 'retail' and \
                target_company.parent_company_id == user_company.id:
                 return True
                 
@@ -128,7 +128,7 @@ class CompanyTypePermission(permissions.BasePermission):
         if not company_user:
             return False
             
-        company_type = company_user.company.company_type
+        company_type = company_user.company.type
         
         # 특정 타입만 허용하는 경우
         if self.required_types and company_type not in self.required_types:
@@ -193,7 +193,7 @@ class OrderPermission(HierarchyPermission):
             return False
             
         company_user = request.user.companyuser
-        company_type = company_user.company.company_type
+        company_type = company_user.company.type
         
         # 주문 상태에 따른 권한 제어
         if hasattr(obj, 'status'):
@@ -259,12 +259,12 @@ def check_company_permission(user: User, target_company, action: str = 'view') -
     # 읽기 권한
     if action == 'view':
         # 본사는 모든 회사 조회 가능
-        if user_company.company_type == 'headquarters':
+        if user_company.type == 'headquarters':
             return True
         # 협력사는 자신과 하위 판매점 조회 가능
-        elif user_company.company_type == 'agency':
+        elif user_company.type == 'agency':
             return (user_company.id == target_company.id or
-                   (target_company.company_type == 'retail' and 
+                   (target_company.type == 'retail' and 
                     target_company.parent_company_id == user_company.id))
         # 판매점은 자신만 조회 가능
         else:
@@ -273,7 +273,7 @@ def check_company_permission(user: User, target_company, action: str = 'view') -
     # 수정/삭제 권한
     elif action in ['edit', 'delete']:
         # 본사는 모든 회사 수정 가능
-        if user_company.company_type == 'headquarters':
+        if user_company.type == 'headquarters':
             return True
         # 그 외에는 자신만 수정 가능
         else:
@@ -307,16 +307,16 @@ def get_accessible_companies(user: User) -> List[int]:
     accessible_ids = [user_company.id]
     
     # 본사는 모든 회사 접근 가능
-    if user_company.company_type == 'headquarters':
+    if user_company.type == 'headquarters':
         from companies.models import Company
         return list(Company.objects.values_list('id', flat=True))
     
     # 협력사는 하위 판매점도 접근 가능
-    elif user_company.company_type == 'agency':
+    elif user_company.type == 'agency':
         from companies.models import Company
         retail_ids = Company.objects.filter(
             parent_company=user_company,
-            company_type='retail'
+            type='retail'
         ).values_list('id', flat=True)
         accessible_ids.extend(retail_ids)
         
