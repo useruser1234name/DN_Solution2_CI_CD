@@ -351,6 +351,38 @@ export const dashboardAPI = {
     const response = await apiClient.get('/api/dashboard/activities/');
     return response.data;
   },
+
+  // 본사용 정산 대시보드
+  getHeadquartersDashboard: async (params = {}) => {
+    const response = await apiClient.get('/api/settlements/dashboard/headquarters/', {
+      params,
+    });
+    return response.data;
+  },
+
+  // 협력사용 정산 대시보드
+  getAgencyDashboard: async (params = {}) => {
+    const response = await apiClient.get('/api/settlements/dashboard/agency/', {
+      params,
+    });
+    return response.data;
+  },
+
+  // 판매점용 정산 대시보드
+  getRetailDashboard: async (params = {}) => {
+    const response = await apiClient.get('/api/settlements/dashboard/retail/', {
+      params,
+    });
+    return response.data;
+  },
+
+  // 정산 분석 대시보드
+  getAnalyticsDashboard: async (params = {}) => {
+    const response = await apiClient.get('/api/settlements/dashboard/analytics/', {
+      params,
+    });
+    return response.data;
+  },
 };
 
 // ======================

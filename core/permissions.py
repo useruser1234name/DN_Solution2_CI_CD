@@ -282,6 +282,39 @@ def check_company_permission(user: User, target_company, action: str = 'view') -
     return False
 
 
+class IsHeadquartersUser(permissions.BasePermission):
+    """
+    본사 사용자 권한 클래스
+    본사 타입의 회사 사용자만 접근 허용
+    """
+    
+    def has_permission(self, request: Request, view: View) -> bool:
+        """본사 사용자 권한 체크"""
+        if not request.user.is_authenticated:
+            logger.warning(f"인증되지 않은 사용자 접근 시도: {request.path}")
+            return False
+            
+        # 슈퍼유저는 모든 권한 허용
+        if request.user.is_superuser:
+            return True
+            
+        # CompanyUser가 있는지 확인
+        if not hasattr(request.user, 'companyuser'):
+            logger.warning(f"CompanyUser가 없는 사용자: {request.user.username}")
+            return False
+            
+        company_user = request.user.companyuser
+        
+        # 본사 타입인지 확인
+        if company_user.company.type != 'headquarters':
+            logger.warning(
+                f"본사가 아닌 사용자 접근 시도: {request.user.username} - {company_user.company.type}"
+            )
+            return False
+            
+        return True
+
+
 def get_accessible_companies(user: User) -> List[int]:
     """
     사용자가 접근 가능한 회사 ID 목록 반환
@@ -321,3 +354,41 @@ def get_accessible_companies(user: User) -> List[int]:
         accessible_ids.extend(retail_ids)
         
     return accessible_ids
+
+
+# 하위 호환성을 위한 별칭들
+IsHeadquarters = IsHeadquartersUser
+
+
+class IsHeadquartersOrAgency(permissions.BasePermission):
+    """
+    본사 또는 협력사 사용자 권한 클래스
+    본사나 협력사 타입의 회사 사용자만 접근 허용
+    """
+    
+    def has_permission(self, request: Request, view: View) -> bool:
+        """본사 또는 협력사 사용자 권한 체크"""
+        if not request.user.is_authenticated:
+            logger.warning(f"인증되지 않은 사용자 접근 시도: {request.path}")
+            return False
+            
+        # 슈퍼유저는 모든 권한 허용
+        if request.user.is_superuser:
+            return True
+            
+        # CompanyUser가 있는지 확인
+        if not hasattr(request.user, 'companyuser'):
+            logger.warning(f"CompanyUser가 없는 사용자: {request.user.username}")
+            return False
+            
+        company_user = request.user.companyuser
+        company_type = company_user.company.type
+        
+        # 본사 또는 협력사인지 확인
+        if company_type not in ['headquarters', 'agency']:
+            logger.warning(
+                f"본사/협력사가 아닌 사용자 접근 시도: {request.user.username} - {company_type}"
+            )
+            return False
+            
+        return True

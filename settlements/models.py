@@ -184,6 +184,15 @@ class Settlement(models.Model):
                 logger.info(f"정산 생성: {self.company.name} - {self.rebate_amount:,}원")
                 # 새 정산의 초기 상태 이력 기록
                 self._create_status_history(None, self.status, None, '정산 생성')
+                
+                # 팩트 테이블에 데이터 생성
+                self._create_commission_fact()
+                
+                # 데이터 웨어하우스 팩트 테이블 생성
+                try:
+                    CommissionFact.create_from_settlement(self)
+                except Exception as e:
+                    logger.warning(f"팩트 테이블 생성 실패: {str(e)}")
             else:
                 # 상태 변경 시 이력 기록
                 if old_status and old_status != self.status:
@@ -213,6 +222,110 @@ class Settlement(models.Model):
         except Exception as e:
             logger.error(f"정산 상태 이력 생성 실패: {str(e)}")
     
+    def _create_commission_fact(self):
+        """팩트 테이블에 정산 데이터 생성"""
+        try:
+            # 그레이드 보너스 계산
+            grade_bonus = self._calculate_grade_bonus()
+            
+            # 주문에서 추가 정보 추출
+            plan_range = self._extract_plan_range_from_order()
+            contract_period = self._extract_contract_period_from_order()
+            
+            # 팩트 데이터 생성
+            CommissionFact.objects.create(
+                date_key=self.created_at.date(),
+                company=self.company,
+                policy=self.order.policy,
+                order=self.order,
+                carrier=self.order.policy.carrier if hasattr(self.order, 'policy') else 'unknown',
+                plan_range=plan_range,
+                contract_period=contract_period,
+                base_commission=self.rebate_amount,
+                grade_bonus=grade_bonus,
+                total_commission=self.rebate_amount + grade_bonus,
+                settlement_status=self.status,
+                payment_status='pending',
+                order_count_in_period=1,
+                achieved_grade_level=self._get_current_grade_level(),
+                batch_id=None  # 실시간 생성이므로 배치 ID 없음
+            )
+            
+            logger.info(f"팩트 테이블 생성 완료: {self.company.name} - {self.rebate_amount:,}원")
+            
+        except Exception as e:
+            logger.error(f"팩트 테이블 생성 실패: {str(e)} - 정산: {self.id}")
+    
+    def _calculate_grade_bonus(self):
+        """그레이드 보너스 계산"""
+        try:
+            # 현재 활성화된 그레이드 추적 찾기
+            from django.utils import timezone
+            current_date = timezone.now().date()
+            
+            grade_tracking = CommissionGradeTracking.objects.filter(
+                company=self.company,
+                policy=self.order.policy,
+                period_start__lte=current_date,
+                period_end__gte=current_date,
+                is_active=True
+            ).first()
+            
+            if grade_tracking:
+                return grade_tracking.bonus_per_order
+            return Decimal('0')
+            
+        except Exception as e:
+            logger.warning(f"그레이드 보너스 계산 실패: {str(e)}")
+            return Decimal('0')
+    
+    def _extract_plan_range_from_order(self):
+        """주문에서 요금제 범위 추출"""
+        try:
+            # 주문에서 요금제 정보 추출 (실제 필드명에 따라 조정 필요)
+            if hasattr(self.order, 'plan_amount'):
+                plan_amount = self.order.plan_amount
+                # CommissionMatrix의 PLAN_RANGE_CHOICES 참조
+                from policies.models import CommissionMatrix
+                for range_value, _ in CommissionMatrix.PLAN_RANGE_CHOICES:
+                    if plan_amount <= range_value:
+                        return range_value
+                # 가장 높은 범위 반환
+                return CommissionMatrix.PLAN_RANGE_CHOICES[-1][0]
+            return 50000  # 기본값
+        except Exception:
+            return 50000
+    
+    def _extract_contract_period_from_order(self):
+        """주문에서 계약기간 추출"""
+        try:
+            if hasattr(self.order, 'contract_period'):
+                return self.order.contract_period
+            return 24  # 기본값
+        except Exception:
+            return 24
+    
+    def _get_current_grade_level(self):
+        """현재 그레이드 레벨 조회"""
+        try:
+            from django.utils import timezone
+            current_date = timezone.now().date()
+            
+            grade_tracking = CommissionGradeTracking.objects.filter(
+                company=self.company,
+                policy=self.order.policy,
+                period_start__lte=current_date,
+                period_end__gte=current_date,
+                is_active=True
+            ).first()
+            
+            if grade_tracking:
+                return grade_tracking.achieved_grade_level
+            return 0
+            
+        except Exception:
+            return 0
+    
     def approve(self, user):
         """정산 승인"""
         if self.status != 'pending':
@@ -232,6 +345,12 @@ class Settlement(models.Model):
             approved_by=self.approved_by,
             approved_at=self.approved_at
         )
+        
+        # 팩트 테이블 업데이트
+        try:
+            CommissionFact.update_payment_status(self)
+        except Exception as e:
+            logger.warning(f"팩트 테이블 상태 업데이트 실패: {str(e)}")
         
         logger.info(f"정산 승인: {self.company.name} - {self.rebate_amount:,}원")
     
@@ -272,6 +391,12 @@ class Settlement(models.Model):
             notes=self.notes
         )
         
+        # 팩트 테이블 업데이트
+        try:
+            CommissionFact.update_payment_status(self)
+        except Exception as e:
+            logger.warning(f"팩트 테이블 상태 업데이트 실패: {str(e)}")
+        
         logger.info(f"정산 입금 완료: {self.company.name} - {self.rebate_amount:,}원 ({old_status} → paid)")
     
     def mark_as_unpaid(self, reason='', user=None):
@@ -292,6 +417,12 @@ class Settlement(models.Model):
             status=self.status,
             notes=self.notes
         )
+        
+        # 팩트 테이블 업데이트
+        try:
+            CommissionFact.update_payment_status(self)
+        except Exception as e:
+            logger.warning(f"팩트 테이블 상태 업데이트 실패: {str(e)}")
         
         logger.info(f"정산 미입금 처리: {self.company.name} - {self.rebate_amount:,}원")
     
@@ -1068,3 +1199,450 @@ class GradeBonusSettlement(models.Model):
         )
         
         return bonus_settlement
+
+
+class CommissionFact(models.Model):
+    """
+    수수료 팩트 테이블 (데이터 웨어하우스)
+    
+    날짜별, 업체별, 정책별로 수수료 데이터를 집계하여 저장하는 팩트 테이블입니다.
+    빠른 분석과 리포팅을 위한 데이터 웨어하우스 구조입니다.
+    """
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # 차원 키들
+    date_key = models.DateField(verbose_name='날짜 차원')  # 날짜 차원
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='commission_facts',
+        verbose_name='업체'
+    )
+    policy = models.ForeignKey(
+        Policy,
+        on_delete=models.CASCADE,
+        related_name='commission_facts',
+        verbose_name='정책'
+    )
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='commission_facts',
+        verbose_name='주문'
+    )
+    
+    # 요금제/계약 정보 (차원)
+    carrier = models.CharField(
+        max_length=10,
+        verbose_name='통신사',
+        help_text='SKT, KT, LG, all'
+    )
+    plan_range = models.IntegerField(
+        verbose_name='요금제 범위',
+        help_text='요금제 금액대 (11000, 22000, ...165000)'
+    )
+    contract_period = models.IntegerField(
+        verbose_name='계약기간',
+        help_text='계약기간 (12, 24, 36, 48개월)'
+    )
+    
+    # 측정값 (Measures)
+    base_commission = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='기본 수수료'
+    )
+    grade_bonus = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='그레이드 보너스'
+    )
+    total_commission = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='총 수수료'
+    )
+    
+    # 상태 정보
+    settlement_status = models.CharField(
+        max_length=20,
+        verbose_name='정산 상태',
+        help_text='pending, approved, paid, unpaid, cancelled'
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        verbose_name='입금 상태',
+        help_text='pending, paid, unpaid'
+    )
+    
+    # 주문 정보
+    order_count_in_period = models.IntegerField(
+        default=1,
+        verbose_name='기간 내 주문 수',
+        help_text='해당 기간 내 업체의 누적 주문 수'
+    )
+    achieved_grade_level = models.IntegerField(
+        default=0,
+        verbose_name='달성 그레이드 레벨'
+    )
+    
+    # 메타 정보
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
+    
+    # 배치 처리 정보
+    batch_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='배치 ID',
+        help_text='ETL 배치 처리 시 사용되는 배치 식별자'
+    )
+    
+    class Meta:
+        verbose_name = '수수료 팩트'
+        verbose_name_plural = '수수료 팩트 테이블'
+        ordering = ['-date_key', '-created_at']
+        indexes = [
+            models.Index(fields=['date_key', 'company']),
+            models.Index(fields=['date_key', 'policy']),
+            models.Index(fields=['company', 'settlement_status']),
+            models.Index(fields=['policy', 'date_key']),
+            models.Index(fields=['carrier', 'plan_range']),
+            models.Index(fields=['achieved_grade_level']),
+            models.Index(fields=['batch_id']),
+        ]
+        # 중복 방지: 같은 주문에 대해 같은 업체의 팩트는 하나만
+        unique_together = ['order', 'company']
+    
+    def __str__(self):
+        return f"{self.date_key} - {self.company.name} - {self.policy.title}: {self.total_commission:,}원"
+    
+    def clean(self):
+        """유효성 검증"""
+        if self.base_commission < 0:
+            raise ValidationError("기본 수수료는 0 이상이어야 합니다.")
+        
+        if self.grade_bonus < 0:
+            raise ValidationError("그레이드 보너스는 0 이상이어야 합니다.")
+        
+        # 총 수수료 자동 계산
+        if self.base_commission is not None and self.grade_bonus is not None:
+            calculated_total = self.base_commission + self.grade_bonus
+            if self.total_commission != calculated_total:
+                self.total_commission = calculated_total
+    
+    def save(self, *args, **kwargs):
+        """저장 시 유효성 검증 및 로깅"""
+        try:
+            self.clean()
+            super().save(*args, **kwargs)
+            
+            logger.debug(
+                f"수수료 팩트 저장: {self.company.name} - "
+                f"날짜: {self.date_key}, 총액: {self.total_commission:,}원"
+            )
+        except Exception as e:
+            logger.error(f"수수료 팩트 저장 실패: {str(e)}")
+            raise
+    
+    @classmethod
+    def create_from_settlement(cls, settlement):
+        """
+        정산 데이터를 기반으로 팩트 테이블 생성
+        
+        Args:
+            settlement: Settlement 객체
+        
+        Returns:
+            CommissionFact 객체
+        """
+        try:
+            # 주문 정보에서 요금제/계약 정보 추출
+            order = settlement.order
+            policy = order.policy
+            
+            # 요금제 범위 계산 (주문의 요금제 정보 기반)
+            plan_range = cls._calculate_plan_range(order)
+            contract_period = cls._extract_contract_period(order)
+            carrier = cls._extract_carrier(order)
+            
+            # 그레이드 보너스 계산
+            grade_bonus = cls._calculate_grade_bonus(settlement)
+            
+            # 현재 기간 내 주문 수 계산
+            order_count = cls._calculate_period_order_count(settlement.company, policy)
+            
+            # 달성 그레이드 레벨 조회
+            grade_level = cls._get_achieved_grade_level(settlement.company, policy)
+            
+            # 팩트 데이터 생성
+            fact = cls.objects.create(
+                date_key=settlement.created_at.date(),
+                company=settlement.company,
+                policy=policy,
+                order=order,
+                carrier=carrier,
+                plan_range=plan_range,
+                contract_period=contract_period,
+                base_commission=settlement.rebate_amount,
+                grade_bonus=grade_bonus,
+                total_commission=settlement.rebate_amount + grade_bonus,
+                settlement_status=settlement.status,
+                payment_status='pending' if settlement.status in ['pending', 'approved'] else settlement.status,
+                order_count_in_period=order_count,
+                achieved_grade_level=grade_level
+            )
+            
+            logger.info(
+                f"수수료 팩트 생성: {settlement.company.name} - "
+                f"기본: {settlement.rebate_amount:,}원, 보너스: {grade_bonus:,}원"
+            )
+            
+            return fact
+            
+        except Exception as e:
+            logger.error(f"수수료 팩트 생성 실패: {str(e)}")
+            raise
+    
+    @classmethod
+    def _calculate_plan_range(cls, order):
+        """주문에서 요금제 범위 계산"""
+        # 주문에서 요금제 정보 추출 (실제 구현은 주문 모델 구조에 따라 조정)
+        try:
+            # 기본값으로 33K 범위 사용
+            if hasattr(order, 'plan_amount'):
+                plan_amount = order.plan_amount
+                # 요금제 범위 매핑
+                ranges = [11000, 22000, 33000, 44000, 55000, 66000, 77000, 88000, 99000, 110000, 121000, 132000, 143000, 154000, 165000]
+                for range_val in ranges:
+                    if plan_amount <= range_val:
+                        return range_val
+                return ranges[-1]  # 최고 범위
+            else:
+                return 33000  # 기본값
+        except Exception:
+            return 33000  # 기본값
+    
+    @classmethod
+    def _extract_contract_period(cls, order):
+        """주문에서 계약기간 추출"""
+        try:
+            if hasattr(order, 'contract_period'):
+                return order.contract_period
+            else:
+                return 24  # 기본값 24개월
+        except Exception:
+            return 24
+    
+    @classmethod
+    def _extract_carrier(cls, order):
+        """주문에서 통신사 추출"""
+        try:
+            if hasattr(order, 'carrier'):
+                return order.carrier
+            elif hasattr(order.policy, 'carrier'):
+                return order.policy.carrier
+            else:
+                return 'all'  # 기본값
+        except Exception:
+            return 'all'
+    
+    @classmethod
+    def _calculate_grade_bonus(cls, settlement):
+        """정산에 대한 그레이드 보너스 계산"""
+        try:
+            # 현재 기간의 그레이드 추적 정보 조회
+            tracking = CommissionGradeTracking.objects.filter(
+                company=settlement.company,
+                policy=settlement.order.policy,
+                period_start__lte=settlement.created_at.date(),
+                period_end__gte=settlement.created_at.date(),
+                is_active=True
+            ).first()
+            
+            if tracking:
+                return tracking.bonus_per_order
+            else:
+                return Decimal('0')
+                
+        except Exception as e:
+            logger.warning(f"그레이드 보너스 계산 실패: {str(e)}")
+            return Decimal('0')
+    
+    @classmethod
+    def _calculate_period_order_count(cls, company, policy):
+        """현재 기간 내 주문 수 계산"""
+        try:
+            # 현재 월의 주문 수 계산
+            from django.utils import timezone
+            import calendar
+            
+            now = timezone.now()
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_day = calendar.monthrange(now.year, now.month)[1]
+            end_of_month = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+            
+            from orders.models import Order
+            count = Order.objects.filter(
+                company=company,
+                policy=policy,
+                created_at__gte=start_of_month,
+                created_at__lte=end_of_month,
+                status__in=['final_approved', 'completed']
+            ).count()
+            
+            return count
+            
+        except Exception as e:
+            logger.warning(f"기간 내 주문 수 계산 실패: {str(e)}")
+            return 1
+    
+    @classmethod
+    def _get_achieved_grade_level(cls, company, policy):
+        """현재 달성 그레이드 레벨 조회"""
+        try:
+            # 현재 활성화된 그레이드 추적 정보 조회
+            from django.utils import timezone
+            
+            tracking = CommissionGradeTracking.objects.filter(
+                company=company,
+                policy=policy,
+                period_start__lte=timezone.now().date(),
+                period_end__gte=timezone.now().date(),
+                is_active=True
+            ).first()
+            
+            if tracking:
+                return tracking.achieved_grade_level
+            else:
+                return 0
+                
+        except Exception as e:
+            logger.warning(f"그레이드 레벨 조회 실패: {str(e)}")
+            return 0
+    
+    @classmethod
+    def update_payment_status(cls, settlement):
+        """
+        정산 상태 변경 시 팩트 테이블의 payment_status 업데이트
+        
+        Args:
+            settlement: Settlement 객체
+        """
+        try:
+            facts = cls.objects.filter(
+                order=settlement.order,
+                company=settlement.company
+            )
+            
+            for fact in facts:
+                old_payment_status = fact.payment_status
+                
+                if settlement.status == 'paid':
+                    fact.payment_status = 'paid'
+                elif settlement.status == 'unpaid':
+                    fact.payment_status = 'unpaid'
+                else:
+                    fact.payment_status = 'pending'
+                
+                fact.settlement_status = settlement.status
+                fact.save()
+                
+                logger.debug(
+                    f"팩트 테이블 결제 상태 업데이트: {settlement.company.name} - "
+                    f"{old_payment_status} → {fact.payment_status}"
+                )
+                
+        except Exception as e:
+            logger.error(f"팩트 테이블 상태 업데이트 실패: {str(e)}")
+    
+    @classmethod
+    def get_company_commission_summary(cls, company, start_date=None, end_date=None):
+        """
+        업체별 수수료 요약 통계
+        
+        Args:
+            company: Company 객체
+            start_date: 시작일 (선택적)
+            end_date: 종료일 (선택적)
+            
+        Returns:
+            dict: 수수료 통계 정보
+        """
+        from django.db.models import Sum, Count, Avg
+        
+        queryset = cls.objects.filter(company=company)
+        
+        if start_date:
+            queryset = queryset.filter(date_key__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date_key__lte=end_date)
+        
+        stats = queryset.aggregate(
+            total_commission=Sum('total_commission'),
+            total_base_commission=Sum('base_commission'),
+            total_grade_bonus=Sum('grade_bonus'),
+            total_orders=Count('id'),
+            avg_commission=Avg('total_commission')
+        )
+        
+        return {
+            'company': company.name,
+            'period': f"{start_date or '전체'} ~ {end_date or '현재'}",
+            'total_commission': stats['total_commission'] or Decimal('0'),
+            'total_base_commission': stats['total_base_commission'] or Decimal('0'),
+            'total_grade_bonus': stats['total_grade_bonus'] or Decimal('0'),
+            'total_orders': stats['total_orders'] or 0,
+            'avg_commission': stats['avg_commission'] or Decimal('0')
+        }
+    
+    @classmethod
+    def get_policy_performance(cls, policy, start_date=None, end_date=None):
+        """
+        정책별 성과 분석
+        
+        Args:
+            policy: Policy 객체
+            start_date: 시작일 (선택적)
+            end_date: 종료일 (선택적)
+            
+        Returns:
+            dict: 정책 성과 정보
+        """
+        from django.db.models import Sum, Count, Avg
+        
+        queryset = cls.objects.filter(policy=policy)
+        
+        if start_date:
+            queryset = queryset.filter(date_key__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date_key__lte=end_date)
+        
+        # 전체 통계
+        total_stats = queryset.aggregate(
+            total_commission=Sum('total_commission'),
+            total_orders=Count('id'),
+            avg_commission=Avg('total_commission')
+        )
+        
+        # 업체별 분포
+        company_stats = queryset.values('company__name').annotate(
+            company_commission=Sum('total_commission'),
+            company_orders=Count('id')
+        ).order_by('-company_commission')[:10]  # 상위 10개 업체
+        
+        # 그레이드별 분포
+        grade_stats = queryset.values('achieved_grade_level').annotate(
+            grade_commission=Sum('total_commission'),
+            grade_orders=Count('id')
+        ).order_by('achieved_grade_level')
+        
+        return {
+            'policy': policy.title,
+            'period': f"{start_date or '전체'} ~ {end_date or '현재'}",
+            'total_stats': total_stats,
+            'top_companies': list(company_stats),
+            'grade_distribution': list(grade_stats)
+        }
