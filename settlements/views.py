@@ -42,33 +42,100 @@ class SettlementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HierarchyPermission]
     
     def get_queryset(self):
-        """계층 구조에 따른 정산 목록 조회"""
+        """계층 구조에 따른 정산 목록 조회 (날짜 필터 지원)"""
         user = self.request.user
-        queryset = Settlement.objects.all()
+        
+        # 기본 쿼리셋 (관련 데이터 포함)
+        queryset = Settlement.objects.select_related(
+            'order', 'company', 'order__policy'
+        )
         
         # 슈퍼유저는 모든 정산 조회 가능
         if user.is_superuser:
-            return queryset
+            base_queryset = queryset
+        else:
+            # CompanyUser 확인
+            if not hasattr(user, 'companyuser'):
+                return queryset.none()
+            
+            company = user.companyuser.company
+            
+            # 회사 타입에 따른 필터링
+            if company.type == 'headquarters':
+                # 본사는 모든 정산 조회 가능
+                base_queryset = queryset
+            elif company.type == 'agency':
+                # 협력사는 자신과 하위 판매점의 정산만 조회
+                base_queryset = queryset.filter(
+                    Q(company=company) |
+                    Q(company__parent_company=company)
+                )
+            else:  # retail
+                # 판매점은 자신의 정산만 조회
+                base_queryset = queryset.filter(company=company)
         
-        # CompanyUser 확인
-        if not hasattr(user, 'companyuser'):
-            return queryset.none()
+        # 날짜 필터 적용 (GET 요청에서만)
+        if self.request.method == 'GET':
+            start_date_str = self.request.query_params.get('start_date')
+            end_date_str = self.request.query_params.get('end_date')
+            date_column = self.request.query_params.get('date_column', 'created_at')
+            status_filter = self.request.query_params.get('status')
+            
+            logger.info(f"쿼리 파라미터: start_date={start_date_str}, end_date={end_date_str}, date_column={date_column}, status={status_filter}")
+            
+            # 날짜 필터 적용
+            if start_date_str and end_date_str:
+                try:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                    
+                    logger.info(f"날짜 필터 적용: {start_date} ~ {end_date}, 컬럼: {date_column}")
+                    
+                    # 날짜 컬럼에 따른 필터링
+                    date_filter = {}
+                    if date_column == 'created_at':
+                        date_filter = {
+                            'created_at__date__gte': start_date,
+                            'created_at__date__lte': end_date
+                        }
+                    elif date_column == 'paid_at':
+                        date_filter = {
+                            'paid_at__date__gte': start_date,
+                            'paid_at__date__lte': end_date
+                        }
+                    elif date_column == 'order__created_at':
+                        date_filter = {
+                            'order__created_at__date__gte': start_date,
+                            'order__created_at__date__lte': end_date
+                        }
+                    elif date_column == 'order__activation_date':
+                        # TelecomOrder의 activation_date는 직접 연결되지 않으므로 생략
+                        pass
+                    elif date_column == 'updated_at':
+                        date_filter = {
+                            'updated_at__date__gte': start_date,
+                            'updated_at__date__lte': end_date
+                        }
+                    
+                    logger.info(f"적용할 필터: {date_filter}")
+                    
+                    if date_filter:
+                        original_count = base_queryset.count()
+                        base_queryset = base_queryset.filter(**date_filter)
+                        filtered_count = base_queryset.count()
+                        logger.info(f"필터 적용 결과: {original_count} -> {filtered_count}")
+                    else:
+                        logger.warning(f"날짜 컬럼 '{date_column}'에 대한 필터가 설정되지 않음")
+                    
+                except ValueError:
+                    # 날짜 형식 오류 시 기본 쿼리셋 반환
+                    pass
+            
+            # 상태 필터 적용
+            if status_filter and status_filter != 'all':
+                base_queryset = base_queryset.filter(status=status_filter)
         
-        company = user.companyuser.company
-        
-        # 회사 타입에 따른 필터링
-        if company.type == 'headquarters':
-            # 본사는 모든 정산 조회 가능
-            return queryset
-        elif company.type == 'agency':
-            # 협력사는 자신과 하위 판매점의 정산만 조회
-            return queryset.filter(
-                Q(company=company) |
-                Q(company__parent_company=company)
-            )
-        else:  # retail
-            # 판매점은 자신의 정산만 조회
-            return queryset.filter(company=company)
+        return base_queryset
     
     def get_serializer_class(self):
         """액션에 따른 시리얼라이저 선택"""
@@ -278,6 +345,39 @@ class SettlementViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'])
+    def test_excel(self, request):
+        """엑셀 테스트 엔드포인트"""
+        try:
+            logger.info("테스트 엑셀 시작")
+            
+            # 간단한 엑셀 생성
+            import io
+            import xlsxwriter
+            
+            output = io.BytesIO()
+            workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+            worksheet = workbook.add_worksheet('테스트')
+            
+            worksheet.write(0, 0, '테스트')
+            worksheet.write(1, 0, '성공')
+            
+            workbook.close()
+            output.seek(0)
+            
+            response = HttpResponse(
+                output.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="test.xlsx"'
+            
+            logger.info("테스트 엑셀 완료")
+            return response
+            
+        except Exception as e:
+            logger.error(f"테스트 엑셀 오류: {e}")
+            return Response({'error': str(e)}, status=500)
+    
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """정산 취소"""
@@ -296,39 +396,87 @@ class SettlementViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def export_excel(self, request):
-        """정산 내역 엑셀 출력 (최대 3개월)"""
+        """정산 내역 엑셀 출력"""
         try:
-            # 날짜 파라미터 가져오기
+            logger.info(f"엑셀 내보내기 시작: 사용자={request.user.username}")
+            logger.info(f"쿼리 파라미터: {dict(request.query_params)}")
+            # 파라미터 가져오기
             start_date_str = request.query_params.get('start_date')
             end_date_str = request.query_params.get('end_date')
+            status_filter = request.query_params.get('status')
+            date_column = request.query_params.get('date_column', 'created_at')
             
-            if not start_date_str or not end_date_str:
+            # 기본 쿼리셋 (더 많은 관련 데이터 포함)
+            queryset = self.get_queryset().select_related(
+                'order', 'company', 'order__policy'
+            )
+            
+            # 날짜 필터 적용 (있는 경우, 없으면 최근 3개월)
+            if start_date_str and end_date_str:
+                try:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                    
+                    # 최대 1년 제한
+                    if (end_date - start_date).days > 365:
+                        return Response(
+                            {'error': '최대 1년까지만 조회 가능합니다.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # 날짜 컬럼에 따른 필터링
+                    date_filter = {}
+                    if date_column == 'created_at':
+                        date_filter = {
+                            'created_at__date__gte': start_date,
+                            'created_at__date__lte': end_date
+                        }
+                    elif date_column == 'paid_at':
+                        date_filter = {
+                            'paid_at__date__gte': start_date,
+                            'paid_at__date__lte': end_date
+                        }
+                    elif date_column == 'order__created_at':
+                        date_filter = {
+                            'order__created_at__date__gte': start_date,
+                            'order__created_at__date__lte': end_date
+                        }
+                    elif date_column == 'order__activation_date':
+                        # TelecomOrder의 activation_date는 직접 연결되지 않으므로 생략
+                        pass
+                    elif date_column == 'updated_at':
+                        date_filter = {
+                            'updated_at__date__gte': start_date,
+                            'updated_at__date__lte': end_date
+                        }
+                    
+                    if date_filter:
+                        queryset = queryset.filter(**date_filter)
+                    
+                except ValueError:
+                    return Response(
+                        {'error': '날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            elif start_date_str or end_date_str:
+                # 시작일 또는 종료일 중 하나만 있는 경우
                 return Response(
-                    {'error': '시작일과 종료일을 입력해주세요.'},
+                    {'error': '시작일과 종료일을 모두 입력하거나 모두 비워주세요.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            try:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                return Response(
-                    {'error': '날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)'},
-                    status=status.HTTP_400_BAD_REQUEST
+            else:
+                # 날짜 필터가 없는 경우 최근 3개월로 제한
+                from django.utils import timezone
+                end_date = timezone.now().date()
+                start_date = end_date - timedelta(days=90)
+                queryset = queryset.filter(
+                    created_at__date__gte=start_date,
+                    created_at__date__lte=end_date
                 )
             
-            # 최대 3개월 제한
-            if (end_date - start_date).days > 90:
-                return Response(
-                    {'error': '최대 3개월까지만 조회 가능합니다.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # 권한에 따른 정산 데이터 필터링
-            queryset = self.get_queryset().filter(
-                created_at__date__gte=start_date,
-                created_at__date__lte=end_date
-            ).select_related('order', 'company', 'order__policy')
+            # 상태 필터 적용 (있는 경우)
+            if status_filter and status_filter != 'all':
+                queryset = queryset.filter(status=status_filter)
             
             # 엑셀 파일 생성
             output = io.BytesIO()
@@ -340,74 +488,113 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 'bold': True,
                 'bg_color': '#D7E4BC',
                 'border': 1,
-                'align': 'center'
+                'align': 'center',
+                'valign': 'vcenter'
             })
             
             cell_format = workbook.add_format({
                 'border': 1,
-                'align': 'center'
+                'align': 'left',
+                'valign': 'vcenter'
             })
             
-            amount_format = workbook.add_format({
+            number_format = workbook.add_format({
                 'border': 1,
                 'align': 'right',
+                'valign': 'vcenter',
                 'num_format': '#,##0'
+            })
+            
+            date_format = workbook.add_format({
+                'border': 1,
+                'align': 'center',
+                'valign': 'vcenter',
+                'num_format': 'yyyy-mm-dd'
             })
             
             # 헤더 작성
             headers = [
-                '정산일', '주문일', '업체명', '업체타입', '고객명', 
-                '정책명', '리베이트금액', '정산상태', '지급예정일', '메모'
+                '번호', '정산번호', '주문번호', '업체명', '업체유형', 
+                '정산액', '상태', '생성일', '지급일', '정책명', '통신사', '비고'
             ]
             
             for col, header in enumerate(headers):
                 worksheet.write(0, col, header, header_format)
             
-            # 데이터 작성
-            for row, settlement in enumerate(queryset, start=1):
-                worksheet.write(row, 0, settlement.created_at.strftime('%Y-%m-%d'), cell_format)
-                worksheet.write(row, 1, settlement.order.created_at.strftime('%Y-%m-%d'), cell_format)
-                worksheet.write(row, 2, settlement.company.name, cell_format)
-                worksheet.write(row, 3, settlement.company.get_company_type_display(), cell_format)
-                worksheet.write(row, 4, settlement.order.customer_name, cell_format)
-                worksheet.write(row, 5, settlement.order.policy.title, cell_format)
-                worksheet.write(row, 6, float(settlement.rebate_amount), amount_format)
-                worksheet.write(row, 7, settlement.get_status_display(), cell_format)
-                worksheet.write(row, 8, settlement.rebate_due_date.strftime('%Y-%m-%d') if settlement.rebate_due_date else '', cell_format)
-                worksheet.write(row, 9, settlement.notes, cell_format)
+            # 컬럼 너비 설정
+            worksheet.set_column(0, 0, 8)   # 번호
+            worksheet.set_column(1, 1, 15)  # 정산번호
+            worksheet.set_column(2, 2, 15)  # 주문번호
+            worksheet.set_column(3, 3, 20)  # 업체명
+            worksheet.set_column(4, 4, 12)  # 업체유형
+            worksheet.set_column(5, 5, 15)  # 정산액
+            worksheet.set_column(6, 6, 12)  # 상태
+            worksheet.set_column(7, 7, 12)  # 생성일
+            worksheet.set_column(8, 8, 12)  # 지급일
+            worksheet.set_column(9, 9, 25)  # 정책명
+            worksheet.set_column(10, 10, 10) # 통신사
+            worksheet.set_column(11, 11, 30) # 비고
             
-            # 컬럼 너비 조정
-            worksheet.set_column('A:A', 12)  # 정산일
-            worksheet.set_column('B:B', 12)  # 주문일
-            worksheet.set_column('C:C', 20)  # 업체명
-            worksheet.set_column('D:D', 12)  # 업체타입
-            worksheet.set_column('E:E', 15)  # 고객명
-            worksheet.set_column('F:F', 25)  # 정책명
-            worksheet.set_column('G:G', 15)  # 리베이트금액
-            worksheet.set_column('H:H', 12)  # 정산상태
-            worksheet.set_column('I:I', 12)  # 지급예정일
-            worksheet.set_column('J:J', 30)  # 메모
+            # 데이터 작성 (QuerySet을 리스트로 변환)
+            settlements_list = list(queryset)
+            for row, settlement in enumerate(settlements_list, 1):
+                # 상태 한글 변환
+                status_map = {
+                    'pending': '정산 대기',
+                    'approved': '정산 승인',
+                    'paid': '입금 완료',
+                    'unpaid': '미입금',
+                    'cancelled': '취소됨'
+                }
+                
+                # 업체 유형 한글 변환
+                company_type_map = {
+                    'headquarters': '본사',
+                    'agency': '협력사',
+                    'retail': '판매점'
+                }
+                
+                worksheet.write(row, 0, row, cell_format)  # 번호
+                worksheet.write(row, 1, str(settlement.id)[:8], cell_format)  # 정산번호
+                worksheet.write(row, 2, str(settlement.order.id)[:8] if settlement.order else '-', cell_format)  # 주문번호
+                worksheet.write(row, 3, settlement.company.name if settlement.company else '-', cell_format)  # 업체명
+                worksheet.write(row, 4, company_type_map.get(settlement.company.type, settlement.company.type) if settlement.company else '-', cell_format)  # 업체유형
+                worksheet.write(row, 5, float(settlement.rebate_amount or 0), number_format)  # 정산액
+                worksheet.write(row, 6, status_map.get(settlement.status, settlement.status), cell_format)  # 상태
+                worksheet.write(row, 7, settlement.created_at.date(), date_format)  # 생성일
+                worksheet.write(row, 8, settlement.paid_at.date() if settlement.paid_at else '-', cell_format)  # 지급일
+                worksheet.write(row, 9, settlement.order.policy.title if settlement.order and settlement.order.policy else '-', cell_format)  # 정책명
+                worksheet.write(row, 10, settlement.order.policy.carrier if settlement.order and settlement.order.policy else '-', cell_format)  # 통신사
+                worksheet.write(row, 11, settlement.notes or '-', cell_format)  # 비고
+            
+            # 요약 정보 추가
+            data_count = len(settlements_list)
+            summary_row = data_count + 2
+            worksheet.write(summary_row, 3, '합계:', header_format)
+            worksheet.write(summary_row, 5, f'=SUM(F2:F{data_count+1})', number_format)
             
             workbook.close()
             output.seek(0)
             
             # HTTP 응답 생성
             response = HttpResponse(
-                output.getvalue(),
+                output.read(),
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
             
-            filename = f'정산내역_{start_date_str}_{end_date_str}.xlsx'
+            # 파일명 생성
+            filename = f'정산내역_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             
-            logger.info(f"정산 엑셀 출력: {request.user.username} - {start_date} ~ {end_date}")
-            
+            logger.info(f"엑셀 내보내기 완료: {request.user.username}, 건수: {data_count}")
             return response
             
         except Exception as e:
-            logger.error(f"정산 엑셀 출력 실패: {str(e)}")
+            import traceback
+            error_detail = traceback.format_exc()
+            logger.error(f"정산 엑셀 출력 실패: {str(e)}\n{error_detail}")
             return Response(
-                {'error': '엑셀 파일 생성 중 오류가 발생했습니다.'},
+                {'error': f'엑셀 파일 생성 중 오류가 발생했습니다: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -766,3 +953,476 @@ class GradeBonusSettlementViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"보너스 정산 지급 완료 처리 실패: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DynamicFilteredSettlementViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    동적 필터링이 적용된 정산 뷰셋
+    Phase 5-3: 사용자별 맞춤 필터링 시스템
+    """
+    
+    serializer_class = SettlementSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """동적 필터가 적용된 쿼리셋 반환"""
+        from .filters import DynamicSettlementFilter, SettlementFilterSerializer
+        
+        # 필터 파라미터 추출 및 검증
+        filter_params = {}
+        
+        # URL 쿼리 파라미터에서 필터 추출
+        for key, value in self.request.query_params.items():
+            if key.endswith('[]'):  # 배열 파라미터 처리
+                key = key[:-2]
+                filter_params[key] = self.request.query_params.getlist(f'{key}[]')
+            else:
+                filter_params[key] = value
+        
+        # 필터 검증
+        validated_filters = SettlementFilterSerializer.validate_filters(filter_params)
+        
+        # 동적 필터 적용
+        dynamic_filter = DynamicSettlementFilter(self.request.user)
+        queryset = dynamic_filter.apply_multiple_filters(validated_filters)
+        
+        return queryset.select_related(
+            'order', 'order__policy', 'company', 'approved_by'
+        ).order_by('-created_at')
+    
+    @action(detail=False, methods=['get'])
+    def filter_options(self, request):
+        """
+        사용자가 사용할 수 있는 필터 옵션 반환
+        
+        GET /api/settlements/dynamic/filter_options/
+        """
+        try:
+            from .filters import DynamicSettlementFilter
+            
+            dynamic_filter = DynamicSettlementFilter(request.user)
+            options = dynamic_filter.get_filter_options()
+            
+            return Response(options)
+            
+        except Exception as e:
+            logger.error(f"필터 옵션 조회 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def apply_filters(self, request):
+        """
+        복합 필터를 적용한 정산 목록 조회
+        
+        POST /api/settlements/dynamic/apply_filters/
+        {
+            "filters": {
+                "period_type": "month",
+                "statuses": ["approved", "paid"],
+                "company_types": ["agency", "retail"],
+                "min_amount": 10000,
+                "max_amount": 100000
+            },
+            "page": 1,
+            "page_size": 20
+        }
+        """
+        try:
+            from .filters import DynamicSettlementFilter, SettlementFilterSerializer
+            
+            filters = request.data.get('filters', {})
+            page = int(request.data.get('page', 1))
+            page_size = int(request.data.get('page_size', 20))
+            
+            # 필터 검증
+            validated_filters = SettlementFilterSerializer.validate_filters(filters)
+            
+            # 동적 필터 적용
+            dynamic_filter = DynamicSettlementFilter(request.user)
+            queryset = dynamic_filter.apply_multiple_filters(validated_filters)
+            
+            # 페이지네이션 적용
+            from django.core.paginator import Paginator
+            paginator = Paginator(queryset, page_size)
+            page_obj = paginator.get_page(page)
+            
+            # 직렬화
+            serializer = self.get_serializer(page_obj.object_list, many=True)
+            
+            return Response({
+                'results': serializer.data,
+                'pagination': {
+                    'current_page': page,
+                    'total_pages': paginator.num_pages,
+                    'total_count': paginator.count,
+                    'page_size': page_size,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous()
+                },
+                'applied_filters': validated_filters,
+                'summary': self._get_filtered_summary(queryset)
+            })
+            
+        except Exception as e:
+            logger.error(f"필터 적용 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def summary_stats(self, request):
+        """
+        필터가 적용된 정산 요약 통계
+        
+        GET /api/settlements/dynamic/summary_stats/?period_type=month&statuses[]=approved
+        """
+        try:
+            from .filters import DynamicSettlementFilter, SettlementFilterSerializer
+            
+            # 필터 파라미터 추출
+            filter_params = {}
+            for key, value in request.query_params.items():
+                if key.endswith('[]'):
+                    key = key[:-2]
+                    filter_params[key] = request.query_params.getlist(f'{key}[]')
+                else:
+                    filter_params[key] = value
+            
+            # 필터 검증 및 적용
+            validated_filters = SettlementFilterSerializer.validate_filters(filter_params)
+            dynamic_filter = DynamicSettlementFilter(request.user)
+            queryset = dynamic_filter.apply_multiple_filters(validated_filters)
+            
+            # 요약 통계 생성
+            summary = self._get_filtered_summary(queryset)
+            
+            return Response({
+                'summary': summary,
+                'applied_filters': validated_filters
+            })
+            
+        except Exception as e:
+            logger.error(f"요약 통계 조회 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _get_filtered_summary(self, queryset):
+        """필터링된 쿼리셋의 요약 통계"""
+        from django.db.models import Sum, Count, Avg
+        
+        stats = queryset.aggregate(
+            total_count=Count('id'),
+            total_amount=Sum('rebate_amount'),
+            avg_amount=Avg('rebate_amount'),
+            total_grade_bonus=Sum('grade_bonus')
+        )
+        
+        # 상태별 통계
+        status_stats = {}
+        for status_choice in Settlement.STATUS_CHOICES:
+            status_code = status_choice[0]
+            status_count = queryset.filter(status=status_code).count()
+            if status_count > 0:
+                status_stats[status_code] = {
+                    'count': status_count,
+                    'label': status_choice[1]
+                }
+        
+        # 회사 유형별 통계
+        company_type_stats = {}
+        for company_type in ['headquarters', 'agency', 'retail']:
+            type_data = queryset.filter(company__type=company_type).aggregate(
+                count=Count('id'),
+                amount=Sum('rebate_amount')
+            )
+            if type_data['count'] > 0:
+                company_type_stats[company_type] = type_data
+        
+        return {
+            'total_statistics': {
+                'count': stats['total_count'] or 0,
+                'total_amount': float(stats['total_amount'] or 0),
+                'average_amount': float(stats['avg_amount'] or 0),
+                'total_grade_bonus': float(stats['total_grade_bonus'] or 0)
+            },
+            'status_breakdown': status_stats,
+            'company_type_breakdown': company_type_stats
+        }
+
+
+class AdvancedExcelExportViewSet(viewsets.ViewSet):
+    """
+    고급 엑셀 내보내기 ViewSet
+    Phase 6: 사용자별 맞춤 엑셀 템플릿
+    """
+    
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['post'])
+    def export_with_filters(self, request):
+        """
+        동적 필터가 적용된 엑셀 내보내기
+        
+        POST /api/settlements/excel/export_with_filters/
+        {
+            "filters": {
+                "period_type": "month",
+                "statuses": ["approved", "paid"],
+                "company_types": ["agency", "retail"]
+            },
+            "export_type": "auto"  // auto, headquarters, agency, retail
+        }
+        """
+        try:
+            from .excel_exporters import SettlementExcelExporter
+            from .filters import SettlementFilterSerializer
+            
+            # 필터 및 내보내기 타입 추출
+            filters = request.data.get('filters', {})
+            export_type = request.data.get('export_type', 'auto')
+            
+            # 필터 검증
+            validated_filters = SettlementFilterSerializer.validate_filters(filters)
+            
+            # 엑셀 내보내기 실행
+            exporter = SettlementExcelExporter(request.user, validated_filters)
+            
+            if export_type == 'auto':
+                # 사용자 유형에 따라 자동 선택
+                response = exporter.export_for_user_type()
+            elif export_type == 'headquarters':
+                response = exporter.export_for_headquarters()
+            elif export_type == 'agency':
+                response = exporter.export_for_agency()
+            elif export_type == 'retail':
+                response = exporter.export_for_retail()
+            else:
+                return Response(
+                    {'error': '유효하지 않은 내보내기 타입입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"엑셀 내보내기 완료: {request.user.username} - {export_type}")
+            return response
+            
+        except Exception as e:
+            logger.error(f"엑셀 내보내기 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def export_simple(self, request):
+        """
+        간단한 엑셀 내보내기 (GET 방식)
+        
+        GET /api/settlements/excel/export_simple/?period_type=month&statuses[]=approved
+        """
+        try:
+            from .excel_exporters import SettlementExcelExporter
+            from .filters import SettlementFilterSerializer
+            
+            # 쿼리 파라미터에서 필터 추출
+            filter_params = {}
+            for key, value in request.query_params.items():
+                if key.endswith('[]'):
+                    key = key[:-2]
+                    filter_params[key] = request.query_params.getlist(f'{key}[]')
+                else:
+                    filter_params[key] = value
+            
+            # 필터 검증
+            validated_filters = SettlementFilterSerializer.validate_filters(filter_params)
+            
+            # 엑셀 내보내기 실행
+            exporter = SettlementExcelExporter(request.user, validated_filters)
+            response = exporter.export_for_user_type()
+            
+            logger.info(f"간단 엑셀 내보내기 완료: {request.user.username}")
+            return response
+            
+        except Exception as e:
+            logger.error(f"간단 엑셀 내보내기 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def export_large_dataset(self, request):
+        """
+        대용량 데이터셋 엑셀 내보내기
+        청크 단위로 처리하여 메모리 사용량 최적화
+        
+        POST /api/settlements/excel/export_large_dataset/
+        {
+            "filters": {...},
+            "chunk_size": 1000,
+            "max_records": 10000
+        }
+        """
+        try:
+            from .excel_exporters import LargeDatasetExcelExporter
+            from .filters import SettlementFilterSerializer
+            
+            filters = request.data.get('filters', {})
+            chunk_size = int(request.data.get('chunk_size', 1000))
+            max_records = int(request.data.get('max_records', 10000))
+            
+            # 필터 검증
+            validated_filters = SettlementFilterSerializer.validate_filters(filters)
+            
+            # 대용량 데이터 내보내기 실행
+            exporter = LargeDatasetExcelExporter(
+                request.user, 
+                validated_filters,
+                chunk_size=chunk_size,
+                max_records=max_records
+            )
+            response = exporter.export()
+            
+            logger.info(f"대용량 엑셀 내보내기 완료: {request.user.username} - {max_records}건")
+            return response
+            
+        except Exception as e:
+            logger.error(f"대용량 엑셀 내보내기 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def export_templates(self, request):
+        """
+        사용 가능한 엑셀 템플릿 목록 반환
+        
+        GET /api/settlements/excel/export_templates/
+        """
+        try:
+            from companies.models import CompanyUser
+            
+            # 사용자 회사 정보 조회
+            try:
+                company_user = CompanyUser.objects.get(django_user=request.user)
+                user_company_type = company_user.company.type
+            except CompanyUser.DoesNotExist:
+                user_company_type = None
+            
+            # 사용 가능한 템플릿 목록
+            templates = []
+            
+            if request.user.is_superuser or user_company_type == 'headquarters':
+                templates.extend([
+                    {
+                        'type': 'headquarters',
+                        'name': '본사 전체 정산 현황',
+                        'description': '전체 정산 데이터, 회사별/정책별/상태별 요약',
+                        'sheets': ['전체 정산 현황', '회사별 요약', '정책별 요약', '상태별 요약']
+                    },
+                    {
+                        'type': 'agency',
+                        'name': '협력사 리베이트 현황',
+                        'description': '받을/지급할 리베이트, 그레이드 현황, 판매점별 성과',
+                        'sheets': ['받을 리베이트', '지급할 리베이트', '그레이드 현황', '판매점별 성과']
+                    },
+                    {
+                        'type': 'retail',
+                        'name': '판매점 리베이트 현황',
+                        'description': '받을 리베이트, 월별/정책별 성과, 그레이드 현황',
+                        'sheets': ['받을 리베이트', '월별 성과', '정책별 성과', '그레이드 현황']
+                    }
+                ])
+            
+            elif user_company_type == 'agency':
+                templates.extend([
+                    {
+                        'type': 'agency',
+                        'name': '협력사 리베이트 현황',
+                        'description': '받을/지급할 리베이트, 그레이드 현황, 판매점별 성과',
+                        'sheets': ['받을 리베이트', '지급할 리베이트', '그레이드 현황', '판매점별 성과']
+                    },
+                    {
+                        'type': 'retail',
+                        'name': '판매점 리베이트 현황',
+                        'description': '받을 리베이트, 월별/정책별 성과, 그레이드 현황',
+                        'sheets': ['받을 리베이트', '월별 성과', '정책별 성과', '그레이드 현황']
+                    }
+                ])
+            
+            elif user_company_type == 'retail':
+                templates.append({
+                    'type': 'retail',
+                    'name': '판매점 리베이트 현황',
+                    'description': '받을 리베이트, 월별/정책별 성과, 그레이드 현황',
+                    'sheets': ['받을 리베이트', '월별 성과', '정책별 성과', '그레이드 현황']
+                })
+            
+            return Response({
+                'templates': templates,
+                'user_company_type': user_company_type,
+                'recommended_template': templates[0]['type'] if templates else None
+            })
+            
+        except Exception as e:
+            logger.error(f"템플릿 목록 조회 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def preview_data(self, request):
+        """
+        엑셀 내보내기 전 데이터 미리보기
+        
+        POST /api/settlements/excel/preview_data/
+        {
+            "filters": {...},
+            "preview_limit": 100
+        }
+        """
+        try:
+            from .filters import DynamicSettlementFilter, SettlementFilterSerializer
+            
+            filters = request.data.get('filters', {})
+            preview_limit = int(request.data.get('preview_limit', 100))
+            
+            # 필터 검증 및 적용
+            validated_filters = SettlementFilterSerializer.validate_filters(filters)
+            dynamic_filter = DynamicSettlementFilter(request.user)
+            queryset = dynamic_filter.apply_multiple_filters(validated_filters)
+            
+            # 미리보기 데이터
+            preview_settlements = queryset.select_related(
+                'order', 'order__policy', 'company'
+            )[:preview_limit]
+            
+            # 요약 통계
+            summary = self._get_filtered_summary(queryset)
+            
+            # 미리보기 데이터 직렬화
+            from .serializers import SettlementSerializer
+            serializer = SettlementSerializer(preview_settlements, many=True)
+            
+            return Response({
+                'preview_data': serializer.data,
+                'total_count': queryset.count(),
+                'preview_count': len(preview_settlements),
+                'summary': summary,
+                'estimated_file_size': self._estimate_file_size(queryset.count()),
+                'processing_time_estimate': self._estimate_processing_time(queryset.count())
+            })
+            
+        except Exception as e:
+            logger.error(f"데이터 미리보기 오류: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _estimate_file_size(self, record_count: int) -> str:
+        """파일 크기 추정"""
+        # 대략적인 계산: 레코드당 평균 1KB
+        estimated_kb = record_count * 1
+        
+        if estimated_kb < 1024:
+            return f"{estimated_kb}KB"
+        elif estimated_kb < 1024 * 1024:
+            return f"{estimated_kb / 1024:.1f}MB"
+        else:
+            return f"{estimated_kb / (1024 * 1024):.1f}GB"
+    
+    def _estimate_processing_time(self, record_count: int) -> str:
+        """처리 시간 추정"""
+        # 대략적인 계산: 1000건당 1초
+        estimated_seconds = record_count / 1000
+        
+        if estimated_seconds < 60:
+            return f"{estimated_seconds:.0f}초"
+        elif estimated_seconds < 3600:
+            return f"{estimated_seconds / 60:.1f}분"
+        else:
+            return f"{estimated_seconds / 3600:.1f}시간"

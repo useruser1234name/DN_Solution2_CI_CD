@@ -333,6 +333,80 @@ export const settlementAPI = {
     const response = await apiClient.post(`/api/settlements/${id}/process/`);
     return response.data;
   },
+
+  // 엑셀 내보내기 - 기존 API (파라미터 확장)
+  exportExcel: async (startDate, endDate, status, dateColumn) => {
+    const params = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    if (status) params.status = status;
+    if (dateColumn) params.date_column = dateColumn;
+    
+    const response = await apiClient.get('/api/settlements/export_excel/', {
+      params,
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  // 고급 엑셀 내보내기 - 동적 필터 적용
+  exportWithFilters: async (filters = {}, exportType = 'auto') => {
+    const response = await apiClient.post('/api/settlements/excel/export_with_filters/', {
+      filters,
+      export_type: exportType
+    }, {
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  // 간단한 엑셀 내보내기
+  exportSimple: async (params = {}) => {
+    const response = await apiClient.get('/api/settlements/excel/export_simple/', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  // 사용 가능한 엑셀 템플릿 조회
+  getExportTemplates: async () => {
+    const response = await apiClient.get('/api/settlements/excel/export_templates/');
+    return response.data;
+  },
+
+  // 데이터 미리보기
+  previewData: async (filters = {}, previewLimit = 100) => {
+    const response = await apiClient.post('/api/settlements/excel/preview_data/', {
+      filters,
+      preview_limit: previewLimit
+    });
+    return response.data;
+  },
+
+  // 동적 필터링 - 필터 옵션 조회
+  getFilterOptions: async () => {
+    const response = await apiClient.get('/api/settlements/dynamic/filter_options/');
+    return response.data;
+  },
+
+  // 동적 필터링 - 필터 적용
+  applyFilters: async (filters = {}, page = 1, pageSize = 20) => {
+    const response = await apiClient.post('/api/settlements/dynamic/apply_filters/', {
+      filters,
+      page,
+      page_size: pageSize
+    });
+    return response.data;
+  },
+
+  // 요약 통계 조회
+  getSummaryStats: async (params = {}) => {
+    const response = await apiClient.get('/api/settlements/dynamic/summary_stats/', {
+      params
+    });
+    return response.data;
+  }
 };
 
 // ======================
