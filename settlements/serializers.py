@@ -52,7 +52,7 @@ class SettlementSerializer(serializers.ModelSerializer):
         read_only_fields = ['approved_at', 'paid_at', 'created_at', 'updated_at']
     
     def get_order_info(self, obj):
-        """주문 정보 요약 (통신사 주문 정보 포함)"""
+        """주문 정보 요약 (통합된 Order 모델 사용)"""
         order_info = {
             'id': str(obj.order.id),
             'customer_name': obj.order.customer_name,
@@ -60,49 +60,25 @@ class SettlementSerializer(serializers.ModelSerializer):
             'total_amount': str(obj.order.total_amount),
             'created_at': obj.order.created_at.isoformat(),
             'status': obj.order.status,
-            'order_number': getattr(obj.order, 'order_number', None),
-            # 통신사 관련 정보
-            'carrier': None,
-            'subscription_type': None,
+            # 통합된 TelecomOrder 필드들 직접 사용
+            'order_number': obj.order.order_number,
+            'carrier': obj.order.carrier,
+            'subscription_type': obj.order.subscription_type,
+            'activation_date': obj.order.activation_date.isoformat() if obj.order.activation_date else None,
             'plan_name': None,
-            'contract_period': None,
-            'activation_date': None
+            'contract_period': None
         }
         
-        # 통신사 주문 정보가 있는 경우 추가 (정책과 회사를 통해 조회)
-        try:
-            from orders.telecom_order_models import TelecomOrder
-            
-            # 같은 정책과 회사로 생성된 통신사 주문 찾기 (임시 방법)
-            telecom_orders = TelecomOrder.objects.filter(
-                policy=obj.order.policy,
-                company=obj.order.company,
-                created_at__date=obj.order.created_at.date()
-            ).order_by('-created_at')
-            
-            if telecom_orders.exists():
-                telecom_order = telecom_orders.first()
-                order_info.update({
-                    'carrier': telecom_order.carrier,
-                    'subscription_type': telecom_order.subscription_type,
-                    'activation_date': telecom_order.activation_date.isoformat() if telecom_order.activation_date else None,
-                    'order_number': telecom_order.order_number
-                })
-                
-                # 주문 데이터에서 추가 정보 추출
-                if telecom_order.order_data:
-                    order_data = telecom_order.order_data
-                    order_info.update({
-                        'plan_name': order_data.get('plan_name'),
-                        'contract_period': order_data.get('contract_period')
-                    })
-        except Exception as e:
-            # 통신사 주문 정보 조회 실패 시 로그만 남기고 계속 진행
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"통신사 주문 정보 조회 실패: {e}")
-            
-            # 정책에서 기본 통신사 정보 가져오기
+        # order_data에서 추가 정보 추출
+        if obj.order.order_data:
+            order_data = obj.order.order_data
+            order_info.update({
+                'plan_name': order_data.get('plan_name'),
+                'contract_period': order_data.get('contract_period')
+            })
+        
+        # carrier가 없으면 정책에서 가져오기
+        if not order_info['carrier']:
             try:
                 if hasattr(obj.order.policy, 'carrier'):
                     order_info['carrier'] = obj.order.policy.carrier

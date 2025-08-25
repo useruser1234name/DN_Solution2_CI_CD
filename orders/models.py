@@ -35,8 +35,29 @@ class Order(models.Model):
         ('processing', '개통 준비중'),
         ('shipped', '개통중'),
         ('completed', '개통완료'),
-        ('final_approved', '승인(완료)'),  # 새로 추가 - 정산 생성 트리거
+        ('final_approved', '승인(완료)'),  # 정산 생성 트리거
         ('cancelled', '개통취소'),
+        # TelecomOrder 상태 통합
+        ('received', '접수'),
+        ('activation_request', '개통 요청'),
+        ('activating', '개통중'),
+        ('activation_complete', '개통 완료'),
+        ('rejected', '반려'),
+    ]
+    
+    # 가입 유형 선택지 (TelecomOrder에서 통합)
+    SUBSCRIPTION_TYPE_CHOICES = [
+        ('MNP', '번호이동'),
+        ('device_change', '기기변경'),
+        ('new', '신규가입'),
+    ]
+    
+    # 고객 유형 선택지 (TelecomOrder에서 통합)
+    CUSTOMER_TYPE_CHOICES = [
+        ('adult', '성인일반'),
+        ('corporate', '법인'),
+        ('foreigner', '외국인'),
+        ('minor', '미성년자'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -61,6 +82,73 @@ class Order(models.Model):
         default=False,
         verbose_name='민감정보 암호화 완료',
         help_text='민감정보가 암호화되어 저장되었는지 여부'
+    )
+    
+    # ========== TelecomOrder 통합 필드들 ==========
+    # 주문 번호 (자동 생성)
+    order_number = models.CharField(
+        max_length=50,
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name="주문번호",
+        help_text="자동 생성된 주문번호"
+    )
+    
+    # 통신사 정보
+    carrier = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name="통신사",
+        help_text="정책에서 자동 입력"
+    )
+    
+    # 가입 유형
+    subscription_type = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_TYPE_CHOICES,
+        blank=True,
+        verbose_name="가입유형"
+    )
+    
+    # 고객 유형
+    customer_type = models.CharField(
+        max_length=20,
+        choices=CUSTOMER_TYPE_CHOICES,
+        blank=True,
+        verbose_name="고객유형"
+    )
+    
+    # 접수일자 (기존 created_at과 구분)
+    received_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="접수일자",
+        help_text="주문 접수 일시"
+    )
+    
+    # 개통일자
+    activation_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="개통일자",
+        help_text="실제 개통 완료 일시"
+    )
+    
+    # 주문 데이터 (JSON 형태로 저장)
+    order_data = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="주문 데이터",
+        help_text="주문서 양식에서 제출된 모든 데이터"
+    )
+    
+    # 1차 ID (판매점 코드)
+    first_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="1차 ID",
+        help_text="주문을 접수한 판매점 코드"
     )
     status = models.CharField(
         max_length=20,
@@ -129,8 +217,56 @@ class Order(models.Model):
     
     def save(self, *args, **kwargs):
         """저장 시 로깅 및 검증"""
+        is_new = self._state.adding  # UUID 필드 때문에 pk 체크 대신 _state.adding 사용
         self.full_clean()
-        is_new = self.pk is None
+        
+        # 주문번호 자동 생성 (TelecomOrder 통합) - 중복 방지
+        if is_new and not self.order_number:
+            from django.utils import timezone
+            import time
+            
+            # 중복되지 않는 주문번호 생성
+            max_attempts = 10
+            for attempt in range(max_attempts):
+                if self.carrier:
+                    prefix = self.carrier[:2].upper()
+                else:
+                    prefix = 'ORD'
+                
+                # 더 정밀한 타임스탬프 + 랜덤 접미사
+                timestamp = timezone.now().strftime('%y%m%d%H%M%S')  # 초 단위까지 포함
+                random_suffix = uuid.uuid4().hex[:6].upper()  # 6자리로 증가
+                order_number = f"{prefix}-{timestamp}-{random_suffix}"
+                
+                # 중복 확인
+                if not Order.objects.filter(order_number=order_number).exists():
+                    self.order_number = order_number
+                    break
+                
+                # 중복된 경우 잠시 대기 후 재시도
+                time.sleep(0.001)  # 1ms 대기
+            
+            # 최대 시도 횟수 초과 시 UUID 사용
+            if not self.order_number:
+                self.order_number = f"{prefix}-{str(uuid.uuid4())[:8].upper()}"
+                logger.warning(f"주문번호 생성 최대 시도 횟수 초과, UUID 사용: {self.order_number}")
+        
+        # 접수일자 자동 설정 (오늘 날짜)
+        if is_new and not self.received_date:
+            from django.utils import timezone
+            self.received_date = timezone.now()
+        
+        # 1차 ID 자동 설정 (판매점 코드)
+        if is_new and not self.first_id and self.company:
+            self.first_id = self.company.code
+        
+        # 통신사 정보 자동 설정 (정책에서)
+        if is_new and not self.carrier and self.policy:
+            self.carrier = self.policy.carrier
+        
+        # 가입유형 자동 설정 (정책에서)
+        if is_new and not self.subscription_type and self.policy:
+            self.subscription_type = getattr(self.policy, 'subscription_type', 'new')
         
         # 민감정보 처리 (로컬 암호화)
         if is_new and not self.is_sensitive_data_encrypted:
@@ -140,9 +276,9 @@ class Order(models.Model):
         # 로깅 시 민감정보 마스킹
         masked_name = self._mask_customer_name()
         if is_new:
-            logger.info(f"[Order.save] 새 주문 생성 - 고객: {masked_name}, 금액: {self.total_amount}")
+            logger.info(f"[Order.save] 새 주문 생성 - 고객: {masked_name}, 주문번호: {self.order_number}, 금액: {self.total_amount}")
         else:
-            logger.info(f"[Order.save] 주문 수정 - 고객: {masked_name}")
+            logger.info(f"[Order.save] 주문 수정 - 고객: {masked_name}, 주문번호: {self.order_number}")
         
         super().save(*args, **kwargs)
     

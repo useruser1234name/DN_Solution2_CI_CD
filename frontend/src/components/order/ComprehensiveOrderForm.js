@@ -183,17 +183,59 @@ const ComprehensiveOrderForm = ({
 
   const createDefaultFields = () => {
     return [
-      // 고객 정보 (4개)
+      // 주문서 생성일자 (오늘 날짜+시간, 자동 설정)
+      { 
+        field_name: 'order_date', 
+        field_label: '주문서 생성일자', 
+        field_type: 'datetime', 
+        is_required: false, 
+        order: 0,
+        auto_generate: true,
+        default_value: new Date().toLocaleString('ko-KR')
+      },
+      
+      // 1차 ID (판매점 코드, 자동 설정)
+      { 
+        field_name: 'first_id', 
+        field_label: '1차 ID', 
+        field_type: 'text', 
+        is_required: true, 
+        order: 0.5,
+        auto_generate: true,
+        placeholder: '자동 설정됨'
+      },
+      
+      // 주문번호 (자동 생성)
+      { 
+        field_name: 'order_number', 
+        field_label: '주문번호', 
+        field_type: 'text', 
+        is_required: false, 
+        order: 0.7,
+        auto_generate: true,
+        placeholder: '자동 생성됨'
+      },
+      
+      // 고객 정보
       { field_name: 'customer_name', field_label: '고객명', field_type: 'text', is_required: true, order: 1, placeholder: '고객명을 입력하세요' },
-      { field_name: 'join_type', field_label: '가입유형', field_type: 'join_type', is_required: true, order: 2 },
-      { field_name: 'birth_date', field_label: '생년월일', field_type: 'text', is_required: true, order: 3, placeholder: '예: 901234' },
-      { field_name: 'phone_number', field_label: '개통번호', field_type: 'phone', is_required: true, order: 4, placeholder: '예: 010-1234-5678' },
+      { field_name: 'subscription_type', field_label: '고객유형', field_type: 'subscription_type', is_required: true, order: 2 },
+      { field_name: 'phone_number', field_label: '개통번호', field_type: 'phone', is_required: true, order: 3, placeholder: '010-0000-0000' },
       
       // 기기 및 통신 정보 (6개)
       { field_name: 'device_model', field_label: '모델명', field_type: 'device_model', is_required: true, order: 5 },
       { field_name: 'device_color', field_label: '색상', field_type: 'device_color', is_required: true, order: 6 },
       { field_name: 'serial_number', field_label: '일련번호', field_type: 'text', is_required: true, order: 7, placeholder: '예: 189150' },
-      { field_name: 'carrier_plan', field_label: '요금제', field_type: 'carrier_plan', is_required: true, order: 8 },
+      { 
+        field_name: 'carrier_plan', 
+        field_label: '요금상품명', 
+        field_type: 'carrier_plan', 
+        is_required: true, 
+        order: 8,
+        field_options: {
+          dynamic: true,
+          source: 'CarrierPlan'
+        }
+      },
       { field_name: 'sim_type', field_label: '유심타입', field_type: 'sim_type', is_required: true, order: 9 },
       
       // 결제 및 지원금 정보 (7개)

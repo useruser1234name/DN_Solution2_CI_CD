@@ -108,12 +108,6 @@ const Sidebar = () => {
                     label: '정산 목록', 
                     icon: '💰',
                     permission: 'settlements'
-                },
-                { 
-                    path: '/settlements/report', 
-                    label: '정산 보고서', 
-                    icon: '📊',
-                    permission: 'settlements'
                 }
             ]
         },

@@ -46,6 +46,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'company', 'company_name', 'created_by', 'created_by_username',
             'total_amount', 'rebate_amount', 'notes', 'form_data',
             'memo_count', 'has_invoice', 'invoice_info', 'status_history',
+            # TelecomOrder 통합 필드들
+            'order_number', 'carrier', 'subscription_type', 'customer_type',
+            'received_date', 'activation_date', 'order_data', 'first_id',
             'created_at', 'updated_at'
         ]
         extra_kwargs = {

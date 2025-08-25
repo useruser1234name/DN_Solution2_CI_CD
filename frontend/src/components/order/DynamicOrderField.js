@@ -41,6 +41,9 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       loadDynamicOptions();
     } else if (field.field_options?.choices) {
       setOptions(field.field_options.choices);
+    } else if (field.field_type === 'dropdown_from_policy' && field.field_name === 'plan_name') {
+      // 요금상품명 필드는 동적으로 로드
+      loadDynamicOptions();
     } else {
       // 기본 옵션 설정
       setOptions(getDefaultOptionsForFieldType(field.field_type));
@@ -138,6 +141,11 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
         { value: 'simple', label: '심플' },
         { value: 'standard', label: '스탠다드' },
         { value: 'premium', label: '프리미엄' }
+      ],
+      'subscription_type': [
+        { value: 'MNP', label: '번호이동' },
+        { value: 'device_change', label: '기기변경' },
+        { value: 'new', label: '신규가입' }
       ]
     };
     
@@ -186,31 +194,65 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       
       let endpoint = '';
       
-      switch (source) {
-        case 'CarrierPlan':
-          endpoint = 'policies/carrier-plans/';
-          // 정책 통신사에 맞는 요금제만 필터링
-          if (dependencies.policy_carrier) {
-            endpoint += `?carrier=${dependencies.policy_carrier}`;
-            console.log(`[DynamicOrderField] 통신사(${dependencies.policy_carrier})에 맞는 요금상품 불러오기`);
-          }
-          // 폼에서 직접 선택한 통신사에 맞는 요금제 필터링
-          else if (dependencies.carrier) {
-            endpoint += `?carrier=${dependencies.carrier}`;
-            console.log(`[DynamicOrderField] 선택한 통신사(${dependencies.carrier})에 맞는 요금상품 불러오기`);
-          }
-          break;
-        case 'DeviceModel':
-          endpoint = 'policies/device-models/';
-          break;
-        case 'DeviceColor':
-          endpoint = 'policies/device-colors/';
-          if (dependencies.device_model) {
-            endpoint += `?model=${dependencies.device_model}`;
-          }
-          break;
-        default:
-          return;
+      // plan_name 필드는 CarrierPlan 소스로 처리
+      if (field.field_name === 'plan_name' || source === 'CarrierPlan') {
+        endpoint = 'policies/carrier-plans/';
+        console.log(`[DynamicOrderField] CarrierPlan 로드 시도:`, {
+          field_name: field.field_name,
+          policy_carrier: dependencies.policy_carrier,
+          form_carrier: dependencies.carrier,
+          all_dependencies: dependencies
+        });
+        
+        // 정책 통신사에 맞는 요금제만 필터링
+        if (dependencies.policy_carrier) {
+          endpoint += `?carrier=${dependencies.policy_carrier}`;
+          console.log(`[DynamicOrderField] 통신사(${dependencies.policy_carrier})에 맞는 요금상품 불러오기`);
+        }
+        // 폼에서 직접 선택한 통신사에 맞는 요금제 필터링
+        else if (dependencies.carrier) {
+          endpoint += `?carrier=${dependencies.carrier}`;
+          console.log(`[DynamicOrderField] 선택한 통신사(${dependencies.carrier})에 맞는 요금상품 불러오기`);
+        }
+        else {
+          console.warn(`[DynamicOrderField] 통신사 정보가 없어서 모든 요금제를 불러옵니다`);
+        }
+      } else {
+        switch (source) {
+          case 'CarrierPlan':
+            endpoint = 'policies/carrier-plans/';
+            console.log(`[DynamicOrderField] CarrierPlan 로드 시도:`, {
+              policy_carrier: dependencies.policy_carrier,
+              form_carrier: dependencies.carrier,
+              all_dependencies: dependencies
+            });
+            
+            // 정책 통신사에 맞는 요금제만 필터링
+            if (dependencies.policy_carrier) {
+              endpoint += `?carrier=${dependencies.policy_carrier}`;
+              console.log(`[DynamicOrderField] 통신사(${dependencies.policy_carrier})에 맞는 요금상품 불러오기`);
+            }
+            // 폼에서 직접 선택한 통신사에 맞는 요금제 필터링
+            else if (dependencies.carrier) {
+              endpoint += `?carrier=${dependencies.carrier}`;
+              console.log(`[DynamicOrderField] 선택한 통신사(${dependencies.carrier})에 맞는 요금상품 불러오기`);
+            }
+            else {
+              console.warn(`[DynamicOrderField] 통신사 정보가 없어서 모든 요금제를 불러옵니다`);
+            }
+            break;
+          case 'DeviceModel':
+            endpoint = 'policies/device-models/';
+            break;
+          case 'DeviceColor':
+            endpoint = 'policies/device-colors/';
+            if (dependencies.device_model) {
+              endpoint += `?model=${dependencies.device_model}`;
+            }
+            break;
+          default:
+            return;
+        }
       }
 
       console.log(`[DynamicOrderField] ${field.field_name} 옵션 로드 요청:`, endpoint);
@@ -236,7 +278,7 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
           console.log(`[DynamicOrderField] ${field.field_name} 데이터 배열:`, data);
           const formattedOptions = data.map(item => ({
             value: item.id,
-            label: getOptionLabel(source, item)
+            label: field.field_name === 'plan_name' ? getOptionLabel('CarrierPlan', item) : getOptionLabel(source, item)
           }));
           console.log(`[DynamicOrderField] ${field.field_name} 포맷된 옵션:`, formattedOptions);
           setOptions(formattedOptions);
@@ -314,6 +356,29 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       disabled: loading || field.is_readonly
     };
 
+    // 자동 생성 필드는 읽기 전용으로 표시
+    if (field.auto_generate || field.field_name === 'order_date' || field.field_name === 'first_id') {
+      let displayValue = '';
+      
+      if (field.field_name === 'order_date') {
+        displayValue = new Date().toLocaleString('ko-KR');
+      } else if (field.field_name === 'first_id') {
+        displayValue = '자동 설정됨 (판매점 코드)';
+      } else if (field.field_name === 'order_number') {
+        displayValue = '자동 생성됨';
+      } else {
+        displayValue = field.default_value || '자동 설정됨';
+      }
+      
+      return (
+        <Input 
+          value={displayValue}
+          disabled={true}
+          style={{ backgroundColor: '#f5f5f5', color: '#666' }}
+        />
+      );
+    }
+
     switch (field.field_type) {
       case 'text':
       case 'phone':
@@ -386,12 +451,17 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
             filterOption={(input, option) =>
               option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
             }
+            notFoundContent={loading ? <Spin size="small" /> : (options.length === 0 ? "요금제가 없습니다" : null)}
           >
-            {options.map(option => (
-              <Option key={option.value} value={option.value}>
-                {option.label}
-              </Option>
-            ))}
+            {options.length > 0 ? (
+              options.map(option => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))
+            ) : (
+              <Option disabled value="no_options">요금제를 불러오는 중...</Option>
+            )}
           </Select>
         );
       
@@ -437,6 +507,9 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       case 'birth_date':
         return <DatePicker {...commonProps} style={{ width: '100%' }} placeholder="날짜를 선택하세요" />;
 
+      case 'datetime':
+        return <DatePicker {...commonProps} showTime style={{ width: '100%' }} placeholder="날짜와 시간을 선택하세요" />;
+
       case 'select':
       case 'join_type':
       case 'sim_type':
@@ -446,6 +519,7 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       case 'insurance':
       case 'course':
       case 'customer_type':
+      case 'subscription_type':
         return (
           <Select {...commonProps} loading={loading}>
             {field.field_options ? (
@@ -575,6 +649,17 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       pattern: /^01[0-9]-?[0-9]{4}-?[0-9]{4}$/,
       message: '올바른 전화번호 형식을 입력하세요. (예: 010-1234-5678)'
     });
+  }
+
+  // 완전히 숨겨야 하는 필드들 (백엔드에서만 처리)
+  const hiddenFields = [
+    'received_date',     // 접수일자 (백엔드에서 자동 설정)
+    'carrier',           // 통신사 (정책에서 자동 설정)
+    'subscription_type', // 가입유형 (백엔드에서 자동 설정)
+  ];
+  
+  if (hiddenFields.includes(field.field_name)) {
+    return null;
   }
 
   return (
