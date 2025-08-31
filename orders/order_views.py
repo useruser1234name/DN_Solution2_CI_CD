@@ -87,51 +87,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
     
-    @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        """주문 승인 (본사만 가능)"""
-        if not self._check_headquarters_permission(request):
-            return Response({
-                'error': '본사 권한이 필요합니다.'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        order = self.get_object()
-        
-        try:
-            order.approve(user=request.user)
-            return Response({
-                'message': '주문이 승인되었습니다.',
-                'status': order.status
-            })
-        except Exception as e:
-            logger.error(f"주문 승인 실패: {str(e)}")
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def final_approve(self, request, pk=None):
-        """최종 승인 - 정산 생성 트리거 (본사만 가능)"""
-        if not self._check_headquarters_permission(request):
-            return Response({
-                'error': '본사 권한이 필요합니다.'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        order = self.get_object()
-        
-        try:
-            with transaction.atomic():
-                order.final_approve(user=request.user)
-                
-            return Response({
-                'message': '주문이 최종 승인되었습니다. 정산이 생성되었습니다.',
-                'status': order.status
-            })
-        except Exception as e:
-            logger.error(f"최종 승인 실패: {str(e)}")
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+    # 승인/최종승인 엔드포인트는 요구사항에 따라 임시 비활성화되었습니다.
     
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):

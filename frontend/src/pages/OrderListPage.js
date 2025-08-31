@@ -12,6 +12,15 @@ const OrderListPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
+    const [dateRange, setDateRange] = useState(() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const today = `${yyyy}-${mm}-${dd}`;
+        return { start: today, end: today };
+    });
+    const [editedStatuses, setEditedStatuses] = useState({});
 
     console.log('[OrderListPage] 컴포넌트 렌더링', {
         user: user?.username,
@@ -76,9 +85,9 @@ const OrderListPage = () => {
         }
 
         try {
-            const response = await post(`orders/${orderId}/approve/`);
+            const response = await post(`api/orders/${orderId}/approve/`);
             if (response.success) {
-                alert('주문이 승인되었습니다.');
+                // 승인 성공 후 목록 새로고침 (알림 미표시)
                 fetchOrders();
             } else {
                 alert(response.message || '주문 승인에 실패했습니다.');
@@ -108,65 +117,61 @@ const OrderListPage = () => {
         }
     };
 
-    const handleUpdateStatus = async (orderId, status) => {
-        const statusName = {
-            'processing': '개통 준비중',
-            'shipped': '개통중',
-            'completed': '개통완료',
-            'cancelled': '개통취소'
-        }[status] || status;
+    // 백엔드 전이 규칙에 맞춰 중간 단계를 자동 진행
+    const validTransitions = {
+        'pending': ['approved', 'cancelled'],
+        'approved': ['processing', 'cancelled'],
+        'processing': ['shipped', 'cancelled'],
+        'shipped': ['completed', 'cancelled'],
+        'completed': ['final_approved', 'cancelled'],
+        'final_approved': [],
+        'cancelled': []
+    };
 
-        // 상태 변경 사유 입력 (취소의 경우 필수)
-        let reason = '';
-        if (status === 'cancelled') {
-            reason = prompt('취소 사유를 입력해주세요:');
-            if (reason === null) {
-                return; // 취소
-            }
-            if (!reason.trim()) {
-                alert('취소 사유는 필수입니다.');
-                return;
-            }
-        } else {
-            // 다른 상태는 선택적
-            reason = prompt(`주문 상태를 '${statusName}'로 변경하는 사유를 입력해주세요 (선택사항):`) || '';
+    const buildTransitionPath = (current, target) => {
+        if (current === target) return [];
+        // 간단한 단계적 경로 구성
+        const order = ['pending','approved','processing','shipped','completed','final_approved'];
+        const ci = order.indexOf(current);
+        const ti = order.indexOf(target);
+        if (ci === -1 || ti === -1) return [target];
+        if (ti < ci) return [target]; // 역방향(취소 등)은 단일 시도
+        const path = [];
+        for (let i = ci; i < ti; i++) {
+            const next = order[i+1];
+            if (!validTransitions[order[i]]?.includes(next)) break;
+            path.push(next);
         }
+        // 마지막 단계가 목표가 아니면 직접 목표도 시도
+        if (path[path.length - 1] !== target) path.push(target);
+        return path;
+    };
 
-        if (!window.confirm(`주문 상태를 '${statusName}'(으)로 변경하시겠습니까?`)) {
-            return;
-        }
-
+    const handleUpdateStatus = async (order, targetStatus) => {
         try {
-            const response = await post(`api/orders/${orderId}/update_status/`, { 
-                status,
-                reason: reason?.trim() || ''
-            });
-            if (response.success) {
-                alert(`주문 상태가 '${statusName}'(으)로 변경되었습니다.`);
-                fetchOrders();
-            } else {
-                alert(response.message || '상태 변경에 실패했습니다.');
+            const current = order.status;
+            const path = buildTransitionPath(current, targetStatus);
+            for (const step of path) {
+                await post(`api/orders/${order.id}/update_status/`, { status: step, reason: '' });
             }
+            setEditedStatuses(prev => ({ ...prev, [order.id]: undefined }));
+            fetchOrders();
         } catch (error) {
             console.error('[OrderListPage] 상태 변경 실패:', error);
             alert('상태 변경 중 오류가 발생했습니다.');
         }
     };
 
-    const getStatusBadge = (status) => {
-        const statusMap = {
-            'pending': { label: '접수대기', className: 'pending' },
-            'approved': { label: '승인됨', className: 'approved' },
-            'processing': { label: '개통준비중', className: 'processing' },
-            'shipped': { label: '개통중', className: 'shipped' },
-            'completed': { label: '개통완료', className: 'completed' },
-            'final_approved': { label: '승인(완료)', className: 'final-approved' },
-            'cancelled': { label: '개통취소', className: 'cancelled' }
-        };
-        
-        const statusInfo = statusMap[status] || { label: status, className: 'default' };
-        return <span className={`badge ${statusInfo.className}`}>{statusInfo.label}</span>;
-    };
+    const statusOptions = [
+        { value: 'pending', label: '접수대기' },
+        { value: 'approved', label: '접수준비' },
+        { value: 'processing', label: '접수중' },
+        { value: 'shipped', label: '접수 완료' },
+        { value: 'completed', label: '개통완료' },
+        { value: 'final_approved', label: '개통 승인' },
+        { value: 'cancelled', label: '개통취소' }
+    ];
+
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('ko-KR');
@@ -176,9 +181,26 @@ const OrderListPage = () => {
         return new Intl.NumberFormat('ko-KR').format(amount);
     };
 
+    const toYMD = (dateLike) => {
+        try {
+            const iso = typeof dateLike === 'string' && dateLike.includes(' ') ? dateLike.replace(' ', 'T') : dateLike;
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        } catch (_) {
+            return '';
+        }
+    };
+
     const filteredOrders = orders.filter(order => {
-        if (filter === 'all') return true;
-        return order.status === filter;
+        const statusOk = filter === 'all' ? true : order.status === filter;
+        const ymd = toYMD(order.created_at);
+        const afterStart = !dateRange.start || ymd >= dateRange.start;
+        const beforeEnd = !dateRange.end || ymd <= dateRange.end;
+        return statusOk && afterStart && beforeEnd;
     });
 
     if (loading) {
@@ -249,6 +271,37 @@ const OrderListPage = () => {
                         승인완료 ({orders.filter(o => o.status === 'final_approved').length})
                     </button>
                 </div>
+                <div className="filter-date" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label>주문일</label>
+                    <input 
+                        type="date" 
+                        value={dateRange.start} 
+                        onChange={(e) => setDateRange(r => ({ ...r, start: e.target.value }))}
+                    />
+                    <span>~</span>
+                    <input 
+                        type="date" 
+                        value={dateRange.end} 
+                        onChange={(e) => setDateRange(r => ({ ...r, end: e.target.value }))}
+                    />
+                    <button className="btn btn-small" onClick={() => setDateRange(() => {
+                        const d = new Date();
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const today = `${yyyy}-${mm}-${dd}`;
+                        return { start: today, end: today };
+                    })}>오늘</button>
+                    <button className="btn btn-small" onClick={() => setDateRange(() => {
+                        const d = new Date();
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const today = `${yyyy}-${mm}-${dd}`;
+                        const first = `${yyyy}-${mm}-01`;
+                        return { start: first, end: today };
+                    })}>이번달</button>
+                </div>
             </div>
 
             <div className="orders-container">
@@ -269,10 +322,11 @@ const OrderListPage = () => {
                         <table>
                             <thead>
                                 <tr>
-                                    <th>주문번호</th>
                                     <th>고객명</th>
-                                    <th>정책</th>
-                                    <th>금액</th>
+                                    <th>전화번호</th>
+                                    <th>정책명</th>
+                                    <th>요금제</th>
+                                    <th>약정기간</th>
                                     <th>상태</th>
                                     <th>주문일</th>
                                     <th>작업</th>
@@ -281,83 +335,37 @@ const OrderListPage = () => {
                             <tbody>
                                 {filteredOrders.map(order => (
                                     <tr key={order.id}>
-                                        <td>
-                                            <span className="order-number">#{order.order_number || order.id.slice(0, 8)}</span>
-                                        </td>
                                         <td>{order.customer_name || '-'}</td>
-                                        <td>{order.policy_name || '-'}</td>
-                                        <td className="amount">{formatAmount(order.amount || 0)}원</td>
-                                        <td>{getStatusBadge(order.status)}</td>
+                                        <td>{order.activation_phone || order.phone_number || '-'}</td>
+                                        <td>{order.policy_title || '-'}</td>
+                                        <td>{order.plan_name || '-'}</td>
+                                        <td>{order.contract_period_selected || '-'}</td>
+                                        <td>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <select
+                                                    value={editedStatuses[order.id] ?? order.status}
+                                                    onChange={(e) => setEditedStatuses(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                >
+                                                    {statusOptions.map(opt => (
+                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    className="btn btn-small btn-primary"
+                                                    onClick={() => handleUpdateStatus(order, editedStatuses[order.id] ?? order.status)}
+                                                >
+                                                    저장
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td>{formatDate(order.created_at)}</td>
                                         <td>
-                                            <div className="action-buttons">
-                                                <button 
-                                                    className="btn btn-small btn-secondary"
-                                                    onClick={() => handleViewOrder(order.id)}
-                                                >
-                                                    보기
-                                                </button>
-                                                {order.status === 'pending' && (
-                                                    <PermissionGuard permission="canApproveOrders">
-                                                        <button 
-                                                            className="btn btn-small btn-success"
-                                                            onClick={() => handleApproveOrder(order.id)}
-                                                        >
-                                                            승인
-                                                        </button>
-                                                    </PermissionGuard>
-                                                )}
-                                                {order.status === 'approved' && (
-                                                    <PermissionGuard permission="canApproveOrders">
-                                                        <button 
-                                                            className="btn btn-small btn-info"
-                                                            onClick={() => handleUpdateStatus(order.id, 'processing')}
-                                                        >
-                                                            개통준비
-                                                        </button>
-                                                    </PermissionGuard>
-                                                )}
-                                                {order.status === 'processing' && (
-                                                    <PermissionGuard permission="canApproveOrders">
-                                                        <button 
-                                                            className="btn btn-small btn-info"
-                                                            onClick={() => handleUpdateStatus(order.id, 'shipped')}
-                                                        >
-                                                            개통시작
-                                                        </button>
-                                                    </PermissionGuard>
-                                                )}
-                                                {order.status === 'shipped' && (
-                                                    <PermissionGuard permission="canApproveOrders">
-                                                        <button 
-                                                            className="btn btn-small btn-success"
-                                                            onClick={() => handleUpdateStatus(order.id, 'completed')}
-                                                        >
-                                                            개통완료
-                                                        </button>
-                                                    </PermissionGuard>
-                                                )}
-                                                {order.status === 'completed' && (
-                                                    <PermissionGuard permission="canApproveOrders">
-                                                        <button 
-                                                            className="btn btn-small btn-primary"
-                                                            onClick={() => handleFinalApprove(order.id)}
-                                                        >
-                                                            최종승인
-                                                        </button>
-                                                    </PermissionGuard>
-                                                )}
-                                                {(order.status === 'pending' || order.status === 'approved' || order.status === 'processing' || order.status === 'shipped') && (
-                                                    <PermissionGuard permission="canApproveOrders">
-                                                        <button 
-                                                            className="btn btn-small btn-danger"
-                                                            onClick={() => handleUpdateStatus(order.id, 'cancelled')}
-                                                        >
-                                                            취소
-                                                        </button>
-                                                    </PermissionGuard>
-                                                )}
-                                            </div>
+                                            <button 
+                                                className="btn btn-small btn-secondary"
+                                                onClick={() => handleViewOrder(order.id)}
+                                            >
+                                                자세히 보기
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

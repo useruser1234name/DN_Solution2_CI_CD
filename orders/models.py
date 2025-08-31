@@ -475,9 +475,13 @@ class Order(models.Model):
                 settlement.save()
                 logger.info(f"주문 취소로 인한 정산 취소: {settlement.id}")
         
-        # 최종 승인 시 알림 발송 (추후 구현)
+        # 최종 승인 시 정산 생성 트리거 및 알림 로깅
         if new_status == 'final_approved':
-            logger.info(f"주문 최종 승인 알림 발송 대상: {self.customer_name}")
+            try:
+                self._create_settlements()
+                logger.info(f"주문 최종 승인으로 정산 생성 트리거 완료: {self.customer_name}")
+            except Exception as e:
+                logger.error(f"최종 승인 정산 생성 실패: {str(e)}")
     
     def _create_status_history(self, old_status, new_status, user, reason=None):
         """상태 변경 이력 생성"""
