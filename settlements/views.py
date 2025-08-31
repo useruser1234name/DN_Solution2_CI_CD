@@ -512,66 +512,142 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 'num_format': 'yyyy-mm-dd'
             })
             
-            # 헤더 작성
+            # 헤더 작성(고객/단말 상세 포함)
             headers = [
-                '번호', '정산번호', '주문번호', '업체명', '업체유형', 
-                '정산액', '상태', '생성일', '지급일', '정책명', '통신사', '비고'
+                # 기본/요약
+                '접수일', '판매점', '정책명',
+                # 고객정보
+                '고객명', '생년월일(마스킹)', '개통번호', '주소', '통신사', '가입유형',
+                # 상품/약정
+                '요금제', '선택약정',
+                # 단말/USIM
+                '모델명', 'IMEI1', 'IMEI2', 'EID', 'USIM 모델', 'USIM 일련번호',
+                # 정산 요약
+                '총 수수료', '그레이드(레벨/보너스)', '대리점 정산', '판매점 수수료'
             ]
             
             for col, header in enumerate(headers):
                 worksheet.write(0, col, header, header_format)
             
             # 컬럼 너비 설정
-            worksheet.set_column(0, 0, 8)   # 번호
-            worksheet.set_column(1, 1, 15)  # 정산번호
-            worksheet.set_column(2, 2, 15)  # 주문번호
-            worksheet.set_column(3, 3, 20)  # 업체명
-            worksheet.set_column(4, 4, 12)  # 업체유형
-            worksheet.set_column(5, 5, 15)  # 정산액
-            worksheet.set_column(6, 6, 12)  # 상태
-            worksheet.set_column(7, 7, 12)  # 생성일
-            worksheet.set_column(8, 8, 12)  # 지급일
-            worksheet.set_column(9, 9, 25)  # 정책명
-            worksheet.set_column(10, 10, 10) # 통신사
-            worksheet.set_column(11, 11, 30) # 비고
+            worksheet.set_column(0, 0, 14)   # 접수일
+            worksheet.set_column(1, 1, 20)   # 판매점
+            worksheet.set_column(2, 2, 22)   # 정책명
+            worksheet.set_column(3, 3, 12)   # 고객명
+            worksheet.set_column(4, 4, 14)   # 생년월일
+            worksheet.set_column(5, 5, 16)   # 개통번호
+            worksheet.set_column(6, 6, 24)   # 주소
+            worksheet.set_column(7, 7, 10)   # 통신사
+            worksheet.set_column(8, 8, 12)   # 가입유형
+            worksheet.set_column(9, 9, 18)   # 요금제
+            worksheet.set_column(10, 10, 10) # 선택약정
+            worksheet.set_column(11, 11, 18) # 모델명
+            worksheet.set_column(12, 12, 18) # IMEI1
+            worksheet.set_column(13, 13, 18) # IMEI2
+            worksheet.set_column(14, 14, 22) # EID
+            worksheet.set_column(15, 15, 18) # USIM 모델
+            worksheet.set_column(16, 16, 20) # USIM 일련번호
+            worksheet.set_column(17, 17, 14) # 총 수수료
+            worksheet.set_column(18, 18, 18) # 그레이드(레벨/보너스)
+            worksheet.set_column(19, 19, 16) # 대리점 정산
+            worksheet.set_column(20, 20, 16) # 판매점 수수료
             
             # 데이터 작성 (QuerySet을 리스트로 변환)
-            settlements_list = list(queryset)
+            settlements_list = list(queryset.select_related('order','order__policy','company'))
+            from settlements.serializers import SettlementSerializer
+            from datetime import datetime as _dt
+            def _to_date(val):
+                try:
+                    return _dt.fromisoformat(val).date() if isinstance(val, str) else (val.date() if hasattr(val, 'date') else val)
+                except Exception:
+                    return None
+
+            def _mask_birth(ssn_or_birth: str):
+                try:
+                    if not ssn_or_birth:
+                        return '-'
+                    s = str(ssn_or_birth)
+                    digits = ''.join(ch for ch in s if ch.isdigit())
+                    if len(digits) >= 6:
+                        return digits[:6]
+                    return s[:4] + '**' if len(s) > 4 else s
+                except Exception:
+                    return '-'
+
+            def _mask_phone(phone: str):
+                try:
+                    if not phone:
+                        return '-'
+                    p = ''.join(ch for ch in str(phone) if ch.isdigit())
+                    if len(p) >= 7:
+                        return f"{p[:3]}-****-{p[-4:]}"
+                    return phone
+                except Exception:
+                    return '-'
+
             for row, settlement in enumerate(settlements_list, 1):
-                # 상태 한글 변환
-                status_map = {
-                    'pending': '정산 대기',
-                    'approved': '정산 승인',
-                    'paid': '입금 완료',
-                    'unpaid': '미입금',
-                    'cancelled': '취소됨'
-                }
-                
-                # 업체 유형 한글 변환
-                company_type_map = {
-                    'headquarters': '본사',
-                    'agency': '협력사',
-                    'retail': '판매점'
-                }
-                
-                worksheet.write(row, 0, row, cell_format)  # 번호
-                worksheet.write(row, 1, str(settlement.id)[:8], cell_format)  # 정산번호
-                worksheet.write(row, 2, str(settlement.order.id)[:8] if settlement.order else '-', cell_format)  # 주문번호
-                worksheet.write(row, 3, settlement.company.name if settlement.company else '-', cell_format)  # 업체명
-                worksheet.write(row, 4, company_type_map.get(settlement.company.type, settlement.company.type) if settlement.company else '-', cell_format)  # 업체유형
-                worksheet.write(row, 5, float(settlement.rebate_amount or 0), number_format)  # 정산액
-                worksheet.write(row, 6, status_map.get(settlement.status, settlement.status), cell_format)  # 상태
-                worksheet.write(row, 7, settlement.created_at.date(), date_format)  # 생성일
-                worksheet.write(row, 8, settlement.paid_at.date() if settlement.paid_at else '-', cell_format)  # 지급일
-                worksheet.write(row, 9, settlement.order.policy.title if settlement.order and settlement.order.policy else '-', cell_format)  # 정책명
-                worksheet.write(row, 10, settlement.order.policy.carrier if settlement.order and settlement.order.policy else '-', cell_format)  # 통신사
-                worksheet.write(row, 11, settlement.notes or '-', cell_format)  # 비고
+                ser = SettlementSerializer(settlement)
+                data = ser.data
+                order_info = data.get('order_info') or {}
+                # 안전한 order_data 추출
+                order_data = {}
+                _order = getattr(settlement, 'order', None)
+                if _order is not None:
+                    try:
+                        _od = getattr(_order, 'order_data', None)
+                        if isinstance(_od, dict):
+                            order_data = _od
+                        else:
+                            order_data = {}
+                    except Exception:
+                        order_data = {}
+
+                # 접수일
+                recv_date = _to_date(data.get('received_date') or order_info.get('created_at'))
+                worksheet.write(row, 0, recv_date if recv_date else '-', date_format if recv_date else cell_format)
+                # 판매점
+                worksheet.write(row, 1, data.get('company_name') or '-', cell_format)
+                # 정책명
+                pol_title = settlement.order.policy.title if (getattr(settlement, 'order', None) and getattr(settlement.order, 'policy', None)) else '-'
+                worksheet.write(row, 2, pol_title, cell_format)
+                # 고객명
+                cust_name = order_info.get('customer_name') or order_data.get('customer_name') or getattr(_order, 'customer_name', None)
+                worksheet.write(row, 3, cust_name or '-', cell_format)
+
+                # 생년월일/주민번호 소스
+                birth_src = order_data.get('birth_date') or order_data.get('ssn') or getattr(_order, 'ssn', None)
+                worksheet.write(row, 4, _mask_birth(birth_src), cell_format)
+                phone_src = order_info.get('customer_phone') or order_data.get('customer_phone') or getattr(_order, 'customer_phone', None)
+                worksheet.write(row, 5, _mask_phone(phone_src), cell_format)
+                worksheet.write(row, 6, order_data.get('customer_address') or getattr(_order, 'customer_address', '-') or '-', cell_format)
+                worksheet.write(row, 7, order_info.get('carrier') or getattr(_order, 'carrier', '-') or '-', cell_format)
+                worksheet.write(row, 8, order_info.get('subscription_type') or getattr(_order, 'subscription_type', '-') or '-', cell_format)
+                # 요금제 / 선택약정
+                worksheet.write(row, 9, data.get('plan_name') or order_info.get('plan_name') or order_data.get('plan_name') or getattr(_order,'plan_name', '-') or '-', cell_format)
+                worksheet.write(row, 10, data.get('contract_period') or order_info.get('contract_period') or order_data.get('contract_period') or getattr(_order,'contract_period_selected','-') or '-', cell_format)
+                # 단말/USIM
+                worksheet.write(row, 11, order_data.get('device_model') or getattr(_order,'device_model', '-') or '-', cell_format)
+                worksheet.write(row, 12, order_data.get('imei') or getattr(_order,'imei', '-') or '-', cell_format)
+                worksheet.write(row, 13, order_data.get('imei2') or getattr(_order,'imei2', '-') or '-', cell_format)
+                worksheet.write(row, 14, order_data.get('eid') or getattr(_order,'eid', '-') or '-', cell_format)
+                worksheet.write(row, 15, order_data.get('sim_model') or getattr(_order,'sim_model', '-') or '-', cell_format)
+                worksheet.write(row, 16, order_data.get('sim_serial_number') or getattr(_order,'sim_serial_number', '-') or '-', cell_format)
+                # 정산 요약
+                worksheet.write(row, 17, float(data.get('total_commission') or 0), number_format)
+                grade_level = int(data.get('grade_level') or 0)
+                grade_bonus = float(data.get('grade_bonus') or 0)
+                worksheet.write(row, 18, f"L{grade_level} / {grade_bonus:,.0f}", cell_format)
+                worksheet.write(row, 19, float(data.get('agency_commission') or 0), number_format)
+                worksheet.write(row, 20, float(data.get('retail_commission') or 0), number_format)
             
             # 요약 정보 추가
             data_count = len(settlements_list)
             summary_row = data_count + 2
-            worksheet.write(summary_row, 3, '합계:', header_format)
-            worksheet.write(summary_row, 5, f'=SUM(F2:F{data_count+1})', number_format)
+            worksheet.write(summary_row, 0, '합계', header_format)
+            # 총 수수료(R), 대리점 정산(T), 판매점 수수료(U)
+            worksheet.write(summary_row, 17, f'=SUM(R2:R{data_count+1})', number_format)
+            worksheet.write(summary_row, 19, f'=SUM(T2:T{data_count+1})', number_format)
+            worksheet.write(summary_row, 20, f'=SUM(U2:U{data_count+1})', number_format)
             
             workbook.close()
             output.seek(0)
@@ -583,7 +659,8 @@ class SettlementViewSet(viewsets.ModelViewSet):
             )
             
             # 파일명 생성
-            filename = f'정산내역_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            from django.utils import timezone as _tz
+            filename = f'정산내역_{_tz.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             
             logger.info(f"엑셀 내보내기 완료: {request.user.username}, 건수: {data_count}")

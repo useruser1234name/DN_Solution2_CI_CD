@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,11 +21,18 @@ const SettlementListPage = () => {
         paid: 0
     });
     const [exportLoading, setExportLoading] = useState(false);
-    const [searchFilters, setSearchFilters] = useState({
-        startDate: '',
-        endDate: '',
-        status: 'all',
-        dateColumn: 'created_at'  // 기본값: 생성일
+    const [searchFilters, setSearchFilters] = useState(() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const today = `${yyyy}-${mm}-${dd}`;
+        return {
+            startDate: today,
+            endDate: today,
+            status: 'all',
+            dateColumn: 'created_at'
+        };
     });
 
     console.log('[SettlementListPage] 컴포넌트 렌더링', {
@@ -86,7 +94,8 @@ const SettlementListPage = () => {
     };
 
     useEffect(() => {
-        fetchSettlements();
+        handleSearch();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleViewReport = () => {
@@ -306,12 +315,7 @@ const SettlementListPage = () => {
                     <p>정산 내역을 조회하고 관리할 수 있습니다.</p>
                 </div>
                 <div className="header-actions">
-                    <button 
-                        className="btn btn-secondary"
-                        onClick={handleViewReport}
-                    >
-                        📊 정산 보고서
-                    </button>
+   
                 </div>
             </div>
 
@@ -459,132 +463,40 @@ const SettlementListPage = () => {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th className="col-number">번호</th>
-                                        <th className="col-settlement-id">정산번호</th>
-                                        <th className="col-order-id">주문번호</th>
-                                        <th className="col-company">판매점</th>
-                                        <th className="col-carrier">통신사</th>
-                                        <th className="col-subscription">가입유형</th>
-                                        <th className="col-customer">명의자</th>
-                                        <th className="col-phone">개통번호</th>
-                                        <th className="col-plan">요금제</th>
-                                        <th className="col-contract">선택약정</th>
-                                        <th className="col-order-status">주문상태</th>
-                                        <th className="col-amount">정산액</th>
-                                        <th className="col-status">정산상태</th>
                                         <th className="col-date">접수일</th>
-                                        <th className="col-activation">개통일</th>
-                                        <th className="col-payment-date">지급일</th>
-                                        <th className="col-actions">작업</th>
+                                        <th className="col-company">판매점</th>
+                                        <th className="col-plan">요금제</th>
+                                        <th className="col-total-commission">총 수수료</th>
+                                        <th className="col-grade">그레이드(레벨/보너스)</th>
+                                        <th className="col-agency">대리점 정산</th>
+                                        <th className="col-retail">판매점 수수료</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredSettlements.map((settlement, index) => (
+                                    {filteredSettlements.map((settlement) => (
                                         <tr key={settlement.id} className="data-row">
-                                            <td className="col-number">
-                                                <span className="row-number">{index + 1}</span>
-                                            </td>
-                                            <td className="col-settlement-id">
-                                                <span className="settlement-number">
-                                                    #{settlement.settlement_number || settlement.id.slice(0, 8)}
-                                                </span>
-                                            </td>
-                                            <td className="col-order-id">
-                                                <span className="order-number">
-                                                    {settlement.order_info?.order_number || settlement.order_info?.id?.slice(0, 8) || '-'}
-                                                </span>
+                                            <td className="col-date">
+                                                <span className="date-value">{settlement.received_date ? formatDate(settlement.received_date) : (settlement.order_info?.created_at ? formatDate(settlement.order_info.created_at) : '-')}</span>
                                             </td>
                                             <td className="col-company">
-                                                <span className="company-name">
-                                                    {settlement.company_name || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-carrier">
-                                                <span className="carrier-name">
-                                                    {settlement.order_info?.carrier || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-subscription">
-                                                <span className="subscription-type">
-                                                    {settlement.order_info?.subscription_type || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-customer">
-                                                <span className="customer-name">
-                                                    {settlement.order_info?.customer_name || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-phone">
-                                                <span className="phone-number">
-                                                    {settlement.order_info?.customer_phone || '-'}
-                                                </span>
+                                                <span className="company-name">{settlement.company_name || '-'}</span>
                                             </td>
                                             <td className="col-plan">
                                                 <span className="plan-name">
-                                                    {settlement.order_info?.plan_name || '-'}
+                                                    {settlement.plan_name || settlement.order_info?.plan_name || '-'}
                                                 </span>
                                             </td>
-                                            <td className="col-contract">
-                                                <span className="contract-period">
-                                                    {settlement.order_info?.contract_period ? `${settlement.order_info.contract_period}개월` : '-'}
-                                                </span>
+                                            <td className="col-total-commission">
+                                                <span className="amount-value">{formatAmount(settlement.total_commission || 0)}원</span>
                                             </td>
-                                            <td className="col-order-status">
-                                                <span className="order-status">
-                                                    {settlement.order_info?.status || '-'}
-                                                </span>
+                                            <td className="col-grade">
+                                                <span className="amount-value">L{settlement.grade_level ?? 0} / {formatAmount(settlement.grade_bonus || 0)}원</span>
                                             </td>
-                                            <td className="col-amount">
-                                                <span className="amount-value">
-                                                    {formatAmount(settlement.rebate_amount || 0)}원
-                                                </span>
+                                            <td className="col-agency">
+                                                <span className="amount-value">{formatAmount(settlement.agency_commission || 0)}원</span>
                                             </td>
-                                            <td className="col-status">
-                                                {getStatusBadge(settlement.status)}
-                                            </td>
-                                            <td className="col-date">
-                                                <span className="date-value">
-                                                    {settlement.order_info?.created_at ? formatDate(settlement.order_info.created_at) : '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-activation">
-                                                <span className="date-value">
-                                                    {settlement.order_info?.activation_date ? formatDate(settlement.order_info.activation_date) : '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-payment-date">
-                                                <span className="date-value">
-                                                    {settlement.paid_at ? formatDate(settlement.paid_at) : '-'}
-                                                </span>
-                                            </td>
-                                            <td className="col-actions">
-                                                <div className="action-buttons">
-                                                    {settlement.status === 'pending' && (
-                                                        <PermissionGuard permission="canManageSettlements">
-                                                            <button 
-                                                                className="btn btn-small btn-success"
-                                                                onClick={() => handleApproveSettlement(settlement.id)}
-                                                                title="정산 승인"
-                                                            >
-                                                                승인
-                                                            </button>
-                                                        </PermissionGuard>
-                                                    )}
-                                                    {settlement.status === 'approved' && (
-                                                        <PermissionGuard permission="canManageSettlements">
-                                                            <button 
-                                                                className="btn btn-small btn-primary"
-                                                                onClick={() => handlePaySettlement(settlement.id)}
-                                                                title="지급 완료 처리"
-                                                            >
-                                                                지급완료
-                                                            </button>
-                                                        </PermissionGuard>
-                                                    )}
-                                                    {settlement.status === 'paid' && (
-                                                        <span className="completed-mark">✓</span>
-                                                    )}
-                                                </div>
+                                            <td className="col-retail">
+                                                <span className="amount-value">{formatAmount(settlement.retail_commission || 0)}원</span>
                                             </td>
                                         </tr>
                                     ))}

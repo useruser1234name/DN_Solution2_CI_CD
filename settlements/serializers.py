@@ -38,6 +38,15 @@ class SettlementSerializer(serializers.ModelSerializer):
     status_history = serializers.SerializerMethodField()
     can_mark_paid = serializers.SerializerMethodField()
     can_mark_unpaid = serializers.SerializerMethodField()
+    # 확장 필드(목록/엑셀 공통)
+    received_date = serializers.SerializerMethodField()
+    plan_name = serializers.SerializerMethodField()
+    contract_period = serializers.SerializerMethodField()
+    grade_level = serializers.SerializerMethodField()
+    grade_bonus = serializers.SerializerMethodField()
+    total_commission = serializers.SerializerMethodField()
+    agency_commission = serializers.SerializerMethodField()
+    retail_commission = serializers.SerializerMethodField()
     
     class Meta:
         model = Settlement
@@ -47,7 +56,11 @@ class SettlementSerializer(serializers.ModelSerializer):
             'approved_by', 'approved_by_name', 'approved_at', 'paid_at', 'rebate_due_date',
             'payment_method', 'payment_reference', 'expected_payment_date',  # 새로운 필드
             'notes', 'status_history', 'can_mark_paid', 'can_mark_unpaid',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at',
+            # 확장 표시 필드
+            'received_date', 'plan_name', 'contract_period',
+            'grade_level', 'grade_bonus', 'total_commission',
+            'agency_commission', 'retail_commission'
         ]
         read_only_fields = ['approved_at', 'paid_at', 'created_at', 'updated_at']
     
@@ -102,6 +115,89 @@ class SettlementSerializer(serializers.ModelSerializer):
     def get_can_mark_unpaid(self, obj):
         """미입금 처리 가능 여부"""
         return obj.status == 'approved'
+
+    # ===== 확장 필드 구현 =====
+    def get_received_date(self, obj):
+        try:
+            return obj.order.created_at.isoformat()
+        except Exception:
+            return None
+
+    def get_plan_name(self, obj):
+        try:
+            if getattr(obj.order, 'plan_name', None):
+                return obj.order.plan_name
+            if obj.order.order_data:
+                return obj.order.order_data.get('plan_name')
+        except Exception:
+            pass
+        return None
+
+    def get_contract_period(self, obj):
+        try:
+            if getattr(obj.order, 'contract_period_selected', None):
+                return obj.order.contract_period_selected
+            if obj.order.order_data:
+                return obj.order.order_data.get('contract_period')
+        except Exception:
+            pass
+        return None
+
+    def _get_grade_tracking(self, obj):
+        try:
+            from .models import CommissionGradeTracking
+            from django.utils import timezone
+            today = timezone.now().date()
+            return CommissionGradeTracking.objects.filter(
+                company=obj.company,
+                policy=obj.order.policy,
+                period_start__lte=today,
+                period_end__gte=today,
+                is_active=True
+            ).first()
+        except Exception:
+            return None
+
+    def get_grade_level(self, obj):
+        tracking = self._get_grade_tracking(obj)
+        return getattr(tracking, 'achieved_grade_level', 0) if tracking else 0
+
+    def get_grade_bonus(self, obj):
+        tracking = self._get_grade_tracking(obj)
+        try:
+            return float(getattr(tracking, 'bonus_per_order', 0)) if tracking else 0
+        except Exception:
+            return 0
+
+    def get_total_commission(self, obj):
+        try:
+            return float(obj.rebate_amount) + float(self.get_grade_bonus(obj))
+        except Exception:
+            return float(obj.rebate_amount or 0)
+
+    def get_agency_commission(self, obj):
+        """협력사 정산액(본사→협력사)."""
+        try:
+            total = float(obj.order.rebate_amount or 0)
+            if getattr(obj.company, 'type', '') == 'agency':
+                return float(obj.rebate_amount or 0)
+            if getattr(obj.company, 'type', '') == 'retail':
+                return max(0.0, total - float(obj.rebate_amount or 0))
+            return 0.0
+        except Exception:
+            return 0.0
+
+    def get_retail_commission(self, obj):
+        """판매점 수수료(협력사→판매점)."""
+        try:
+            total = float(obj.order.rebate_amount or 0)
+            if getattr(obj.company, 'type', '') == 'retail':
+                return float(obj.rebate_amount or 0)
+            if getattr(obj.company, 'type', '') == 'agency':
+                return max(0.0, total - float(obj.rebate_amount or 0))
+            return 0.0
+        except Exception:
+            return 0.0
 
 
 class PaymentUpdateSerializer(serializers.Serializer):
