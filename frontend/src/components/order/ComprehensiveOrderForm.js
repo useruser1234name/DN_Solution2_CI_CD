@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Form, 
   Button, 
@@ -23,7 +23,7 @@ import EnhancedRebateCalculator from './EnhancedRebateCalculator';
 
 import './ComprehensiveOrderForm.css';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const ComprehensiveOrderForm = ({ 
   policyId, 
@@ -58,8 +58,37 @@ const ComprehensiveOrderForm = ({
     }
   }, [policyId, formTemplate]);
 
+  // 폼 자동 채움: 정책/사용자 의존값이 준비되면 auto_fill 지정 필드에 값 주입
+  useEffect(() => {
+    if (!fields || fields.length === 0 || !form) return;
+    const values = {};
+    fields.forEach(f => {
+      if (!f.auto_fill && !f.auto_generate) return;
+      if (f.auto_generate && f.field_name === 'order_number') return; // 백엔드 생성
+      if (f.auto_fill === 'current_datetime') {
+        values[f.field_name] = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      } else if (f.auto_fill === 'current_user') {
+        if (['company_code','agency_code','primary_id','first_id'].includes(f.field_name)) {
+          values[f.field_name] = user?.company?.code || '';
+        } else if (f.field_name === 'retailer_name') {
+          values[f.field_name] = user?.company?.name || '';
+        } else {
+          values[f.field_name] = user?.username || '';
+        }
+      } else if (f.auto_fill === 'from_policy') {
+        if (f.field_name === 'carrier') values[f.field_name] = policy?.carrier || '';
+        if (f.field_name === 'subscription_type') values[f.field_name] = policy?.join_type || '';
+        if (f.field_name === 'reference_url') values[f.field_name] = policy?.external_url || '';
+      }
+    });
+    if (Object.keys(values).length > 0) {
+      // 필드 마운트 이후 안전하게 주입
+      setTimeout(() => form.setFieldsValue(values), 0);
+    }
+  }, [fields, policy, user, form]);
+
   // 정책 정보만 로드하는 함수
-  const loadPolicyOnly = async () => {
+  const loadPolicyOnly = useCallback(async () => {
     setLoading(true);
     try {
       console.log('[ComprehensiveOrderForm] 정책 정보만 로딩 시작:', policyId);
@@ -97,9 +126,9 @@ const ComprehensiveOrderForm = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [policyId, form]);
 
-  const loadPolicyAndTemplate = async () => {
+  const loadPolicyAndTemplate = useCallback(async () => {
     setLoading(true);
     try {
       console.log('[ComprehensiveOrderForm] 정책 및 템플릿 로딩 시작:', policyId);
@@ -161,7 +190,7 @@ const ComprehensiveOrderForm = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [policyId, form]);
 
   // 템플릿 데이터 처리 함수
   const processTemplate = (templateData) => {
@@ -323,10 +352,12 @@ const ComprehensiveOrderForm = ({
         <Card 
           title="주문서 입력"
           className="form-card"
-          headStyle={{ 
-            background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-            color: 'white',
-            borderRadius: '8px 8px 0 0'
+          styles={{
+            header: {
+              background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+              color: 'white',
+              borderRadius: '8px 8px 0 0'
+            }
           }}
         >
           <Row gutter={[24, 16]}>
@@ -341,6 +372,7 @@ const ComprehensiveOrderForm = ({
                       policy_carrier: policy?.carrier, // 정책의 통신사 정보 전달
                       policy_id: policy?.id, // 정책 ID 전달
                       policy_contract_period: policy?.contract_period, // 정책의 계약기간 전달
+                      policy_external_url: policy?.external_url, // 정책 외부 URL 전달
                       company_code: user?.company?.code, // 업체코드 전달
                       current_user: user?.username // 현재 사용자 전달
                     }}

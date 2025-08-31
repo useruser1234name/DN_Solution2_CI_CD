@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ToggleSwitch from '../components/common/ToggleSwitch';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { post } from '../services/api';
@@ -16,6 +17,7 @@ const PolicyCreatePage = () => {
         title: '',
         description: '',
         carrier: 'skt',
+        external_url: '',
         is_active: true,
         grade_period_type: 'monthly'
     });
@@ -176,6 +178,21 @@ const PolicyCreatePage = () => {
                     </div>
 
                     <div className="form-group">
+                        <label htmlFor="external_url">정책 URL</label>
+                        <input
+                            type="url"
+                            id="external_url"
+                            name="external_url"
+                            value={formData.external_url}
+                            onChange={handleChange}
+                            disabled={loading}
+                            placeholder="정책 URL을 입력하세요"
+                            inputMode="url"
+                            pattern="https?://.+"
+                        />
+                    </div>
+
+                    <div className="form-group">
                         <label htmlFor="carrier">통신사 *</label>
                         <select
                             id="carrier"
@@ -235,19 +252,17 @@ const PolicyCreatePage = () => {
                 {/* 정책 활성화 설정 */}
                 <div className="form-section">
                     <h3>정책 활성화 설정</h3>
-                    
-                    <div className="form-group checkbox-group">
-                        <label>
-                            <input
-                                type="checkbox"
-                                name="is_active"
+                    <div className="form-group">
+                        <div>
+                            <ToggleSwitch
                                 checked={formData.is_active}
-                                onChange={handleChange}
+                                onChange={(next) => setFormData(prev => ({ ...prev, is_active: next }))}
                                 disabled={loading}
+                                onColor="#4caf50"
+                                offColor="#d9d9d9"
                             />
-                            정책 활성화
-                        </label>
-                        <span className="field-hint">체크하면 정책이 활성화됩니다.</span>
+                        </div>
+                        <span className="field-hint">활성화 시 정책이 즉시 사용 및 노출됩니다.</span>
                     </div>
                 </div>
 

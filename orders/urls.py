@@ -9,7 +9,8 @@ from .order_views import OrderViewSet, OrderMemoViewSet, InvoiceViewSet
 
 # DRF 라우터 설정
 router = DefaultRouter()
-router.register(r'orders', OrderViewSet, basename='order')
+# 기본 경로로 등록하여 /api/orders/ 가 리스트/생성 엔드포인트가 되도록 정리
+router.register(r'', OrderViewSet, basename='order')
 router.register(r'order-memos', OrderMemoViewSet, basename='order-memo')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 

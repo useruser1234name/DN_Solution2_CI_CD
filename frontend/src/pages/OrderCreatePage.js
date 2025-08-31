@@ -35,7 +35,7 @@ const OrderCreatePage = () => {
     const fetchPolicies = async () => {
         try {
             console.log('[OrderCreatePage] 정책 목록 가져오기 시작...');
-            const response = await get('api/policies/');
+            const response = await get('api/policies/?only_active=1');
             console.log('[OrderCreatePage] 정책 API 응답:', response);
             
             if (response.success && response.data) {
@@ -67,19 +67,8 @@ const OrderCreatePage = () => {
                     console.log('[OrderCreatePage] expose:', firstPolicy.expose);
                 }
                 
-                // 활성화된 정책만 필터링 (status가 'active'이고 expose가 true인 정책)
-                const activePolicies = policiesData.filter(p => {
-                    console.log(`[OrderCreatePage] 정책 ${p.title || p.id} 필터링:`, {
-                        status: p.status,
-                        expose: p.expose,
-                        statusCheck: p.status === 'active',
-                        exposeCheck: p.expose === true
-                    });
-                    return p.status === 'active' && p.expose === true;
-                });
-                console.log('[OrderCreatePage] 활성 정책 필터링 결과:', activePolicies);
-                
-                setPolicies(activePolicies);
+                // 백엔드에서 only_active=1을 적용하므로 추가 필터 없이 그대로 사용
+                setPolicies(policiesData);
             } else {
                 console.warn('[OrderCreatePage] 정책 데이터 없음:', response);
             }
@@ -95,7 +84,7 @@ const OrderCreatePage = () => {
         
         // 정책의 주문서 템플릿 가져오기
         try {
-            const response = await get(`policies/${policyId}/form-template/`);
+            const response = await get(`api/policies/${policyId}/form-template/`);
             if (response.success && response.data) {
                 // 템플릿에 따라 초기 폼 데이터 설정
                 const initialData = {};

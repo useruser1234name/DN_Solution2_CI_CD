@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { get } from '../services/api';
 import { Card, Select, Typography, message, Spin } from 'antd';
-import { ShoppingCartOutlined, UserOutlined } from '@ant-design/icons';
+import { UserOutlined } from '@ant-design/icons';
 import ComprehensiveOrderForm from '../components/order/ComprehensiveOrderForm';
 import './OrderCreatePage.css';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 const OrderCreatePageNew = () => {
@@ -28,7 +28,7 @@ const OrderCreatePageNew = () => {
             console.log('[OrderCreatePageNew] 정책 목록 가져오기 시작...');
             setLoading(true);
             
-            const response = await get('api/policies/');
+            const response = await get('api/policies/?only_active=1');
             console.log('[OrderCreatePageNew] 정책 API 응답:', response);
             
             if (response.success && response.data) {
@@ -65,19 +65,8 @@ const OrderCreatePageNew = () => {
                 
                 console.log('[OrderCreatePageNew] 파싱된 정책 데이터:', policiesData);
                 
-                // 활성화된 정책만 필터링 (draft 상태도 포함)
-                const activePolicies = policiesData.filter(p => {
-                    console.log(`[OrderCreatePageNew] 정책 ${p.title || p.id} 필터링:`, {
-                        status: p.status,
-                        expose: p.expose
-                    });
-                    // draft 상태도 허용하고, expose가 true이거나 undefined인 경우도 포함
-                    return (p.status === 'active' || p.status === 'draft') && 
-                           (p.expose === true || p.expose === undefined);
-                });
-                
-                console.log('[OrderCreatePageNew] 활성 정책 필터링 결과:', activePolicies);
-                setPolicies(activePolicies);
+                // 백엔드에서 only_active=1을 적용하므로 추가 필터 없이 그대로 사용
+                setPolicies(policiesData);
             } else {
                 console.warn('[OrderCreatePageNew] 정책 데이터 없음:', response);
                 message.warning('사용 가능한 정책이 없습니다.');
@@ -124,7 +113,18 @@ const OrderCreatePageNew = () => {
                 is_required: isRequired,
                 order: order,
                 placeholder: placeholder,
-                field_options: fieldOptions
+                field_options: fieldOptions,
+                // 확장 메타 전달
+                is_readonly: field.is_readonly || false,
+                is_masked: field.is_masked || false,
+                auto_fill: field.auto_fill || '',
+                auto_generate: field.auto_generate || false,
+                allow_manual: field.allow_manual !== undefined ? field.allow_manual : true,
+                data_source: field.data_source || '',
+                rows: field.rows || 3,
+                multiple: field.multiple || false,
+                max_files: field.max_files || 4,
+                accept: field.accept || 'image/*,.pdf,.doc,.docx'
             };
         });
     };
@@ -224,7 +224,7 @@ const OrderCreatePageNew = () => {
                     }
                 >
                     {policies.map(policy => (
-                        <Option key={policy.id} value={policy.id}>
+                        <Option key={policy.id} value={policy.id} label={`${policy.title} - ${policy.carrier_display || policy.carrier}`}>
                             {policy.title} - {policy.carrier_display || policy.carrier}
                         </Option>
                     ))}

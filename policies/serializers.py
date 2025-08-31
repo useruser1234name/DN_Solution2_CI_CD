@@ -6,7 +6,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from companies.models import Company
 from .models import (
-    Policy, PolicyNotice, PolicyAssignment, PolicyExposure, 
+    Policy, PolicyNotice, PolicyAssignment, PolicyExposure,
     AgencyRebate, CommissionMatrix, OrderFormTemplate, OrderFormField,
     CarrierPlan, DeviceModel, DeviceColor
 )
@@ -33,7 +33,7 @@ class PolicySerializer(serializers.ModelSerializer):
             'carrier', 'carrier_display', 'join_type', 'join_type_display',
             'contract_period', 'contract_period_display',
             'rebate_agency', 'rebate_retail', 'is_active',
-            'html_content', 'created_by', 'created_by_username',
+            'html_content', 'external_url', 'created_by', 'created_by_username',
             'created_at', 'updated_at', 'assignment_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'html_content']
@@ -155,6 +155,20 @@ class PolicyAssignmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("운영 중단된 업체에는 정책을 배정할 수 없습니다.")
         
         return data
+
+
+class PolicyAssignmentListSerializer(serializers.ModelSerializer):
+    policy_title = serializers.CharField(source='policy.title', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_type = serializers.CharField(source='company.type', read_only=True)
+
+    class Meta:
+        model = PolicyAssignment
+        fields = [
+            'id', 'policy', 'policy_title', 'company', 'company_name', 'company_type',
+            'custom_rebate', 'expose_to_child', 'assigned_at', 'assigned_to_name'
+        ]
+        read_only_fields = fields
 
 
 class CompanySerializer(serializers.ModelSerializer):

@@ -47,7 +47,7 @@ class FormBuilder:
         return [
         # ========== 자동 입력 필드 ==========
         {
-            'field_name': 'order_id',
+            'field_name': 'order_number',
             'field_label': '주문번호',
             'field_type': 'text',
             'is_required': True,
@@ -72,6 +72,15 @@ class FormBuilder:
             'is_readonly': True,
             'auto_fill': 'current_user',
             'order': 3
+        },
+        {
+            'field_name': 'retailer_name',
+            'field_label': '판매점명',
+            'field_type': 'text',
+            'is_required': True,
+            'is_readonly': True,
+            'auto_fill': 'current_user',
+            'order': 6
         },
         {
             'field_name': 'carrier',
@@ -298,6 +307,7 @@ class FormBuilder:
             'field_type': 'url',
             'is_required': False,
             'placeholder': 'https://... (관련 링크가 있으면 입력)',
+            'auto_fill': 'from_policy',
             'order': 26
         },
         {

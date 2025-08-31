@@ -37,7 +37,7 @@ const PolicyCreateForm = ({ onSuccess, onCancel }) => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      const response = await post('api/policies/api/create/', values);
+      const response = await post('api/policies/', values);
       
       if (response.success) {
         message.success('정책이 성공적으로 생성되었습니다.');
@@ -112,6 +112,13 @@ const PolicyCreateForm = ({ onSuccess, onCancel }) => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item
+            name="external_url"
+            label="정책 URL (선택)"
+          >
+            <Input placeholder="https://..." />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>

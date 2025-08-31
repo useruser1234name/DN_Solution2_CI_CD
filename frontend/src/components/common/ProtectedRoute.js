@@ -34,7 +34,7 @@ const ProtectedRoute = ({
         alignItems: 'center', 
         height: '100vh' 
       }}>
-        <Spin size="large" tip="인증 정보를 확인하는 중..." />
+        <Spin size="large" />
       </div>
     );
   }

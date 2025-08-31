@@ -37,6 +37,13 @@ class OrderSerializer(serializers.ModelSerializer):
     
     # 프론트엔드에서 전송하는 form_data 처리
     form_data = serializers.DictField(write_only=True, required=False)
+
+    # 접수 메타(읽기 전용)
+    acceptance_number = serializers.CharField(source='order_number', read_only=True)
+    acceptance_date = serializers.DateTimeField(source='received_date', read_only=True, format='%Y-%m-%d %H:%M:%S')
+    activation_phone = serializers.CharField(read_only=True)
+    retailer_name = serializers.CharField(read_only=True)
+    reference_url = serializers.CharField(read_only=True)
     
     class Meta:
         model = Order
@@ -50,6 +57,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'order_number', 'carrier', 'subscription_type', 'customer_type',
             'received_date', 'activation_date', 'order_data', 'first_id',
             'created_at', 'updated_at'
+        ]
+        # 추가 필드 확장
+        fields += [
+            'reference_url', 'retailer_name', 'previous_carrier', 'activation_phone',
+            'plan_name', 'contract_period_selected',
+            'device_model', 'device_serial', 'imei', 'imei2', 'eid', 'usim_serial',
+            'payment_method', 'bank_name', 'account_holder', 'account_number_masked',
+            'card_brand', 'card_number_masked', 'card_exp_mmyy',
+            'acceptance_number', 'acceptance_date'
         ]
         extra_kwargs = {
             'customer_name': {
@@ -79,7 +95,39 @@ class OrderSerializer(serializers.ModelSerializer):
             'rebate_amount': {
                 'required': False,  # 자동 계산
                 'help_text': '리베이트 금액 (자동 계산)'
-            }
+            },
+            'policy': {
+                'help_text': '적용할 정책 ID (필수)'
+            },
+            'subscription_type': {
+                'required': False,
+                'help_text': '가입 유형(MNP/device_change/new)'
+            },
+            'plan_name': {
+                'required': False,
+                'help_text': '요금상품명'
+            },
+            'contract_period_selected': {
+                'required': False,
+                'help_text': '약정기간(12|24|36)'
+            },
+            'previous_carrier': {
+                'required': False,
+                'help_text': '이전 통신사(선택)'
+            },
+            'device_model': {'required': False},
+            'device_serial': {'required': False},
+            'imei': {'required': False},
+            'imei2': {'required': False},
+            'eid': {'required': False},
+            'usim_serial': {'required': False},
+            'payment_method': {'required': False},
+            'bank_name': {'required': False},
+            'account_holder': {'required': False},
+            'account_number_masked': {'required': False},
+            'card_brand': {'required': False},
+            'card_number_masked': {'required': False},
+            'card_exp_mmyy': {'required': False},
         }
     
     def get_memo_count(self, obj):
@@ -203,26 +251,64 @@ class OrderSerializer(serializers.ModelSerializer):
             data['customer_email'] = form_data.get('customer_email', '')
             data['customer_address'] = form_data.get('customer_address', '')
             data['notes'] = form_data.get('memo', '')  # memo -> notes로 매핑
-            
-            # plan_type에서 금액 추출 (예: "30000" -> 30000)
-            plan_type = form_data.get('plan_type', '0')
-            try:
-                total_amount = float(plan_type)
-                data['total_amount'] = total_amount
-                # 리베이트는 일단 0으로 설정 (나중에 정책에 따라 계산)
-                data['rebate_amount'] = 0
-            except (ValueError, TypeError):
-                data['total_amount'] = 0
-                data['rebate_amount'] = 0
+            # 고객 유형/가입 유형/이전 통신사
+            data['customer_type'] = form_data.get('customer_type', data.get('customer_type'))
+            sub_type = form_data.get('subscription_type') or form_data.get('join_type') or data.get('subscription_type')
+            if sub_type:
+                sub_map = {'mnp': 'MNP', 'MNP': 'MNP', 'device_change': 'device_change', 'new': 'new'}
+                data['subscription_type'] = sub_map.get(sub_type, sub_type)
+            data['previous_carrier'] = form_data.get('previous_carrier', data.get('previous_carrier', ''))
+
+            # 요금/약정/단말 식별자
+            data['plan_name'] = form_data.get('plan_name', form_data.get('plan')) or data.get('plan_name', '')
+            cp = (form_data.get('contract_period') or form_data.get('contract_period_selected') or '').strip()
+            if cp in ['12', '24', '36']:
+                data['contract_period_selected'] = cp
+            data['device_model'] = form_data.get('device_model', data.get('device_model', ''))
+            data['device_serial'] = form_data.get('device_serial', data.get('device_serial', ''))
+            data['imei'] = form_data.get('imei', data.get('imei', ''))
+            data['imei2'] = form_data.get('imei2', data.get('imei2', ''))
+            data['eid'] = form_data.get('eid', data.get('eid', ''))
+            data['usim_serial'] = form_data.get('usim_serial', data.get('usim_serial', ''))
+
+            # 납부/결제 - 평문은 order_data로 보관, 마스킹은 서버가 처리
+            data['payment_method'] = (form_data.get('payment_method') or '').lower()
+            data['bank_name'] = form_data.get('bank_name', data.get('bank_name', ''))
+            data['account_holder'] = form_data.get('account_holder', data.get('account_holder', ''))
+            # 평문 민감정보는 order_data에만 남긴다(최종승인 시 해시/마스킹 처리)
+            order_payload = data.get('order_data') or {}
+            for key in ['rrn', 'resident_registration_number', 'account_number', 'card_number', 'card_cvc']:
+                if form_data.get(key):
+                    order_payload[key] = form_data.get(key)
+            data['order_data'] = order_payload
         
         # 필수 필드 검증
-        if not data.get('customer_name'):
-            raise serializers.ValidationError({'customer_name': '고객명은 필수 입력 사항입니다.'})
-        if not data.get('customer_phone'):
-            raise serializers.ValidationError({'customer_phone': '연락처는 필수 입력 사항입니다.'})
-        if not data.get('customer_address'):
-            raise serializers.ValidationError({'customer_address': '배송 주소는 필수 입력 사항입니다.'})
+        required_base = ['customer_name', 'customer_phone', 'customer_address', 'customer_type']
+        for f in required_base:
+            if not data.get(f):
+                raise serializers.ValidationError({f: '필수 입력 사항입니다.'})
+
+        # 정책/통신사
+        if not data.get('policy'):
+            raise serializers.ValidationError({'policy': '정책 선택은 필수입니다.'})
+        # 가입/요금/약정/단말 핵심
+        required_detail = ['subscription_type', 'plan_name', 'contract_period_selected', 'device_model', 'device_serial', 'imei']
+        for f in required_detail:
+            if not data.get(f):
+                raise serializers.ValidationError({f: '필수 입력 사항입니다.'})
         
+        # 결제 방식에 따른 필수 항목
+        pm = (data.get('payment_method') or '').lower()
+        if pm == 'card':
+            payload = data.get('order_data') or {}
+            for key in ['card_number', 'card_exp_mmyy', 'card_cvc']:
+                if not (payload.get(key) or data.get(key)):
+                    raise serializers.ValidationError({key: '카드 결제 시 필수 입력입니다.'})
+        elif pm == 'account':
+            payload = data.get('order_data') or {}
+            if not (payload.get('account_number')):
+                raise serializers.ValidationError({'account_number': '계좌 이체 시 계좌번호는 필수입니다.'})
+
         # 정책과 업체 매칭 확인
         policy = data.get('policy')
         company = data.get('company')

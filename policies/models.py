@@ -186,6 +186,15 @@ class Policy(models.Model):
         verbose_name="HTML 내용",
         help_text="자동 생성된 HTML 상세페이지 내용"
     )
+
+    # 프론트엔드 라우팅/외부 문서 링크 등 정책 전용 URL
+    external_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="정책 URL",
+        help_text="정책 상세 안내 또는 외부 라우팅 URL (선택)"
+    )
     
     # 정책 생성자
     created_by = models.ForeignKey(

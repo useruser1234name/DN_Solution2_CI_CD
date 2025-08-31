@@ -93,16 +93,14 @@ class OrderFormManager:
         """
         try:
             # 업데이트 필요 여부 확인 (force=True이면 무조건 업데이트)
+            # 기본 제공 필드 수 일치만으로 '최신' 판단을 하지 않고, 관리자 편집 내용을 보호하기 위해
+            # force=False 인 경우에는 업데이트를 건너뛴다.
             if not force:
-                current_fields_count = template.fields.count()
-                default_fields_count = len(FormBuilder.DEFAULT_FIELDS)
-                
-                if current_fields_count == default_fields_count:
-                    logger.info(f"주문서 양식 '{template.title}'은 이미 최신 상태입니다.")
-                    return template
+                logger.info(f"주문서 양식 '{template.title}' 사용자 편집 보호: 강제 업데이트가 아니므로 스킵")
+                return template
             
             with transaction.atomic():
-                # 기존 필드 삭제
+                # 기존 필드 삭제 후 기본 필드로 재생성 (강제 업데이트인 경우에만)
                 template.fields.all().delete()
                 
                 # 설정 파일에서 필드 정의 로드

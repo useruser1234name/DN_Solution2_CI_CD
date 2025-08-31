@@ -86,15 +86,37 @@ const EnhancedOrderForm = ({
   const handleSubmit = async (values) => {
     setSubmitting(true);
     try {
+      // 백엔드 시리얼라이저의 form_data 규격으로 변환
+      const form_data = {
+        customer_name: values.customer_name,
+        customer_phone: values.phone_number,
+        customer_address: values.address,
+        customer_type: values.customer_type,
+        previous_carrier: values.previous_carrier,
+        subscription_type: values.join_type,
+        plan_name: values.plan_name,
+        contract_period: values.contract_period?.toString(),
+        device_model: selectedModel || values.device_model,
+        device_serial: values.serial_number,
+        imei: values.imei,
+        imei2: values.imei2,
+        eid: values.eid,
+        usim_serial: values.usim_serial,
+        payment_method: values.payment_method,
+        bank_name: values.bank_name,
+        account_holder: values.account_holder,
+        account_number: values.account_number,
+        card_brand: values.card_brand,
+        card_number: values.card_number,
+        card_exp_mmyy: values.card_exp_mmyy,
+        card_cvc: values.card_cvc,
+        memo: values.notes,
+      };
+
       const orderData = {
-        ...values,
-        policy_id: policyId,
-        carrier: selectedCarrier,
-        plan_id: selectedPlan,
-        device_model: selectedModel,
-        device_color: selectedColor,
-        contract_period: contractPeriod,
-        sim_type: simType
+        policy: policyId,
+        form_data,
+        status: 'pending'
       };
 
       if (mode === 'create') {
@@ -182,11 +204,16 @@ const EnhancedOrderForm = ({
               </Form.Item>
 
               <Form.Item
-                name="birth_date"
-                label="생년월일"
-                rules={[{ required: true, message: '생년월일을 입력하세요' }]}
+                name="customer_type"
+                label="고객 유형"
+                rules={[{ required: true, message: '고객 유형을 선택하세요' }]}
               >
-                <Input placeholder="예: 901234" />
+                <Select placeholder="고객 유형을 선택하세요">
+                  <Option value="adult">성인일반</Option>
+                  <Option value="corporate">법인</Option>
+                  <Option value="foreigner">외국인</Option>
+                  <Option value="minor">미성년자</Option>
+                </Select>
               </Form.Item>
 
               <Form.Item
@@ -198,22 +225,32 @@ const EnhancedOrderForm = ({
               </Form.Item>
 
               <Form.Item
+                name="address"
+                label="주소"
+                rules={[{ required: true, message: '주소를 입력하세요' }]}
+              >
+                <Input placeholder="배송 주소" />
+              </Form.Item>
+
+              <Form.Item
+                name="previous_carrier"
+                label="이전 통신사"
+              >
+                <Input placeholder="예: skt/kt/lg" />
+              </Form.Item>
+
+              <Form.Item
                 name="join_type"
                 label="가입유형"
                 rules={[{ required: true, message: '가입유형을 선택하세요' }]}
               >
                 <Select placeholder="가입유형을 선택하세요">
-                  <Option value="new_subscription">신규가입</Option>
-                  <Option value="number_transfer">번호이동</Option>
+                  <Option value="mnp">번호이동</Option>
                   <Option value="device_change">기기변경</Option>
+                  <Option value="new">신규가입</Option>
                 </Select>
               </Form.Item>
-            </Card>
-          </Col>
 
-          {/* 통신사 및 요금제 */}
-          <Col xs={24} lg={12}>
-            <Card title="통신사 및 요금제" className="form-section">
               <Form.Item
                 name="carrier"
                 label="통신사"
@@ -274,9 +311,7 @@ const EnhancedOrderForm = ({
               </Form.Item>
             </Card>
           </Col>
-        </Row>
 
-        <Row gutter={24}>
           {/* 기기 정보 */}
           <Col xs={24} lg={12}>
             <Card title="기기 정보" className="form-section">
@@ -295,60 +330,62 @@ const EnhancedOrderForm = ({
               >
                 <Input placeholder="예: 189150" />
               </Form.Item>
+
+              <Form.Item name="imei" label="IMEI" rules={[{ required: true, message: 'IMEI를 입력하세요' }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="imei2" label="IMEI2">
+                <Input />
+              </Form.Item>
+              <Form.Item name="eid" label="EID">
+                <Input />
+              </Form.Item>
+              <Form.Item name="usim_serial" label="유심 일련번호">
+                <Input />
+              </Form.Item>
             </Card>
           </Col>
+        </Row>
 
-          {/* 결제 정보 */}
+        {/* 결제 정보 */}
+        <Row gutter={24}>
           <Col xs={24} lg={12}>
             <Card title="결제 정보" className="form-section">
               <Form.Item
                 name="payment_method"
-                label="현금/할부"
+                label="납부방법"
                 rules={[{ required: true, message: '결제 방법을 선택하세요' }]}
               >
-                <Select placeholder="결제 방법을 선택하세요">
-                  <Option value="cash">현금</Option>
-                  <Option value="installment">할부</Option>
+                <Select placeholder="납부방법을 선택하세요">
+                  <Option value="account">계좌이체</Option>
+                  <Option value="card">카드</Option>
                 </Select>
               </Form.Item>
 
-              <Form.Item
-                name="installment_months"
-                label="할부개월수"
-              >
-                <Select placeholder="할부개월수를 선택하세요">
-                  <Option value={12}>12개월</Option>
-                  <Option value={24}>24개월</Option>
-                  <Option value={36}>36개월</Option>
-                </Select>
+              {/* 계좌 이체 필드 */}
+              <Form.Item name="bank_name" label="은행명">
+                <Input />
+              </Form.Item>
+              <Form.Item name="account_holder" label="예금주">
+                <Input />
+              </Form.Item>
+              <Form.Item name="account_number" label="계좌번호">
+                <Input />
               </Form.Item>
 
-              <Form.Item
-                name="common_support"
-                label="공통지원금"
-              >
-                <Input placeholder="예: 600,000" />
+              {/* 카드 결제 필드 */}
+              <Divider>카드 결제</Divider>
+              <Form.Item name="card_brand" label="카드사">
+                <Input />
               </Form.Item>
-
-              <Form.Item
-                name="additional_support"
-                label="추가지원금"
-              >
-                <Input placeholder="추가지원금을 입력하세요" />
+              <Form.Item name="card_number" label="카드번호">
+                <Input />
               </Form.Item>
-
-              <Form.Item
-                name="free_amount"
-                label="프리금액"
-              >
-                <Input placeholder="예: 500,000" />
+              <Form.Item name="card_exp_mmyy" label="유효기간(MMYY)">
+                <Input maxLength={4} />
               </Form.Item>
-
-              <Form.Item
-                name="installment_principal"
-                label="할부원금"
-              >
-                <Input placeholder="예: 385,000" />
+              <Form.Item name="card_cvc" label="CVC">
+                <Input maxLength={4} />
               </Form.Item>
             </Card>
           </Col>

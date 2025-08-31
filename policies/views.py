@@ -1779,6 +1779,7 @@ class PolicyFormTemplateView(APIView):
         """정책의 주문서 템플릿 조회"""
         try:
             from .models import OrderFormTemplate
+            from .form_builder import FormBuilder
             
             policy = get_object_or_404(Policy, id=policy_id)
             
@@ -1786,13 +1787,14 @@ class PolicyFormTemplateView(APIView):
             try:
                 template = OrderFormTemplate.objects.get(policy=policy, is_active=True)
                 fields = template.fields.all().order_by('order')
-                
-                logger.info(f"주문서 템플릿 조회: {template.title}, 필드 개수: {fields.count()}")
-                
-                # 필드 데이터 직렬화
+                # 비어있는 템플릿이면 최신 기본 필드로 업데이트
+                if fields.count() == 0:
+                    template = FormBuilder.update_template(template)
+                    fields = template.fields.all().order_by('order')
+                # 정상 경로: 기존 템플릿 직렬화 후 반환
                 fields_data = []
                 for field in fields:
-                    field_data = {
+                    fields_data.append({
                         'id': str(field.id),
                         'field_name': field.field_name,
                         'field_label': field.field_label,
@@ -1801,11 +1803,19 @@ class PolicyFormTemplateView(APIView):
                         'placeholder': field.placeholder,
                         'help_text': field.help_text,
                         'order': field.order,
-                        'field_options': field.field_options or field.get_default_options()
-                    }
-                    fields_data.append(field_data)
-                    logger.info(f"  필드: {field.field_label} ({field.field_type})")
-                
+                        'field_options': field.field_options or field.get_default_options(),
+                        # 확장 메타
+                        'is_readonly': getattr(field, 'is_readonly', False),
+                        'is_masked': getattr(field, 'is_masked', False),
+                        'auto_fill': getattr(field, 'auto_fill', ''),
+                        'auto_generate': getattr(field, 'auto_generate', False),
+                        'allow_manual': getattr(field, 'allow_manual', True),
+                        'data_source': getattr(field, 'data_source', ''),
+                        'rows': getattr(field, 'rows', 3),
+                        'multiple': getattr(field, 'multiple', False),
+                        'max_files': getattr(field, 'max_files', 4),
+                        'accept': getattr(field, 'accept', 'image/*,.pdf,.doc,.docx'),
+                    })
                 return Response({
                     'success': True,
                     'data': {
@@ -1815,92 +1825,42 @@ class PolicyFormTemplateView(APIView):
                         'fields': fields_data
                     }
                 })
-                
             except OrderFormTemplate.DoesNotExist:
                 logger.info(f"주문서 템플릿이 존재하지 않음: 정책 {policy.title}")
-                # 기본 템플릿 반환
-                default_fields = [
-                    # 고객 정보
-                    {
-                        'field_name': 'customer_name',
-                        'field_label': '고객명',
-                        'field_type': 'text',
-                        'is_required': True,
-                        'placeholder': '고객명을 입력하세요',
-                        'help_text': '고객의 이름을 입력하세요',
-                        'order': 1,
-                        'field_options': {}
-                    },
-                    {
-                        'field_name': 'birth_date',
-                        'field_label': '생년월일',
-                        'field_type': 'text',
-                        'is_required': True,
-                        'placeholder': '예: 901234',
-                        'help_text': '고객의 생년월일 6자리를 입력하세요',
-                        'order': 2,
-                        'field_options': {}
-                    },
-                    {
-                        'field_name': 'phone_number',
-                        'field_label': '개통번호',
-                        'field_type': 'phone',
-                        'is_required': True,
-                        'placeholder': '010-1234-5678',
-                        'help_text': '개통할 전화번호를 입력하세요',
-                        'order': 3,
-                        'field_options': {}
-                    },
-                    # 통신 정보
-                    {
-                        'field_name': 'carrier_plan',
-                        'field_label': '요금제',
-                        'field_type': 'carrier_plan',
-                        'is_required': True,
-                        'placeholder': '요금제를 선택하세요',
-                        'help_text': '통신사 요금제를 선택하세요',
-                        'order': 4,
-                        'field_options': {'dynamic': True, 'source': 'CarrierPlan'}
-                    },
-                    {
-                        'field_name': 'sim_type',
-                        'field_label': '유심 타입',
-                        'field_type': 'sim_type',
-                        'is_required': True,
-                        'placeholder': '유심 타입을 선택하세요',
-                        'help_text': '유심 타입에 따라 리베이트가 달라질 수 있습니다',
-                        'order': 5,
-                        'field_options': {}
-                    },
-                    {
-                        'field_name': 'contract_period',
-                        'field_label': '계약기간',
-                        'field_type': 'contract_period',
-                        'is_required': True,
-                        'placeholder': '계약기간을 선택하세요',
-                        'help_text': '계약기간에 따라 리베이트가 달라질 수 있습니다',
-                        'order': 6,
-                        'field_options': {}
-                    },
-                    {
-                        'field_name': 'installment_months',
-                        'field_label': '할부개월',
-                        'field_type': 'installment_months',
-                        'is_required': True,
-                        'placeholder': '할부개월을 선택하세요',
-                        'help_text': '단말기 할부 개월 수를 선택하세요',
-                        'order': 7,
-                        'field_options': {}
-                    }
-                ]
-                
+                # 정책에 최신 기본 템플릿 생성 후 반환
+                template = FormBuilder.create_template(policy)
+                fields = template.fields.all().order_by('order')
+                fields_data = []
+                for field in fields:
+                    fields_data.append({
+                        'id': str(field.id),
+                        'field_name': field.field_name,
+                        'field_label': field.field_label,
+                        'field_type': field.field_type,
+                        'is_required': field.is_required,
+                        'placeholder': field.placeholder,
+                        'help_text': field.help_text,
+                        'order': field.order,
+                        'field_options': field.field_options or field.get_default_options(),
+                        # 확장 메타
+                        'is_readonly': getattr(field, 'is_readonly', False),
+                        'is_masked': getattr(field, 'is_masked', False),
+                        'auto_fill': getattr(field, 'auto_fill', ''),
+                        'auto_generate': getattr(field, 'auto_generate', False),
+                        'allow_manual': getattr(field, 'allow_manual', True),
+                        'data_source': getattr(field, 'data_source', ''),
+                        'rows': getattr(field, 'rows', 3),
+                        'multiple': getattr(field, 'multiple', False),
+                        'max_files': getattr(field, 'max_files', 4),
+                        'accept': getattr(field, 'accept', 'image/*,.pdf,.doc,.docx'),
+                    })
                 return Response({
                     'success': True,
                     'data': {
-                        'id': None,
-                        'title': f'{policy.title} - 기본 주문서',
-                        'description': '기본 주문서 양식입니다.',
-                        'fields': default_fields
+                        'id': str(template.id),
+                        'title': template.title,
+                        'description': template.description,
+                        'fields': fields_data
                     }
                 })
                 
@@ -1944,7 +1904,18 @@ class PolicyFormTemplateView(APIView):
                     placeholder=field_data.get('placeholder', ''),
                     help_text=field_data.get('help_text', ''),
                     order=field_data.get('order', 0),
-                    field_options=field_data.get('field_options')
+                    field_options=field_data.get('field_options'),
+                    # 확장 메타 보존
+                    is_readonly=field_data.get('is_readonly', False),
+                    is_masked=field_data.get('is_masked', False),
+                    auto_fill=field_data.get('auto_fill', ''),
+                    auto_generate=field_data.get('auto_generate', False),
+                    allow_manual=field_data.get('allow_manual', True),
+                    data_source=field_data.get('data_source', ''),
+                    rows=field_data.get('rows', 3),
+                    multiple=field_data.get('multiple', False),
+                    max_files=field_data.get('max_files', 4),
+                    accept=field_data.get('accept', 'image/*,.pdf,.doc,.docx')
                 )
                 logger.info(f"  필드 생성: {field.field_label} ({field.field_type}) - ID: {field.id}")
             

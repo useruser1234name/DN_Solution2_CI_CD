@@ -9,13 +9,11 @@ import {
   Checkbox,
   Spin,
   Button,
-  Space,
   Upload,
   message
 } from 'antd';
 import { 
   LinkOutlined, 
-  ScanOutlined, 
   UploadOutlined 
 } from '@ant-design/icons';
 import { get } from '../../services/api';
@@ -68,7 +66,12 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
           break;
         case 'current_user':
           // 실제 환경에서는 useAuth 훅에서 사용자 정보 가져오기
-          if (field.field_name === 'company_code' || field.field_name === 'agency_code') {
+          if (
+            field.field_name === 'company_code' ||
+            field.field_name === 'agency_code' ||
+            field.field_name === 'primary_id' ||
+            field.field_name === 'first_id'
+          ) {
             // 1차 ID(접속자 업체코드)
             autoValue = dependencies.company_code || '';
           } else {
@@ -80,6 +83,8 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
             autoValue = dependencies.policy_carrier || '';
           } else if (field.field_name === 'subscription_type') {
             autoValue = dependencies.policy_join_type || '';
+          } else if (field.field_name === 'reference_url') {
+            autoValue = dependencies.policy_external_url || '';
           }
           break;
         default:
@@ -196,7 +201,7 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       
       // plan_name 필드는 CarrierPlan 소스로 처리
       if (field.field_name === 'plan_name' || source === 'CarrierPlan') {
-        endpoint = 'policies/carrier-plans/';
+        endpoint = 'api/policies/carrier-plans/';
         console.log(`[DynamicOrderField] CarrierPlan 로드 시도:`, {
           field_name: field.field_name,
           policy_carrier: dependencies.policy_carrier,
@@ -220,7 +225,7 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       } else {
         switch (source) {
           case 'CarrierPlan':
-            endpoint = 'policies/carrier-plans/';
+            endpoint = 'api/policies/carrier-plans/';
             console.log(`[DynamicOrderField] CarrierPlan 로드 시도:`, {
               policy_carrier: dependencies.policy_carrier,
               form_carrier: dependencies.carrier,
@@ -242,10 +247,10 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
             }
             break;
           case 'DeviceModel':
-            endpoint = 'policies/device-models/';
+            endpoint = 'api/policies/device-models/';
             break;
           case 'DeviceColor':
-            endpoint = 'policies/device-colors/';
+            endpoint = 'api/policies/device-colors/';
             if (dependencies.device_model) {
               endpoint += `?model=${dependencies.device_model}`;
             }
@@ -412,23 +417,13 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
         );
       
       case 'barcode_scan':
+        // 스캔 버튼 제거, 입력만 허용
         return (
-          <Space style={{ width: '100%' }}>
-            <Input 
-              {...commonProps}
-              placeholder={field.placeholder || '바코드 스캔 또는 수기입력'}
-              disabled={field.is_readonly || scanMode}
-            />
-            {field.allow_manual && (
-              <Button 
-                icon={scanMode ? <Spin size="small" /> : <ScanOutlined />}
-                onClick={handleBarcodeScan}
-                disabled={field.is_readonly}
-              >
-                스캔
-              </Button>
-            )}
-          </Space>
+          <Input 
+            {...commonProps}
+            placeholder={field.placeholder || '값을 입력하세요'}
+            disabled={field.is_readonly}
+          />
         );
       
       case 'large_textarea':
@@ -653,9 +648,7 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
 
   // 완전히 숨겨야 하는 필드들 (백엔드에서만 처리)
   const hiddenFields = [
-    'received_date',     // 접수일자 (백엔드에서 자동 설정)
-    'carrier',           // 통신사 (정책에서 자동 설정)
-    'subscription_type', // 가입유형 (백엔드에서 자동 설정)
+    'received_date' // 접수일자만 숨김, 나머지는 읽기전용으로 노출
   ];
   
   if (hiddenFields.includes(field.field_name)) {

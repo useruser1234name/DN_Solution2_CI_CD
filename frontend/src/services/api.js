@@ -106,89 +106,81 @@ export const authAPI = {
 // ======================
 
 export const policyAPI = {
-  // 정책 목록 조회 (페이지네이션, 필터링)
+  // 정책 목록 조회 (DRF 표준)
   getPolicies: async (params = {}) => {
-    const response = await apiClient.get('/api/policies/api/management/', {
-      params: {
-        page: 1,
-        page_size: 20,
-        ...params,
-      },
-    });
+    const response = await apiClient.get('/api/policies/', { params });
     return response.data;
   },
 
   // 정책 상세 조회
   getPolicy: async (id) => {
-    const response = await apiClient.get(`/api/policies/api/management/${id}/`);
+    const response = await apiClient.get(`/api/policies/${id}/`);
     return response.data;
   },
 
   // 정책 생성
   createPolicy: async (data) => {
-    const response = await apiClient.post('/api/policies/api/management/', data);
+    const response = await apiClient.post('/api/policies/', data);
     return response.data;
   },
 
   // 정책 수정
   updatePolicy: async (id, data) => {
-    const response = await apiClient.put(`/api/policies/api/management/${id}/`, data);
+    const response = await apiClient.put(`/api/policies/${id}/`, data);
     return response.data;
   },
 
   // 정책 삭제
   deletePolicy: async (id) => {
-    const response = await apiClient.delete(`/api/policies/api/management/${id}/`);
+    const response = await apiClient.delete(`/api/policies/${id}/`);
     return response.data;
   },
 
-  // 대시보드 데이터
+  // 대시보드 데이터 (정책 통계가 필요하면 /api/policies/에 별도 엔드포인트 구성 예정)
   getDashboard: async () => {
-    const response = await apiClient.get('/api/policies/api/management/dashboard/');
+    const response = await apiClient.get('/api/dashboard/stats/');
     return response.data;
   },
 
   // 배정된 업체 목록 조회
   getAssignedCompanies: async (policyId) => {
-    const response = await apiClient.get(`/api/policies/api/management/${policyId}/assigned_companies/`);
+    const response = await apiClient.get(`/api/policies/${policyId}/assignments/`);
     return response.data;
   },
 
   // 업체 배정
   assignCompanies: async (policyId, data) => {
-    const response = await apiClient.post(`/api/policies/api/management/${policyId}/assigned_companies/`, data);
+    const response = await apiClient.post(`/api/policies/${policyId}/assignments/`, data);
     return response.data;
   },
 
   // 업체 배정 해제
   unassignCompanies: async (policyId, companyIds) => {
-    const response = await apiClient.delete(`/api/policies/api/management/${policyId}/assigned_companies/`, {
-      data: { company_ids: companyIds },
-    });
+    const response = await apiClient.delete(`/api/policies/${policyId}/assignments/`, { data: { company_ids: companyIds } });
     return response.data;
   },
 
   // 주문서 양식 조회
   getOrderForm: async (policyId) => {
-    const response = await apiClient.get(`/api/policies/api/management/${policyId}/order_form/`);
+    const response = await apiClient.get(`/api/policies/${policyId}/form-template/`);
     return response.data;
   },
 
   // 주문서 양식 생성/수정
   updateOrderForm: async (policyId, data) => {
-    const response = await apiClient.put(`/api/policies/api/management/${policyId}/order_form/`, data);
+    const response = await apiClient.put(`/api/policies/${policyId}/form-template/`, data);
     return response.data;
   },
 
   // 리베이트 매트릭스 조회
   getRebateMatrix: async (policyId) => {
-    const response = await apiClient.get(`/api/policies/api/management/${policyId}/rebate_matrix/`);
+    const response = await apiClient.get(`/api/policies/${policyId}/rebate-matrix/`);
     return response.data;
   },
 
   // 리베이트 매트릭스 수정
   updateRebateMatrix: async (policyId, data) => {
-    const response = await apiClient.put(`/api/policies/api/management/${policyId}/rebate_matrix/`, data);
+    const response = await apiClient.put(`/api/policies/${policyId}/rebate-matrix/`, data);
     return response.data;
   },
 };
@@ -200,7 +192,7 @@ export const policyAPI = {
 export const companyAPI = {
   // 업체 목록 조회 (배정용)
   getCompaniesForAssignment: async (params = {}) => {
-    const response = await apiClient.get('/api/policies/api/companies/', {
+    const response = await apiClient.get('/api/companies/', {
       params,
     });
     return response.data;

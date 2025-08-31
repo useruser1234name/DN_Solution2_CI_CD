@@ -103,6 +103,15 @@ class Order(models.Model):
         help_text="정책에서 자동 입력"
     )
     
+    # 참조 URL (정책 외부 URL 스냅샷)
+    reference_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='참조 URL',
+        help_text='정책의 외부 URL 스냅샷'
+    )
+    
     # 가입 유형
     subscription_type = models.CharField(
         max_length=20,
@@ -117,6 +126,20 @@ class Order(models.Model):
         choices=CUSTOMER_TYPE_CHOICES,
         blank=True,
         verbose_name="고객유형"
+    )
+    
+    # 판매점명 스냅샷
+    retailer_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='판매점명 스냅샷'
+    )
+    
+    # 이전 통신사
+    previous_carrier = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='이전 통신사'
     )
     
     # 접수일자 (기존 created_at과 구분)
@@ -135,6 +158,13 @@ class Order(models.Model):
         help_text="실제 개통 완료 일시"
     )
     
+    # 개통 번호(마스킹 표시용)
+    activation_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='개통번호(마스킹)'
+    )
+
     # 주문 데이터 (JSON 형태로 저장)
     order_data = models.JSONField(
         null=True,
@@ -142,6 +172,25 @@ class Order(models.Model):
         verbose_name="주문 데이터",
         help_text="주문서 양식에서 제출된 모든 데이터"
     )
+    
+    # 요금/약정 및 단말/식별자 정보
+    plan_name = models.CharField(max_length=200, blank=True, verbose_name='요금상품명')
+    contract_period_selected = models.CharField(max_length=10, blank=True, verbose_name='약정기간(선택)')
+    device_model = models.CharField(max_length=200, blank=True, verbose_name='단말기 모델')
+    device_serial = models.CharField(max_length=100, blank=True, verbose_name='단말기 일련번호')
+    imei = models.CharField(max_length=50, blank=True, verbose_name='IMEI')
+    imei2 = models.CharField(max_length=50, blank=True, verbose_name='IMEI2')
+    eid = models.CharField(max_length=50, blank=True, verbose_name='EID')
+    usim_serial = models.CharField(max_length=50, blank=True, verbose_name='유심일련번호')
+    
+    # 납부/결제 정보 (평문 저장 금지: 마스킹본만 저장)
+    payment_method = models.CharField(max_length=20, blank=True, verbose_name='납부방법', help_text='account|card')
+    bank_name = models.CharField(max_length=100, blank=True, verbose_name='은행/카드사명')
+    account_holder = models.CharField(max_length=100, blank=True, verbose_name='예금주/카드주')
+    account_number_masked = models.CharField(max_length=100, blank=True, verbose_name='계좌번호(마스킹)')
+    card_brand = models.CharField(max_length=50, blank=True, verbose_name='카드 브랜드')
+    card_number_masked = models.CharField(max_length=100, blank=True, verbose_name='카드번호(마스킹)')
+    card_exp_mmyy = models.CharField(max_length=10, blank=True, verbose_name='카드 유효기간(MMYY)')
     
     # 1차 ID (판매점 코드)
     first_id = models.CharField(
@@ -267,6 +316,25 @@ class Order(models.Model):
         # 가입유형 자동 설정 (정책에서)
         if is_new and not self.subscription_type and self.policy:
             self.subscription_type = getattr(self.policy, 'subscription_type', 'new')
+        
+        # 정책 참조 URL 스냅샷
+        if is_new and not self.reference_url and self.policy and getattr(self.policy, 'external_url', None):
+            self.reference_url = self.policy.external_url
+        
+        # 약정기간 선택값 기본 설정(정책 기반)
+        if is_new and not self.contract_period_selected and self.policy:
+            self.contract_period_selected = getattr(self.policy, 'contract_period', '')
+        
+        # 판매점명 스냅샷
+        if is_new and not self.retailer_name and self.company:
+            try:
+                self.retailer_name = self.company.name
+            except Exception:
+                self.retailer_name = ''
+        
+        # 개통번호 마스킹 기본값
+        if is_new and not self.activation_phone and self.customer_phone:
+            self.activation_phone = self._mask_phone(self.customer_phone)
         
         # 민감정보 처리 (로컬 암호화)
         if is_new and not self.is_sensitive_data_encrypted:
@@ -522,6 +590,69 @@ class Order(models.Model):
             logger.error(f"민감정보 처리 실패: {str(e)}")
             self.is_sensitive_data_encrypted = False
     
+    def _mask_phone(self, phone: str) -> str:
+        """전화번호를 010-xxxx-xxxx 형식으로 마스킹"""
+        try:
+            digits = ''.join(ch for ch in phone if ch.isdigit())
+            if len(digits) == 11:
+                return f"{digits[:3]}-xxxx-{digits[-4:]}"
+            if len(digits) == 10:
+                return f"{digits[:3]}-xxx-{digits[-4:]}"
+        except Exception:
+            pass
+        return phone
+    
+    def _process_sensitive_on_final_approve(self):
+        """최종 승인 시 민감정보 정리: 평문 제거, 마스킹/해시 보관"""
+        try:
+            payload = self.order_data or {}
+            rrn_plain = payload.pop('rrn', payload.pop('resident_registration_number', None))
+            account_plain = payload.pop('account_number', None)
+            card_plain = payload.pop('card_number', None)
+            card_cvc_plain = payload.pop('card_cvc', None)
+            
+            # 표시용 마스킹 업데이트
+            if account_plain:
+                self.account_number_masked = self._mask_account_or_card(account_plain)
+            if card_plain:
+                self.card_number_masked = self._mask_account_or_card(card_plain)
+            
+            sensitive = getattr(self, 'sensitive_data', None)
+            if not sensitive:
+                sensitive = OrderSensitiveData(order=self)
+            
+            if rrn_plain:
+                sensitive.rrn_masked = self._mask_rrn(rrn_plain)
+                sensitive.rrn_hash = hashlib.sha256(rrn_plain.encode()).hexdigest()
+            if account_plain:
+                sensitive.account_number_hash = hashlib.sha256(account_plain.encode()).hexdigest()
+            if card_plain:
+                sensitive.card_number_hash = hashlib.sha256(card_plain.encode()).hexdigest()
+            if card_cvc_plain:
+                sensitive.card_cvc_hash = hashlib.sha256(card_cvc_plain.encode()).hexdigest()
+            
+            sensitive.save()
+            
+            self.order_data = payload
+            self.is_sensitive_data_encrypted = True
+            self.save(update_fields=['order_data', 'is_sensitive_data_encrypted', 'account_number_masked', 'card_number_masked'])
+        except Exception as e:
+            logger.error(f"최종 승인 민감정보 처리 실패: {str(e)}")
+    
+    def _mask_rrn(self, value: str) -> str:
+        """주민등록번호 마스킹: xxxxx-x****** 형식"""
+        digits = ''.join(ch for ch in value if ch.isdigit())
+        if len(digits) >= 13:
+            return f"{digits[:5]}-x******"
+        return "***************"
+    
+    def _mask_account_or_card(self, value: str) -> str:
+        """계좌/카드번호 마스킹: ****-****-****-1234 형태"""
+        digits = ''.join(ch for ch in value if ch.isdigit())
+        if len(digits) >= 4:
+            return f"****-****-****-{digits[-4:]}"
+        return "********"
+    
     def _mask_customer_name(self):
         """고객명 마스킹"""
         if not self.customer_name or len(self.customer_name) < 2:
@@ -550,6 +681,12 @@ class Order(models.Model):
         """최종 승인 (정산 생성 트리거)"""
         if self.status != 'completed':
             raise ValidationError("개통완료된 주문만 최종 승인할 수 있습니다.")
+        
+        # 개통일 자동 기입 및 민감정보 정리
+        from django.utils import timezone
+        self.activation_date = timezone.now()
+        self.save(update_fields=['activation_date'])
+        self._process_sensitive_on_final_approve()
         
         # 상태 변경
         self.update_status('final_approved', user)
@@ -661,11 +798,16 @@ class OrderSensitiveData(models.Model):
     customer_phone_hash = models.CharField(max_length=64, verbose_name='전화번호 해시')
     customer_email_hash = models.CharField(max_length=64, blank=True, verbose_name='이메일 해시')
     customer_address_hash = models.CharField(max_length=64, verbose_name='주소 해시')
+    rrn_hash = models.CharField(max_length=64, blank=True, verbose_name='주민등록번호 해시')
+    account_number_hash = models.CharField(max_length=64, blank=True, verbose_name='계좌번호 해시')
+    card_number_hash = models.CharField(max_length=64, blank=True, verbose_name='카드번호 해시')
+    card_cvc_hash = models.CharField(max_length=64, blank=True, verbose_name='카드 CVC 해시')
     
     # 마스킹된 표시용 데이터
     customer_name_masked = models.CharField(max_length=100, verbose_name='고객명 (마스킹)')
     customer_phone_masked = models.CharField(max_length=20, verbose_name='전화번호 (마스킹)')
     customer_address_masked = models.TextField(verbose_name='주소 (마스킹)')
+    rrn_masked = models.CharField(max_length=20, blank=True, verbose_name='주민등록번호(마스킹)')
     
     processed_at = models.DateTimeField(auto_now_add=True, verbose_name='처리일시')
     

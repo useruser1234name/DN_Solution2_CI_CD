@@ -1,3 +1,38 @@
+.comprehensive-order-form .form-card {
+  margin-bottom: 24px;
+}
+
+.comprehensive-order-form .ant-row {
+  row-gap: 16px !important;
+}
+
+.comprehensive-order-form .ant-form-item {
+  margin-bottom: 12px;
+}
+
+/* 반응형: 컬럼 높이 차이로 생기는 빈칸 최소화 */
+@media (min-width: 992px) {
+  .comprehensive-order-form .ant-col {
+    display: flex;
+  }
+  .comprehensive-order-form .ant-form-item {
+    width: 100%;
+  }
+}
+
+/* 입력 요소 높이/폰트 통일 */
+.comprehensive-order-form .ant-input,
+.comprehensive-order-form .ant-select-selector,
+.comprehensive-order-form .ant-picker,
+.comprehensive-order-form .ant-input-number {
+  height: 40px;
+}
+
+.comprehensive-order-form .ant-input,
+.comprehensive-order-form .ant-select-selection-search-input,
+.comprehensive-order-form .ant-input-number-input {
+  font-size: 14px;
+}
 /* 종합 주문서 폼 스타일 */
 .comprehensive-order-form {
   max-width: 1400px;

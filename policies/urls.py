@@ -5,27 +5,26 @@ from .viewsets_exposure import PolicyExposureViewSet
 app_name = 'policies'
 
 urlpatterns = [
-    # 정책 목록 및 관리
-    path('', views.PolicyListView.as_view(), name='policy_list'),
-    path('create/', views.PolicyCreateView.as_view(), name='policy_create'),
-    path('<uuid:pk>/', views.PolicyDetailView.as_view(), name='policy_detail'),
-    path('<uuid:pk>/edit/', views.PolicyUpdateView.as_view(), name='policy_update'),
-    path('<uuid:pk>/delete/', views.PolicyDeleteView.as_view(), name='policy_delete'),
+    # 정책 목록 및 관리 (UI 전용 경로로 분리)
+    path('ui/', views.PolicyListView.as_view(), name='policy_list'),
+    path('ui/create/', views.PolicyCreateView.as_view(), name='policy_create'),
+    path('ui/<uuid:pk>/', views.PolicyDetailView.as_view(), name='policy_detail'),
+    path('ui/<uuid:pk>/edit/', views.PolicyUpdateView.as_view(), name='policy_update'),
+    path('ui/<uuid:pk>/delete/', views.PolicyDeleteView.as_view(), name='policy_delete'),
     
     # 정책 배포 관리
-    path('<uuid:pk>/deploy/', views.policy_deploy, name='policy_deploy'),
-    path('<uuid:pk>/bulk-deploy/', views.policy_bulk_deploy, name='policy_bulk_deploy'),
-    path('<uuid:pk>/bulk-remove/', views.policy_bulk_remove, name='policy_bulk_remove'),
-    path('available-companies/', views.get_available_companies, name='get_available_companies'),
+    path('ui/<uuid:pk>/deploy/', views.policy_deploy, name='policy_deploy'),
+    path('ui/<uuid:pk>/bulk-deploy/', views.policy_bulk_deploy, name='policy_bulk_deploy'),
+    path('ui/<uuid:pk>/bulk-remove/', views.policy_bulk_remove, name='policy_bulk_remove'),
+    path('ui/available-companies/', views.get_available_companies, name='get_available_companies'),
     
     # 정책 상태 토글 API
     path('<uuid:pk>/toggle-expose/', views.toggle_policy_expose, name='toggle_expose'),
     path('<uuid:pk>/toggle-premium-expose/', views.toggle_premium_market_expose, name='toggle_premium_expose'),
     path('<uuid:pk>/regenerate-html/', views.regenerate_html, name='regenerate_html'),
     
-    # 정책별 안내사항 및 배정 관리
+    # 정책별 안내사항 (배정 관리는 ViewSet /api/policies/{id}/assignments/ 로 통합)
     path('<uuid:policy_pk>/notices/', views.policy_notice_list, name='policy_notices'),
-    path('<uuid:policy_pk>/assignments/', views.policy_assignment_list, name='policy_assignments'),
     
     # 정책 노출 및 리베이트 관리 (새로 추가)
     path('<uuid:policy_id>/exposure/', views.PolicyExposureView.as_view(), name='policy_exposure'),

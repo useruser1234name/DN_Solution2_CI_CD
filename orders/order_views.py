@@ -254,14 +254,16 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'message': '등록된 송장이 없습니다.'
             }, status=status.HTTP_404_NOT_FOUND)
     
-    @action(detail=False, methods=['get'])
-    def status_choices(self, request):
-        """주문 상태 선택지 반환"""
+    @action(detail=False, methods=['get'], url_path='stats')
+    def status_counts(self, request):
+        """상태별 주문 수 조회"""
+        queryset = self.get_queryset()
+        status_counts = {}
+        for status_value, status_display in Order.STATUS_CHOICES:
+            status_counts[status_value] = queryset.filter(status=status_value).count()
         return Response({
-            'status_choices': [
-                {'value': choice[0], 'label': choice[1]}
-                for choice in Order.STATUS_CHOICES
-            ]
+            'success': True,
+            'data': status_counts
         })
     
     def _check_headquarters_permission(self, request):
