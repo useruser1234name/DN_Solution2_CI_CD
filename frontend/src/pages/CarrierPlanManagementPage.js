@@ -41,7 +41,7 @@ const CarrierPlanManagementPage = () => {
   const loadCarrierPlans = async (carrier = 'all') => {
     setLoading(true);
     try {
-      let endpoint = '/policies/carrier-plans/';
+      let endpoint = 'api/policies/carrier-plans/';
       if (carrier !== 'all') {
         endpoint += `?carrier=${carrier}`;
       }
@@ -122,7 +122,7 @@ const CarrierPlanManagementPage = () => {
       const values = await form.validateFields();
       
       // 새 요금제 추가
-      const response = await post('/policies/carrier-plans/', values);
+      const response = await post('api/policies/carrier-plans/', values);
       if (response.success) {
         message.success('새 요금제가 성공적으로 추가되었습니다.');
         loadCarrierPlans(activeCarrier);
@@ -138,7 +138,7 @@ const CarrierPlanManagementPage = () => {
   // 요금제 삭제
   const handleDelete = async (id) => {
     try {
-      const response = await del(`/policies/carrier-plans/${id}/`);
+      const response = await del(`api/policies/carrier-plans/${id}/`);
       if (response.success) {
         message.success('요금제가 성공적으로 삭제되었습니다.');
         loadCarrierPlans(activeCarrier);
