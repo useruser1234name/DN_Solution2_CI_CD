@@ -2,22 +2,20 @@
   margin-bottom: 24px;
 }
 
+/* 3컬럼 Grid 레이아웃로 공백 최소화 */
 .comprehensive-order-form .ant-row {
-  row-gap: 16px !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px 24px;
+}
+
+.comprehensive-order-form .ant-col {
+  width: 100% !important;
 }
 
 .comprehensive-order-form .ant-form-item {
   margin-bottom: 12px;
-}
-
-/* 반응형: 컬럼 높이 차이로 생기는 빈칸 최소화 */
-@media (min-width: 992px) {
-  .comprehensive-order-form .ant-col {
-    display: flex;
-  }
-  .comprehensive-order-form .ant-form-item {
-    width: 100%;
-  }
+  height: 100%;
 }
 
 /* 입력 요소 높이/폰트 통일 */

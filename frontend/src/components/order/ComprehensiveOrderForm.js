@@ -339,6 +339,29 @@ const ComprehensiveOrderForm = ({
 
   return (
     <div className="comprehensive-order-form">
+      {/* 정책 URL 표시 */}
+      {policy?.external_url && (
+        <Card 
+          style={{ marginBottom: 16 }}
+          bodyStyle={{ padding: '12px 20px' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Text strong>정책 온라인 URL:</Text>
+            <a 
+              href={policy.external_url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ 
+                fontSize: '14px',
+                textDecoration: 'none',
+                color: '#1890ff'
+              }}
+            >
+              {policy.external_url}
+            </a>
+          </div>
+        </Card>
+      )}
 
       {/* 주문서 폼 */}
       <Form
@@ -362,7 +385,7 @@ const ComprehensiveOrderForm = ({
         >
           <Row gutter={[24, 16]}>
             {fields.length > 0 ? (
-              fields.map(field => (
+              fields.filter(field => field.field_name !== 'reference_url').map(field => (
                 <Col xs={24} sm={12} md={8} key={field.field_name}>
                   <DynamicOrderField
                     field={field}

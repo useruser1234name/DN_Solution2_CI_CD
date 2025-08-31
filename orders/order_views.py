@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404
 from .models import Order, OrderMemo, Invoice
 from .serializers import OrderSerializer, OrderMemoSerializer, InvoiceSerializer
 from companies.models import Company
+from .event_bus import order_event_bus
 
 logger = logging.getLogger('orders')
 
@@ -73,6 +74,18 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.calculate_rebate()
         
         logger.info(f"새 주문 생성: {order.customer_name} by {user.username}")
+        # SSE 브로드캐스트
+        try:
+            order_event_bus.broadcast('order_created', {
+                'id': str(order.id),
+                'order_number': order.order_number,
+                'status': order.status,
+                'policy_title': getattr(order.policy, 'title', ''),
+                'customer_name': order.customer_name,
+                'created_at': order.created_at.isoformat(),
+            })
+        except Exception:
+            pass
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):

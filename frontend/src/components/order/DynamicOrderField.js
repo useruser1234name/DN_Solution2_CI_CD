@@ -35,6 +35,12 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       dependencies
     });
     
+    // 기기 모델/색상은 수기 입력으로 전환: 동적 로드/옵션 비활성화
+    if (field.field_name === 'device_model' || field.field_name === 'device_color') {
+      setOptions([]);
+      return;
+    }
+
     if (field.field_options?.dynamic) {
       loadDynamicOptions();
     } else if (field.field_options?.choices) {
@@ -252,7 +258,7 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
           case 'DeviceColor':
             endpoint = 'api/policies/device-colors/';
             if (dependencies.device_model) {
-              endpoint += `?model=${dependencies.device_model}`;
+              endpoint += `?device_model=${dependencies.device_model}`;
             }
             break;
           default:
@@ -407,14 +413,28 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
           />
         );
       
-      case 'url':
+      case 'url': {
+        const urlValue = form ? form.getFieldValue(field.field_name) : '';
         return (
-          <Input 
-            {...commonProps}
-            prefix={<LinkOutlined />}
-            type="url"
-          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Input 
+              {...commonProps}
+              prefix={<LinkOutlined />}
+              type="url"
+            />
+            {urlValue ? (
+              <a 
+                href={urlValue} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="ant-btn ant-btn-link"
+              >
+                열기
+              </a>
+            ) : null}
+          </div>
         );
+      }
       
       case 'barcode_scan':
         // 스캔 버튼 제거, 입력만 허용
@@ -558,42 +578,18 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
 
       case 'device_model':
         return (
-          <Select 
-            {...commonProps} 
-            loading={loading}
-            showSearch
-            filterOption={(input, option) =>
-              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-            }
-            onChange={(value) => {
-              // 모델 변경 시 색상 초기화
-              if (form && field.field_name === 'device_model') {
-                form.setFieldsValue({ device_color: null });
-              }
-            }}
-          >
-            {options.map(option => (
-              <Option key={option.value} value={option.value}>
-                {option.label}
-              </Option>
-            ))}
-          </Select>
+          <Input 
+            {...commonProps}
+            readOnly={field.is_readonly}
+          />
         );
 
       case 'device_color':
         return (
-          <Select 
-            {...commonProps} 
-            loading={loading}
-            disabled={loading || !dependencies.device_model}
-            placeholder={!dependencies.device_model ? '먼저 모델을 선택하세요' : commonProps.placeholder}
-          >
-            {options.map(option => (
-              <Option key={option.value} value={option.value}>
-                {option.label}
-              </Option>
-            ))}
-          </Select>
+          <Input 
+            {...commonProps}
+            readOnly={field.is_readonly}
+          />
         );
 
       case 'radio':
@@ -646,10 +642,13 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
     });
   }
 
-  // 완전히 숨겨야 하는 필드들 (백엔드에서만 처리)
+  // 숨김 규칙: 백엔드 메타나 하드 규칙 기반
   const hiddenFields = [
-    'received_date' // 접수일자만 숨김, 나머지는 읽기전용으로 노출
+    'received_date'
   ];
+  if (field.field_options && field.field_options.visible === false) {
+    return null;
+  }
   
   if (hiddenFields.includes(field.field_name)) {
     return null;

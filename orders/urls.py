@@ -22,4 +22,6 @@ urlpatterns = [
     
     # 주문서 양식 조회
     path('form-template/<uuid:policy_id>/', views.OrderFormTemplateView.as_view(), name='order_form_template'),
+    # SSE 이벤트 스트림
+    path('events/stream/', views.OrderEventsSSEView.as_view(), name='order_events_sse'),
 ]

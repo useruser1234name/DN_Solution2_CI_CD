@@ -1780,8 +1780,22 @@ class PolicyFormTemplateView(APIView):
         try:
             from .models import OrderFormTemplate
             from .form_builder import FormBuilder
+            from companies.models import CompanyUser
             
             policy = get_object_or_404(Policy, id=policy_id)
+            # 배정 컨텍스트 수집 (현재 사용자 기준)
+            assignment_context = None
+            try:
+                company_user = CompanyUser.objects.select_related('company').get(django_user=request.user)
+                assignment = policy.assignments.filter(company=company_user.company).first()
+                assignment_context = {
+                    'assigned': assignment is not None,
+                    'assigned_to_name': assignment.assigned_to_name if assignment else None,
+                    'custom_rebate': float(assignment.custom_rebate) if getattr(assignment, 'custom_rebate', None) is not None else None,
+                    'expose_to_child': getattr(assignment, 'expose_to_child', None)
+                }
+            except CompanyUser.DoesNotExist:
+                assignment_context = None
             
             # 주문서 템플릿 조회
             try:
@@ -1822,7 +1836,8 @@ class PolicyFormTemplateView(APIView):
                         'id': str(template.id),
                         'title': template.title,
                         'description': template.description,
-                        'fields': fields_data
+                        'fields': fields_data,
+                        'assignment_context': assignment_context
                     }
                 })
             except OrderFormTemplate.DoesNotExist:
@@ -1860,7 +1875,8 @@ class PolicyFormTemplateView(APIView):
                         'id': str(template.id),
                         'title': template.title,
                         'description': template.description,
-                        'fields': fields_data
+                        'fields': fields_data,
+                        'assignment_context': assignment_context
                     }
                 })
                 

@@ -323,6 +323,116 @@ const OrderFormTemplateEditorPage = () => {
                         />
                     </div>
                 </div>
+
+                <div className="config-row">
+                    <div className="config-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={!!field.is_readonly}
+                                onChange={(e) => handleFieldChange(field.id, 'is_readonly', e.target.checked)}
+                            />
+                            읽기 전용
+                        </label>
+                    </div>
+                    <div className="config-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={!!field.is_masked}
+                                onChange={(e) => handleFieldChange(field.id, 'is_masked', e.target.checked)}
+                            />
+                            마스킹
+                        </label>
+                    </div>
+                    <div className="config-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={!!field.auto_generate}
+                                onChange={(e) => handleFieldChange(field.id, 'auto_generate', e.target.checked)}
+                            />
+                            자동 생성
+                        </label>
+                    </div>
+                    <div className="config-group">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={field.allow_manual !== false}
+                                onChange={(e) => handleFieldChange(field.id, 'allow_manual', e.target.checked)}
+                            />
+                            수기 입력 허용
+                        </label>
+                    </div>
+                </div>
+
+                <div className="config-row">
+                    <div className="config-group">
+                        <label>자동 채움</label>
+                        <select
+                            value={field.auto_fill || ''}
+                            onChange={(e) => handleFieldChange(field.id, 'auto_fill', e.target.value)}
+                        >
+                            <option value="">없음</option>
+                            <option value="current_datetime">현재 일시</option>
+                            <option value="current_user">현재 사용자/업체</option>
+                            <option value="from_policy">정책에서 가져오기</option>
+                        </select>
+                    </div>
+                    <div className="config-group">
+                        <label>데이터 소스</label>
+                        <input
+                            type="text"
+                            value={field.data_source || ''}
+                            onChange={(e) => handleFieldChange(field.id, 'data_source', e.target.value)}
+                            placeholder="예: CarrierPlan / DeviceModel 등"
+                        />
+                    </div>
+                    {(field.field_type === 'textarea' || field.field_type === 'large_textarea') && (
+                        <div className="config-group">
+                            <label>행 수</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={field.rows || 3}
+                                onChange={(e) => handleFieldChange(field.id, 'rows', parseInt(e.target.value || '0', 10))}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {field.field_type === 'file_upload' && (
+                    <div className="config-row">
+                        <div className="config-group">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    checked={!!field.multiple}
+                                    onChange={(e) => handleFieldChange(field.id, 'multiple', e.target.checked)}
+                                />
+                                다중 업로드
+                            </label>
+                        </div>
+                        <div className="config-group">
+                            <label>최대 파일 수</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={field.max_files || 4}
+                                onChange={(e) => handleFieldChange(field.id, 'max_files', parseInt(e.target.value || '0', 10))}
+                            />
+                        </div>
+                        <div className="config-group" style={{ flex: 2 }}>
+                            <label>허용 확장자</label>
+                            <input
+                                type="text"
+                                value={field.accept || 'image/*,.pdf,.doc,.docx'}
+                                onChange={(e) => handleFieldChange(field.id, 'accept', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

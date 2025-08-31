@@ -20,7 +20,11 @@ const OrderDetailPage = () => {
             
             const response = await get(`api/orders/${id}/`);
             if (response.success) {
-                setOrder(response.data);
+                let data = response.data;
+                if (data && data.data) {
+                    data = data.data;
+                }
+                setOrder(data);
             } else {
                 setError('주문 정보를 불러오는데 실패했습니다.');
             }
@@ -44,7 +48,7 @@ const OrderDetailPage = () => {
         }
 
         try {
-            const response = await post(`orders/${id}/approve/`);
+            const response = await post(`api/orders/${id}/approve/`);
             if (response.success) {
                 alert('주문이 승인되었습니다.');
                 fetchOrder(); // 주문 정보 새로고침
@@ -62,7 +66,7 @@ const OrderDetailPage = () => {
         if (!reason) return;
 
         try {
-            const response = await post(`orders/${id}/reject/`, { memo: reason });
+            const response = await post(`api/orders/${id}/reject/`, { memo: reason });
             if (response.success) {
                 alert('주문이 반려되었습니다.');
                 fetchOrder(); // 주문 정보 새로고침
@@ -87,12 +91,13 @@ const OrderDetailPage = () => {
     const getStatusBadge = (status) => {
         const statusMap = {
             'pending': { text: '접수대기', class: 'status-pending' },
-            'processing': { text: '처리중', class: 'status-processing' },
-            'shipped': { text: '배송중', class: 'status-shipped' },
-            'completed': { text: '완료', class: 'status-completed' },
-            'cancelled': { text: '취소', class: 'status-cancelled' }
+            'approved': { text: '승인됨', class: 'status-approved' },
+            'processing': { text: '개통준비중', class: 'status-processing' },
+            'shipped': { text: '개통중', class: 'status-shipped' },
+            'completed': { text: '개통완료', class: 'status-completed' },
+            'final_approved': { text: '승인(완료)', class: 'status-final-approved' },
+            'cancelled': { text: '개통취소', class: 'status-cancelled' }
         };
-        
         const statusInfo = statusMap[status] || { text: status, class: 'status-unknown' };
         return <span className={`status-badge ${statusInfo.class}`}>{statusInfo.text}</span>;
     };
@@ -227,6 +232,96 @@ const OrderDetailPage = () => {
                             <label>리베이트 금액</label>
                             <span>{order.rebate_amount ? `${Number(order.rebate_amount).toLocaleString()}원` : '-'}</span>
                         </div>
+                        <div className="info-item">
+                            <label>접수번호</label>
+                            <span>{order.acceptance_number || order.order_number || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>접수일시</label>
+                            <span>{order.acceptance_date || (order.received_date && new Date(order.received_date).toLocaleString('ko-KR')) || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>1차 ID</label>
+                            <span>{order.first_id || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>판매점명</label>
+                            <span>{order.retailer_name || order.company_name || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>통신사</label>
+                            <span>{order.carrier || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>가입유형</label>
+                            <span>{order.subscription_type || '-'}</span>
+                        </div>
+                        <div className="info-item full-width">
+                            <label>참조 URL</label>
+                            {order.reference_url ? (
+                                <a href={order.reference_url} target="_blank" rel="noreferrer">{order.reference_url}</a>
+                            ) : (
+                                <span>-</span>
+                            )}
+                        </div>
+                        <div className="info-item">
+                            <label>요금제</label>
+                            <span>{order.plan_name || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>약정기간</label>
+                            <span>{order.contract_period_selected || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>단말 모델</label>
+                            <span>{order.device_model || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>일련번호</label>
+                            <span>{order.device_serial || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>IMEI</label>
+                            <span>{order.imei || '-'}</span>
+                        </div>
+                        {order.imei2 && (
+                            <div className="info-item">
+                                <label>IMEI2</label>
+                                <span>{order.imei2}</span>
+                            </div>
+                        )}
+                        {order.eid && (
+                            <div className="info-item">
+                                <label>EID</label>
+                                <span>{order.eid}</span>
+                            </div>
+                        )}
+                        {order.usim_serial && (
+                            <div className="info-item">
+                                <label>유심 일련번호</label>
+                                <span>{order.usim_serial}</span>
+                            </div>
+                        )}
+                        <div className="info-item">
+                            <label>이전 통신사</label>
+                            <span>{order.previous_carrier || '-'}</span>
+                        </div>
+                        <div className="info-item">
+                            <label>결제방법</label>
+                            <span>{order.payment_method || '-'}</span>
+                        </div>
+                        {order.account_number_masked && (
+                            <div className="info-item">
+                                <label>계좌(마스킹)</label>
+                                <span>{order.account_number_masked}</span>
+                            </div>
+                        )}
+                        {order.card_number_masked && (
+                            <div className="info-item">
+                                <label>카드(마스킹)</label>
+                                <span>{order.card_number_masked}{order.card_exp_mmyy ? ` (${order.card_exp_mmyy})` : ''}</span>
+                            </div>
+                        )}
                         <div className="info-item">
                             <label>메모 수</label>
                             <span>{order.memo_count || 0}개</span>

@@ -159,7 +159,7 @@ const OrderCreatePageNew = () => {
                     const fieldNames = templateData.fields.map(f => f.name || f.field_name);
                     console.log('[OrderCreatePageNew] 필드 이름 목록:', fieldNames);
                     
-                    // 필드 매핑 적용
+                    // 필드 매핑 적용 (reference_url은 폼에서 제거됨)
                     templateData.fields = mapFormFields(templateData.fields);
                     console.log('[OrderCreatePageNew] 매핑된 필드:', templateData.fields);
                 }
