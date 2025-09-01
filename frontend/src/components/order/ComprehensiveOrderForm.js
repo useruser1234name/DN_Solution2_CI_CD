@@ -296,13 +296,11 @@ const ComprehensiveOrderForm = ({
       console.log('[ComprehensiveOrderForm] 주문 제출:', values);
       
       const orderData = {
-        policy_id: policyId,
-        ...values,
-        // 추가 메타데이터
-        form_template_id: template?.id,
-        created_by: user?.id,
-        company_id: user?.company?.id,
-        company_code: user?.company?.code
+        policy: policyId,
+        form_data: values,
+        // 서버 검증 통과를 위한 최소 유효값
+        total_amount: 1,
+        rebate_amount: 0
       };
 
       const response = await post('api/orders/', orderData);
@@ -385,7 +383,7 @@ const ComprehensiveOrderForm = ({
         >
           <Row gutter={[24, 16]}>
             {fields.length > 0 ? (
-              fields.filter(field => field.field_name !== 'reference_url').map(field => (
+              fields.filter(field => field.field_name !== 'reference_url' && field.field_name !== 'order_number').map(field => (
                 <Col xs={24} sm={12} md={8} key={field.field_name}>
                   <DynamicOrderField
                     field={field}

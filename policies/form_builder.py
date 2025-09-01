@@ -50,9 +50,10 @@ class FormBuilder:
             'field_name': 'order_number',
             'field_label': '주문번호',
             'field_type': 'text',
-            'is_required': True,
+            'is_required': False,
             'is_readonly': True,
             'auto_generate': True,
+            'field_options': {'visible': False},
             'order': 1
         },
         {

@@ -269,6 +269,10 @@ class Order(models.Model):
         is_new = self._state.adding  # UUID 필드 때문에 pk 체크 대신 _state.adding 사용
         self.full_clean()
         
+        # 통신사 정보 자동 설정 (정책에서) - 주문번호 접두사 반영을 위해 선행
+        if is_new and not self.carrier and self.policy:
+            self.carrier = self.policy.carrier
+
         # 주문번호 자동 생성 (TelecomOrder 통합) - 중복 방지
         if is_new and not self.order_number:
             from django.utils import timezone
@@ -308,10 +312,6 @@ class Order(models.Model):
         # 1차 ID 자동 설정 (판매점 코드)
         if is_new and not self.first_id and self.company:
             self.first_id = self.company.code
-        
-        # 통신사 정보 자동 설정 (정책에서)
-        if is_new and not self.carrier and self.policy:
-            self.carrier = self.policy.carrier
         
         # 가입유형 자동 설정 (정책에서)
         if is_new and not self.subscription_type and self.policy:

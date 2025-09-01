@@ -98,12 +98,9 @@ const DynamicOrderField = ({ field, form, dependencies = {} }) => {
       }
       
       if (field.auto_generate) {
-        // 자동 생성 필드 (예: 주문번호)
+        // 서버에서 생성/설정하는 필드는 프론트에서 값을 주입하지 않음
         if (field.field_name === 'order_number') {
-          const prefix = dependencies.policy_carrier ? dependencies.policy_carrier.substring(0, 2).toUpperCase() : 'ORD';
-          const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(2, 12);
-          const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-          autoValue = `${prefix}-${timestamp}-${random}`;
+          autoValue = '';
         } else {
           autoValue = `ORD-${Date.now()}`;
         }

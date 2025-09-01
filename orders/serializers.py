@@ -68,6 +68,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'acceptance_number', 'acceptance_date'
         ]
         extra_kwargs = {
+            'order_number': {
+                'read_only': True
+            },
             'customer_name': {
                 'required': False,  # form_data에서 추출하므로 선택적
                 'allow_blank': False,
